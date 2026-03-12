@@ -1,116 +1,171 @@
-# ATS Automation - Automation Specifications
+# ATS Automation - CTM-Native Automation Plan
 
-## All 17 Automations by Priority
+> **REVISED**: All automations now use CTM native features + Salesforce Flow instead of Python/Playwright
 
 ---
 
-## HIGH PRIORITY AUTOMATIONS (11)
+## Core Integration Architecture
 
-### 1. CTM-SF Auto-Account Access
+```
+Call comes in → CTM Trigger → Platform Event → Salesforce Flow → Auto-pop/Record Update
+```
+
+### CTM Native Capabilities Used:
+- **Triggers**: Automation on call events (received, ended, etc.)
+- **Platform Events**: Emit events to Salesforce for Flow activation
+- **Salesforce Integration**: Native sync, field mapping, campaign association
+- **Webhooks**: Send data to external systems if needed
+- **Softphone Layout**: Salesforce auto-pop configuration
+
+---
+
+## HIGH PRIORITY AUTOMATIONS (11) - CTM-Based
+
+### 1. CTM-SF Auto-Account Access (REVISED)
 **Client**: Flyland Recovery  
 **Priority**: HIGH  
 **Phase**: 1  
-**Effort**: Medium
+**Effort**: Low
 
-**Objective**: Automatically open Salesforce account when call comes via CTM
+**Objective**: Automatically open Salesforce record when call comes via CTM
 
-**Inputs**: Caller phone number visible on CTM screen
+**CTM Native Solution**:
+1. **Enable Platform Events**: Settings → Integration Options → Enable Platform Events (Flows)
+2. **Configure Softphone Layout**: Salesforce Setup → Call Center → Softphone Layout
+   - Set "Search" to search by Phone
+   - Enable auto-pop on incoming calls
+3. **CTM Trigger**: 
+   - Event: "Activity is received"
+   - Action: "Salesforce sync" (ensures record exists before pop)
 
-**Outputs**: SF account auto-opened in adjacent browser tab/panel with key fields displayed
+**Required Settings**:
+| CTM Setting | Value |
+|-------------|-------|
+| Platform Events (Flows) | ON |
+| Manual Screen Pop | OFF |
+| Present search dialog when multiple | ON |
 
-**Technical Approach**:
-- Chrome extension with content script monitors CTM DOM for call events
-- Playwright/Selenium script triggered on call-start reads the phone number
-- Opens SF in existing browser session using pre-built search URL pattern
-- Overlay panel injects into browser - reads SF DOM, no SF API required
-- Duplicate detection: scans SF search results for multiple matches
+**Salesforce Setup**:
+- Call Center configured with CTM adapter
+- Softphone Layout assigned to Call Center
+- Users assigned to Call Center
 
 **Edge Cases**:
-- No SF match: extension shows 'New Lead' button
-- Slow SF page: timeout with partial data notification
+- No SF match: Softphone shows "Create New Lead" option (native behavior)
+- Verify CTM adapter URL: `https://ctm.calltrackingmetrics.com/cti/lightningAdapter.html`
 
-**Business Impact**: Saves 1-3 mins per call; zero credential exposure
+**Business Impact**: Zero development; native Salesforce CTI functionality
 
 ---
 
-### 2. Auto-Note Generator for Unqualified/Duplicates
+### 2. Auto-Note Generator for Unqualified/Duplicates (REVISED)
 **Client**: Flyland Recovery  
 **Priority**: HIGH  
 **Phase**: 1  
-**Effort**: Medium
+**Effort**: Low
 
 **Objective**: Auto-generate notes for unqualified or duplicate calls
 
-**Inputs**: Call transcript text (from screen/clipboard), disposition code
+**CTM Native Solution**:
+1. **CTM Trigger on Call End**:
+   - Event: "End event with all data ready"
+   - Condition: Disposition = "Unqualified" OR "Duplicate"
+   - Action: "Update Field" → Set custom field with disposition
+   - Action: "Tag Call" → Add "unqualified" or "duplicate" tag
 
-**Outputs**: Draft note pre-filled in SF/CTM note field
+2. **Salesforce Flow** (triggered by CTM Platform Event):
+   - Get call data from Platform Event payload
+   - Create Task on Lead/Contact with disposition notes
+   - Use CTM's "AskAI" action for transcription summary
 
-**Technical Approach**:
-- Desktop listener monitors CTM's disposition dropdown
-- On 'Unqualified' or 'Duplicate' selection, reads available context
-- Runs local NLP model (offline DistilBERT) to classify and generate summary
-- Injects text directly into SF/CTM notes field via simulated input or DOM injection
+**Alternative - CTM AskAI Integration**:
+- Enable AskAI in CTM settings
+- Trigger: "Transcription is ready"
+- Action: "AskAI" → Generate call summary
+- Action: "Salesforce sync" → Push summary to SF Description field
 
 **Edge Cases**:
-- Complex or emotional content: skip auto-note, flag for manual
-- Low confidence: show draft with 'Review before posting' warning
+- Transcription not available: Use "Call Score" tags as quick notes
+- Multiple dispositions: Use CTM's 3-tag limit strategically
 
-**Business Impact**: Eliminates 1-2 mins of note typing per unqualified/duplicate call
+**Business Impact**: Native integration; no custom code
 
 ---
 
-### 3. Wrap-Up Auto-Sync Across Systems
+### 3. Wrap-Up Auto-Sync Across Systems (REVISED)
 **Client**: Legacy  
 **Priority**: HIGH  
 **Phase**: 1  
-**Effort**: High
+**Effort**: Low
 
 **Objective**: Post-call, auto-sync disposition data to all relevant systems
 
-**Inputs**: Wrap-up form data from CTM
+**CTM Native Solution**:
+1. **CTM Trigger**:
+   - Event: "End event with all data ready"
+   - Action: "Salesforce sync with mapping set"
+   - Action: "Update Reporting Tag"
 
-**Outputs**: Synced records in SF, tracker, chatter; no-dupe confirmation
+2. **Salesforce Flow**:
+   - Triggered by Platform Event
+   - Creates Task record
+   - Updates Lead/Contact with call details
 
-**Technical Approach**:
-- Playwright multi-tab controller identifies open tabs by URL pattern
-- Reads wrap-up fields from CTM DOM after disposition submit
-- Switches to SF/Google Tracker (or internal web tracker) and auto-fills
-- Uses simulated clicks and keystrokes - no Sheets API needed
+3. **For Google Sheets**: Use **CTM Webhook** → Google Sheets Zapier/Make integration
+
+**Configuration**:
+```
+CTM Trigger:
+  - Event: End event with all data
+  - Action: Salesforce sync (upsert)
+  - Action: Salesforce campaign (if applicable)
+```
 
 **Edge Cases**:
-- Partial sync failure: retry queue with exponential backoff
-- High queue: batch process when agent idle
+- Sync failure: CTM retries automatically; check Integration Logs
+- Duplicate prevention: Use Salesforce Matching Rules + CTM's upsert
 
-**Business Impact**: Eliminates 100% duplications
+**Business Impact**: Eliminates manual data entry; native sync
 
 ---
 
-### 4. Customer History Auto-Pull & Reminders
+### 4. Customer History Auto-Pull & Reminders (REVISED)
 **Client**: Legacy  
 **Priority**: HIGH  
 **Phase**: 1  
-**Effort**: Medium
+**Effort**: Low
 
 **Objective**: Auto-load caller history; remind agent of missed details
 
-**Inputs**: Caller ID / phone number
+**CTM Native Solution**:
+1. **Salesforce Flow**:
+   - Triggered on incoming call (Platform Event from CTM)
+   - Get Contact/Lead by phone number
+   - Return history to CTM via Flow response
+   
+2. **CTM Integration Setting**:
+   - Enable "Enhanced CallerID lookup" in CTM
+   - Shows caller name, location, previous call history in Softphone
 
-**Outputs**: History UI popup; reminders for key updates ("unqualified" updates)
+3. **Salesforce Softphone Layout**:
+   - Configure "Search Results" section to show:
+     - Previous calls (Call History related list)
+     - Open Tasks
+     - Last disposition
 
-**Technical Approach**:
-- SF query on call start via background tab
-- Rule-based reminders displayed as overlay (e.g., "Update: last call marked unqualified")
-- Progress bar for slow loads
+**Configuration Path**:
+- Salesforce: Setup → Call Center → Softphone Layout → Search Results
+- Add: Call Log, Open Activities, Notes
 
 **Edge Cases**:
-- Slow load: show progress bar
-- Sensitive updates: mask until agent clicks to reveal
+- No history: CTM Enhanced CallerID provides demographics
+- Slow SF: Use CTM's caller cache
 
-**Business Impact**: Cover new updates automatically
+**Business Impact**: Native Salesforce CTI feature
 
 ---
 
-### 5. Auto-Lead Pruning & Dial/SMS Automation
+### 5. Auto-Lead Pruning & Dial/SMS Automation (REVISED)
 **Client**: TBT  
 **Priority**: HIGH  
 **Phase**: 1  
@@ -118,50 +173,68 @@
 
 **Objective**: Auto-remove unresponsive leads; auto-dial/SMS for form leads
 
-**Inputs**: Lead list; prune threshold
+**CTM Native Solution**:
+1. **Auto-Dial from SF**: Use CTM's **Smart Dialer**
+   - Export SF leads to CSV
+   - Upload to CTM Smart Dialer
+   - Configure: Mode = "Preview", Confirmation = "Talk time threshold"
 
-**Outputs**: Updated list; call/SMS logs
+2. **Lead Pruning**: Use **CTM Monitors** (not Python)
+   - Set up Monitor to check SF for stale leads
+   - Action: "Add to Do Not Call List" or tag
 
-**Technical Approach**:
-- Local file watcher (Python watchdog) monitors Downloads folder for SF/CTM CSV exports
-- DB query for last response date
-- Prune via rules file (configurable threshold in days)
-- Auto-dial script reads pruned list and initiates calls
+3. **Auto-SMS for Form Leads**: Use **CTM FormReactor**
+   - Configure FormReactor trigger
+   - Action: "Send text" with auto-response
+
+**Configuration**:
+```
+CTM Smart Dialer:
+  - Mode: Preview dialer
+  - Contact list: SF export
+  - Confirmation: Key press or talk time > 30s
+  - Wrap-up: Auto-disposition
+```
 
 **Edge Cases**:
-- Partial responses: flag for review
-- Bulk prune: confirmation dialog
+- DNC compliance: Use CTM's "State DNC check" feature
+- Large lists: Use CTM's bulk upload
 
-**Business Impact**: Reduce OBs by 50%
+**Business Impact**: Native CTM features replace Python automation
 
 ---
 
-### 6. Auto-Lead Pull & Inbound Routing
+### 6. Auto-Lead Pull & Inbound Routing (REVISED)
 **Client**: TBT  
 **Priority**: HIGH  
 **Phase**: 1  
-**Effort**: Medium
+**Effort**: Low
 
 **Objective**: Auto-detect and route incoming leads from SF queue
 
-**Inputs**: SF call queue and agent status DOM
+**CTM Native Solution**:
+1. **CTM Smart Router**:
+   - Route based on tracking source, caller location, time
+   - Use "Salesforce Router" option for SF-based routing
 
-**Outputs**: Auto-routed calls; lead context displayed
+2. **CTM Queues**:
+   - Configure queue with routing: Round Robin, Sticky, or Weighted
+   - Agent status syncs with SF Open CTI
 
-**Technical Approach**:
-- Content script reads CTM call queue and agent status DOM in real-time
-- Routes calls based on availability and lead priority
-- Displays lead context as overlay (using data already visible in open SF record)
+3. **Salesforce Flow**:
+   - Trigger: Platform Event on call received
+   - Action: Check lead status, update priority
+   - Action: Route to appropriate queue via CTM API
 
 **Edge Cases**:
-- High volume: queue-based routing
-- Agent unavailable: route to next available
+- High volume: Use CTM's queue priority features
+- Agent unavailable: Configure overflow routing in CTM
 
-**Business Impact**: Faster lead response time
+**Business Impact**: Native routing; no custom automation needed
 
 ---
 
-### 7. Auto-Fax for Appeals & Claim Status Updater
+### 7. Auto-Fax for Appeals & Claim Status Updater (REVISED)
 **Client**: Takahami  
 **Priority**: HIGH  
 **Phase**: 1  
@@ -169,26 +242,35 @@
 
 **Objective**: Auto-submit fax appeals; auto-update claim status
 
-**Inputs**: Claim record, appeal document
+**CTM Native Solution**:
+1. **Fax Automation**: Use CTM's **webhook** + third-party fax API (Fax.Plus, RingCentral Fax)
+   - CTM Trigger: "Activity is received"
+   - Action: "Run webhook" → Fax API endpoint
+   - Payload: Claim data + recipient fax number
 
-**Outputs**: Fax sent; claim status updated in portal
+2. **Claim Status Updates**:
+   - Use **Salesforce Flow** triggered by CTM Platform Event
+   - Flow updates Custom Claim object status
+   - Use Salesforce In-App Notifications to alert specialist
 
-**Technical Approach**:
-- PyAutoGUI hotkey listener triggers fax workflow on specialist's command
-- Screen OCR (Tesseract) identifies open PDF filename
-- Playwright navigates existing fax portal session (no fax API)
-- Carrier fax directory: local JSON mapping carrier names to fax numbers
-- Claim status: DOM interaction on billing portal - reads current value, selects new status
+**Configuration**:
+```
+CTM Trigger:
+  - Event: Activity is received
+  - Condition: Caller Number contains [claim line]
+  - Action: Run webhook → fax-service.com/api/send
+  - Action: Tag Call: "fax-sent"
+```
 
 **Edge Cases**:
-- Fax portal session expired: alert specialist to re-login
-- Invalid carrier: validation check from local rules file
+- Fax failure: Use CTM's webhook retry or Salesforce Flow retry
+- Session expiry: Use scheduled Flow to check status
 
-**Business Impact**: Saves 5-10 mins per appeal; eliminates manual fax queue
+**Note**: Still requires some custom development (webhook payload), but much simpler than Python
 
 ---
 
-### 8. Claim-Type-Based Appeal Router
+### 8. Claim-Type-Based Appeal Router (REVISED)
 **Client**: Takahami  
 **Priority**: HIGH  
 **Phase**: 1  
@@ -196,273 +278,276 @@
 
 **Objective**: Auto-determine appeal destination based on claim type
 
-**Inputs**: Claim record visible on screen in billing portal
+**CTM Native Solution**:
+1. **CTM Smart Router**:
+   - Use "Voice Menu" (IVR) to collect claim type
+   - Route based on DTMF keypress or speech
+   - Or use CTM's "AskAI" to classify caller intent
 
-**Outputs**: Routing decision shown as overlay (fax number or email)
+2. **Integration with SF**:
+   - CTM Trigger → Salesforce sync → Lookup claim in SF
+   - Use SF's "Assignment Rules" to route to specialist
 
-**Technical Approach**:
-- Chrome extension reads claim type, plan name, and payer from portal DOM
-- Local rule engine (JSON config) determines whether appeal goes to local plan or payer
-- Displays correct destination as overlay
-- One-click triggers fax/email tool accordingly
+**Configuration**:
+```
+CTM Smart Router:
+  - Route 1: IF Caller inputs "1" → Route to Insurance Appeals Queue
+  - Route 2: IF Caller inputs "2" → Route to Billing Queue
+  - Default: Route to General Queue
+```
 
 **Edge Cases**:
-- Unknown type: default to manual with alert
-- Multi-plan: allow manual select
+- Unknown claim type: Route to live agent with claim info
+- Multi-plan: Use Salesforce Case routing rules
 
-**Business Impact**: Eliminates manual destination lookup per claim
+**Business Impact**: Native IVR + SF routing
 
 ---
 
-### 9. CTM-SF Auto-Account Pop-Up
+### 9. CTM-SF Auto-Account Pop-Up (REVISED)
 **Client**: Banyan  
 **Priority**: HIGH  
 **Phase**: 1  
-**Effort**: Medium
+**Effort**: Low
 
 **Objective**: Auto-populate SF data when call arrives via CTM
 
-**Inputs**: Caller phone number visible in CTM call notification
+**Same as #1** - Use native Salesforce Softphone Layout
 
-**Outputs**: SF account data displayed as floating overlay; new lead button
+**Configuration Checklist**:
+- [ ] CTM: Manual Screen Pop = OFF
+- [ ] CTM: Platform Events (Flows) = ON
+- [ ] SF: Call Center configured
+- [ ] SF: Softphone Layout → Search Layouts include Lead, Contact
+- [ ] SF: Users assigned to Call Center
+- [ ] SF: Open CTI permission set assigned
 
-**Technical Approach**:
-- Chrome extension with content script monitors CTM DOM for call state changes (polling every 500ms)
-- Extracts caller number from call notification element
-- Opens SF in background tab (agent already logged into SF)
-- Reads SF DOM fields and renders summary card pinned to screen corner
+**Testing**:
+1. Make test call to CTM tracking number
+2. Agent receives call in CTM Softphone
+3. Salesforce should auto-pop with caller record
 
-**Edge Cases**:
-- SF timeout after 5s: overlay shows partial data with warning
-- Duplicate accounts: prompt merge
-
-**Business Impact**: Saves 1-2 mins per call; eliminates most common manual lookup
+**Business Impact**: Native CTI feature
 
 ---
 
-### 10. Auto-Call Tracking & Form/Note Auto-Fill
+### 10. Auto-Call Tracking & Form/Note Auto-Fill (REVISED)
 **Client**: Banyan  
 **Priority**: HIGH  
 **Phase**: 1  
-**Effort**: High
+**Effort**: Low
 
 **Objective**: After call, auto-update both Google Form tracker AND SF
 
-**Inputs**: Call metadata (duration, disposition) from CTM wrap-up screen
+**CTM Native Solution**:
+1. **CTM Trigger**:
+   - Event: "End event with all data"
+   - Action: "Salesforce sync" → Updates SF record
+   - Action: "Update Reporting Tag" → Tags for tracking
 
-**Outputs**: Tracker row added automatically; SF record updated
+2. **Google Sheets**: Use **CTM Webhook** → Google Sheets (via Zapier/Make)
+   - CTM sends call data to webhook
+   - Zapier adds row to Google Sheet
 
-**Technical Approach**:
-- After agent selects disposition in CTM wrap-up, Playwright reads visible wrap-up fields from CTM DOM
-- Switches to Google Form (or Google Sheet via Playwright if agents have edit access)
-- Auto-fills using simulated clicks and keystrokes - no Sheets API needed
-- Also updates SF record (already open from earlier popup) - fills key fields
+3. **Salesforce Flow**:
+   - Triggered by Platform Event
+   - Creates Task with call details
+   - Updates custom fields from CTM data
+
+**Configuration**:
+```
+CTM Trigger:
+  - Event: End event with all data
+  - Actions:
+    1. Salesforce sync
+    2. Salesforce campaign (if applicable)
+    3. Run webhook → Google Sheets
+```
 
 **Edge Cases**:
-- Incomplete transcription: show editable draft with confidence score
-- Conflicting data: alert agent before overwriting
+- Partial data: Use CTM's "End event with all data" (not immediate)
+- Conflicting updates: Use Salesforce "Last Modified" logic
 
-**Business Impact**: Eliminates duplicate entry; saves 1-2 mins of wrap-up per call
+**Business Impact**: Eliminates duplicate entry; native + webhook
 
 ---
 
-### 11. PDF Auto-Filler
+### 11. PDF Auto-Filler (REVISED)
 **Client**: Element Medical Billing  
 **Priority**: HIGH  
 **Phase**: 1  
-**Effort**: Medium
+**Effort**: High
 
 **Objective**: Auto-fill PDF forms with patient data from open portal
 
-**Inputs**: Blank PDF form opened by specialist, patient record in SF/billing portal
+**CTM Native Solution**:
+1. **Salesforce Flow + Document Generation**:
+   - Flow triggered by CTM Platform Event
+   - Use Salesforce "Generate Document" or "Template Service"
+   - Merge SF Contact data into PDF template
 
-**Outputs**: PDF with standard fields auto-populated; specialist reviews
+2. **Alternative**: Use **CTM Webhook** → Document generation API (DocuSign, PandaDoc)
+   - CTM Trigger: "End event with all data"
+   - Action: "Run webhook" → Document API
+   - API generates PDF from template + SF data
 
-**Technical Approach**:
-- Python file watcher (watchdog) detects when specialist opens new PDF
-- pdfplumber reads form field labels offline
-- DOM scraper reads patient data from open SF/billing portal tab
-- Local field-mapping config maps PDF field labels to SF DOM selectors
-- pdfrw/PyPDF2 writes values into PDF fields and saves pre-filled copy
-- Preview UI: system notification with 'Open Filled PDF' button
+**Configuration**:
+```
+CTM Trigger:
+  - Event: End event with all data
+  - Condition: Tag includes "admission-form"
+  - Action: Run webhook → doc-api.com/generate
+    - Payload: { patient_id, call_data, form_type }
+```
 
 **Edge Cases**:
-- Missing patient data: highlight unfilled fields in yellow
-- Large PDF: process in chunks
-- Unrecognized form: skip and alert
+- Missing data: Use Salesforce Flow decision element
+- Complex forms: Use Salesforce Document Generation feature
 
-**Business Impact**: Saves 2-5 mins × 10+ forms/day = 20-50+ mins daily per specialist
+**Note**: Still requires some development but uses standard APIs instead of Python DOM scraping
+
+**Business Impact**: Replaces Python DOM automation with API-based solution
 
 ---
 
-## MEDIUM PRIORITY AUTOMATIONS (6)
+## MEDIUM PRIORITY AUTOMATIONS (6) - CTM-Based
 
-### 12. Chat Reply Suggester & Form Auto-Filler
+### 12. Chat Reply Suggester & Form Auto-Filler (REVISED)
 **Client**: Flyland Recovery  
 **Priority**: MEDIUM  
 **Phase**: 2  
-**Effort**: Low-Medium
+**Effort**: Low
 
-**Objective**: Suggest replies for chats; auto-fill admission forms
-
-**Inputs**: Chat context; form type
-
-**Outputs**: Suggested replies; filled form
-
-**Technical Approach**:
-- Chrome content script reads chat DOM in real-time for keyword matching
-- Local JSON template library - no external service needed
-- Form filler reads field labels via DOM, matches to SF data already on screen
-- One-click 'Insert' button pastes suggestion into chat input field
-- Offline mode: templates cached locally
-
-**Edge Cases**:
-- Long chats: summarize last 5 messages only for context
-- Offline form: skip auto-fill, show manual prompt
-
-**Business Impact**: Reduces 1-3 mins chat writing + 1 min form fill per interaction
+**Solution**: Use CTM's **AskAI** + **Templates**
+- AskAI can generate responses based on call context
+- Use CTM's text templates for common responses
 
 ---
 
-### 13. Form-Filler, Note Summarizer & AI Queue Prioritizer
+### 13. Form-Filler, Note Summarizer & AI Queue Prioritizer (REVISED)
 **Client**: Legacy  
 **Priority**: MEDIUM  
 **Phase**: 2  
-**Effort**: High
+**Effort**: Low
 
-**Objective**: DOM-based form automation with AI prioritization
-
-**Inputs**: Form context; queue data
-
-**Outputs**: Filled forms; prioritized queue
-
-**Technical Approach**:
-- DOM-based form filler with local field-mapping config file
-- Local NLP model prioritizes queue based on wait time, lead value
-- One-click fill from template library
-
-**Edge Cases**:
-- Complex forms: manual override available
-- Low confidence: draft mode
-
-**Business Impact**: Reduces manual entry time significantly
+**Solution**: Use **CTM AskAI** + **Salesforce Flow**
+- AskAI summarizes calls
+- Salesforce Flow prioritizes queue based on call data
 
 ---
 
-### 14. Text Reply Suggester, Note Templates & Insurance Status Checker
+### 14. Text Reply Suggester, Note Templates & Insurance Status Checker (REVISED)
 **Client**: TBT  
 **Priority**: MEDIUM  
 **Phase**: 2  
-**Effort**: Medium
+**Effort**: Low
 
-**Objective**: Template-based responses for outbound; insurance status from portal
-
-**Inputs**: SMS/Text content; insurance claim data
-
-**Outputs**: Suggested replies; status updates
-
-**Technical Approach**:
-- DOM reader for SMS window content
-- Local template JSON for suggestions
-- Insurance status: reads from portal DOM
-
-**Edge Cases**:
-- No match: show manual input
-- Slow portal: use cached data
-
-**Business Impact**: Faster response times for leads
+**Solution**: Use **CTM Text Messaging Templates**
+- CTM has built-in templates for SMS
+- Salesforce shows insurance status in Softphone panel
 
 ---
 
-### 15. Note Summarizer & Reply Suggester
+### 15. Note Summarizer & Reply Suggester (REVISED)
 **Client**: Banyan  
 **Priority**: MEDIUM  
 **Phase**: 2  
-**Effort**: Medium
+**Effort**: Low
 
-**Objective**: Summarize long notes; suggest replies during admissions/transfers
-
-**Inputs**: Note text; context keywords
-
-**Outputs**: Summarized text; suggested reply list
-
-**Technical Approach**:
-- Clipboard monitor captures highlighted/copied text automatically
-- Local transformer model (DistilBERT) generates summary under 100 words
-- Shows in persistent overlay panel - one-click insert
-- Reply suggester reads active chat/message window DOM, surfaces 2-3 options
-
-**Edge Cases**:
-- Empty notes: default summary
-- Sensitive data: confirm before processing
-
-**Business Impact**: Reduces review and response time; speeds up admissions
+**Solution**: Use **CTM AskAI**
+- Trigger: "Transcription is ready"
+- Action: "AskAI" → Generate summary
+- Action: "Salesforce sync" → Push to SF Description
 
 ---
 
-### 16. Negotiation Form-Filler & Reply Suggester
+### 16. Negotiation Form-Filler & Reply Suggester (REVISED)
 **Client**: Takahami  
 **Priority**: MEDIUM  
 **Phase**: 2  
 **Effort**: Medium
 
-**Objective**: Auto-fill negotiation forms; suggest responses to carrier replies
-
-**Inputs**: Carrier response text; claim data
-
-**Outputs**: Filled negotiation form; suggested actions
-
-**Technical Approach**:
-- DOM reader captures carrier response text from email client or portal message thread
-- Local negotiation playbook (JSON): response patterns mapped to suggested actions
-- Overlay panel shows ranked suggestions with 'Copy' and 'Insert' buttons
-- Form filler reads claim fields from open billing portal tab; injects into negotiation form
-
-**Edge Cases**:
-- Short/vague carrier response: default to general template
-- Complex negotiations: escalation button in overlay
-
-**Business Impact**: Reduces 10-15 mins drafting per negotiation/appeal
+**Solution**: Use **Salesforce Flow + Document Generation**
+- Triggered by CTM Platform Event
+- Uses SF templates for negotiation forms
 
 ---
 
-### 17. Pre-Filled Insurance Form Template Generator
+### 17. Pre-Filled Insurance Form Template Generator (REVISED)
 **Client**: Element Medical Billing  
 **Priority**: MEDIUM  
 **Phase**: 2  
 **Effort**: Low
 
-**Objective**: Generate pre-filled templates for common insurance types
-
-**Inputs**: Insurance type selection
-
-**Outputs**: Template PDF with common fields pre-filled
-
-**Technical Approach**:
-- Lightweight local desktop app (Tkinter or Electron)
-- Dropdown of insurance types - on selection, loads template from local folder
-- Pre-fills standard fields (addresses, codes) from local JSON config
-- Specialists can upload new template PDFs through simple UI
-
-**Edge Cases**:
-- Custom/non-standard insurer: 'Upload Template' option
-- Missing values: highlight in yellow
-
-**Business Impact**: Eliminates template setup time; ensures field consistency
+**Solution**: Use **Salesforce Document Generation**
+- Salesforce templates pre-filled with Contact data
+- Trigger from CTM Platform Event
 
 ---
 
-## Quick Reference by Client
+## Quick Reference by Client - CTM Native
 
-| Client | HIGH (Phase 1) | MEDIUM (Phase 2) |
-|--------|---------------|------------------|
-| Flyland | CTM-SF Auto-Access, Auto-Note | Chat Reply Suggester |
-| Legacy | Wrap-Up Sync, History Auto-Pull | Form-Filler + AI |
-| TBT | Lead Pruning, Lead Pull | Reply Suggester |
-| Banyan | CTM-SF Pop-Up, Auto-Tracking | Note Summarizer |
-| Takahami | Auto-Fax, Appeal Router | Negotiation Filler |
-| Element | PDF Auto-Filler | Template Generator |
+| Client | HIGH Priority Automations (Native) |
+|--------|-----------------------------------|
+| Flyland | #1 Auto-pop (SF Softphone), #2 AskAI notes, #10 SF sync |
+| Legacy | #3 SF sync, #4 Softphone history, #13 AskAI |
+| TBT | #5 Smart Dialer, #6 Router/Queue, #14 Templates |
+| Banyan | #9 Auto-pop, #10 SF sync + Webhook |
+| Takahami | #7 Webhook+Fax, #8 Smart Router |
+| Element | #11 SF Document Generation |
+
+---
+
+## Required CTM Settings Summary
+
+### For All Clients:
+| Setting | Location | Required |
+|---------|----------|----------|
+| Platform Events (Flows) | Settings → Integration Options | ON |
+| Manual Screen Pop | Settings → Integration Options | OFF |
+| Lightning Adapter | Settings → Integrations → Salesforce | Connected |
+| User Mapping | Settings → Integrations → User Mapping | All agents mapped |
+
+### For Auto-Pop:
+| Setting | Value |
+|---------|-------|
+| Manual Screen Pop | OFF |
+| Present search dialog when multiple | ON |
+| Screen pop mapping | Configured |
+
+---
+
+## Implementation Priority
+
+### Phase 1 (Week 1-2):
+1. Fix Auto-Pop (#1, #9) - Check CTM + SF configuration
+2. Enable Platform Events
+3. Test CTM → Salesforce sync
+4. Configure Softphone Layout
+
+### Phase 2 (Week 3-4):
+1. Create CTM Triggers for common workflows
+2. Set up Salesforce Flows for Platform Events
+3. Configure Webhooks for Google Sheets
+
+### Phase 3 (Week 5+):
+1. Advanced automation (AskAI, Document Generation)
+2. Custom webhook integrations
+3. Optimize routing and queues
+
+---
+
+## What Still Requires Custom Development
+
+| Automation | Custom Dev Required |
+|------------|---------------------|
+| #7 Auto-Fax | Webhook payload + Fax API |
+| #11 PDF Auto-Filler | Document generation API |
+| #16 Negotiation Forms | SF Document Generation setup |
+
+**Total**: 3 automations need some development vs 17 with Python
 
 ---
 
 *Last updated: March 2026*
+*Revised approach: CTM-native + Salesforce Flow instead of Python/Playwright*

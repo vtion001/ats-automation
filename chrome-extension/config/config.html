@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Configuration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #fff;
+            font-size: 13px;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #4CAF50;
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #ccc;
+            margin: 20px 0 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .section {
+            background: #2d2d2d;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .field {
+            margin-bottom: 16px;
+        }
+        .field:last-child {
+            margin-bottom: 0;
+        }
+        label {
+            display: block;
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+        input[type="text"],
+        input[type="url"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: #1e1e1e;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 13px;
+        }
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+        .toggle-label {
+            color: #ccc;
+        }
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+        }
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #3d3d3d;
+            border-radius: 24px;
+            transition: 0.3s;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: #fff;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        .toggle input:checked + .toggle-slider {
+            background: #4CAF50;
+        }
+        .toggle input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        .btn {
+            padding: 12px 24px;
+            background: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-right: 8px;
+        }
+        .btn:hover {
+            background: #45a049;
+        }
+        .btn.secondary {
+            background: #3d3d3d;
+        }
+        .btn.secondary:hover {
+            background: #4d4d4d;
+        }
+        .btn.danger {
+            background: #f44336;
+        }
+        .btn.danger:hover {
+            background: #d32f2f;
+        }
+        .status {
+            padding: 10px 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .status.success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+            display: block;
+        }
+        .status.error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+            display: block;
+        }
+        .client-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        .client-card {
+            background: #1e1e1e;
+            border: 1px solid #3d3d3d;
+            border-radius: 6px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .client-card:hover {
+            border-color: #4CAF50;
+        }
+        .client-card.active {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+        .client-card h3 {
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        .client-card p {
+            font-size: 11px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <h1>ATS Configuration</h1>
+    
+    <div id="status" class="status"></div>
+
+    <div class="section">
+        <h2>Active Client</h2>
+        <div class="field">
+            <label>Select Client</label>
+            <select id="clientSelect">
+                <option value="flyland">Flyland Recovery</option>
+                <option value="legacy">Legacy</option>
+                <option value="tbt">TBT</option>
+                <option value="banyan">Banyan</option>
+                <option value="takami">Takahami</option>
+                <option value="element">Element Medical</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Automation Settings</h2>
+        <div class="toggle-row">
+            <span class="toggle-label">Enable All Automations</span>
+            <label class="toggle">
+                <input type="checkbox" id="automationEnabled" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <span class="toggle-label">Auto-search Salesforce</span>
+            <label class="toggle">
+                <input type="checkbox" id="autoSearchSF" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <span class="toggle-label">Call Transcription</span>
+            <label class="toggle">
+                <input type="checkbox" id="transcriptionEnabled" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <span class="toggle-label">AI Analysis</span>
+            <label class="toggle">
+                <input type="checkbox" id="aiAnalysisEnabled" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <span class="toggle-label">Save to Markdown</span>
+            <label class="toggle">
+                <input type="checkbox" id="saveMarkdown" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Salesforce Settings</h2>
+        <div class="field">
+            <label>Salesforce URL</label>
+            <input type="url" id="salesforceUrl" placeholder="https://yourcompany.my.salesforce.com">
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>AI Server Settings</h2>
+        <div class="field">
+            <label>AI Server URL</label>
+            <input type="url" id="aiServerUrl" placeholder="http://localhost:8000">
+        </div>
+        <div class="field">
+            <label>API Key (optional)</label>
+            <input type="text" id="apiKey" placeholder="Enter API key if required">
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>CTM Settings</h2>
+        <div class="field">
+            <label>CTM Selectors (comma separated)</label>
+            <textarea id="ctmSelectors" placeholder=".call-status, .incoming-call, .phone-number"></textarea>
+        </div>
+    </div>
+
+    <div class="section">
+        <button class="btn" id="saveBtn">Save Configuration</button>
+        <button class="btn secondary" id="resetBtn">Reset to Defaults</button>
+        <button class="btn danger" id="clearBtn">Clear All Data</button>
+    </div>
+
+    <script>
+        const DEFAULT_CONFIG = {
+            activeClient: 'flyland',
+            automationEnabled: true,
+            autoSearchSF: true,
+            transcriptionEnabled: true,
+            aiAnalysisEnabled: true,
+            saveMarkdown: true,
+            salesforceUrl: 'https://flyland.my.salesforce.com',
+            aiServerUrl: 'http://localhost:8000',
+            ctmSelectors: '.call-status, .incoming-call, .phone-number, .call-info, .caller-id'
+        };
+
+        async function loadConfig() {
+            const keys = Object.keys(DEFAULT_CONFIG);
+            const result = await chrome.storage.local.get(keys);
+            
+            document.getElementById('clientSelect').value = result.activeClient || DEFAULT_CONFIG.activeClient;
+            document.getElementById('automationEnabled').checked = result.automationEnabled !== false;
+            document.getElementById('autoSearchSF').checked = result.autoSearchSF !== false;
+            document.getElementById('transcriptionEnabled').checked = result.transcriptionEnabled !== false;
+            document.getElementById('aiAnalysisEnabled').checked = result.aiAnalysisEnabled !== false;
+            document.getElementById('saveMarkdown').checked = result.saveMarkdown !== false;
+            document.getElementById('salesforceUrl').value = result.salesforceUrl || DEFAULT_CONFIG.salesforceUrl;
+            document.getElementById('aiServerUrl').value = result.aiServerUrl || DEFAULT_CONFIG.aiServerUrl;
+            document.getElementById('ctmSelectors').value = result.ctmSelectors || DEFAULT_CONFIG.ctmSelectors;
+            document.getElementById('apiKey').value = result.apiKey || '';
+        }
+
+        function showStatus(message, type = 'success') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status ' + type;
+            setTimeout(() => status.className = 'status', 3000);
+        }
+
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            const config = {
+                activeClient: document.getElementById('clientSelect').value,
+                automationEnabled: document.getElementById('automationEnabled').checked,
+                autoSearchSF: document.getElementById('autoSearchSF').checked,
+                transcriptionEnabled: document.getElementById('transcriptionEnabled').checked,
+                aiAnalysisEnabled: document.getElementById('aiAnalysisEnabled').checked,
+                saveMarkdown: document.getElementById('saveMarkdown').checked,
+                salesforceUrl: document.getElementById('salesforceUrl').value,
+                aiServerUrl: document.getElementById('aiServerUrl').value,
+                ctmSelectors: document.getElementById('ctmSelectors').value,
+                apiKey: document.getElementById('apiKey').value
+            };
+
+            await chrome.storage.local.set(config);
+            showStatus('Configuration saved successfully!');
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', async () => {
+            await chrome.storage.local.set(DEFAULT_CONFIG);
+            loadConfig();
+            showStatus('Configuration reset to defaults');
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', async () => {
+            if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                await chrome.storage.local.clear();
+                loadConfig();
+                showStatus('All data cleared', 'error');
+            }
+        });
+
+        loadConfig();
+    </script>
+</body>
+</html>

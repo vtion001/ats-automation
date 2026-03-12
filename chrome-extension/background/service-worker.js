@@ -3,11 +3,24 @@
  * Handles messaging between content scripts and native automation
  */
 
+// Default configuration
 const ATS_CONFIG = {
     activeClient: 'flyland',
-    automationEnabled: true
+    automationEnabled: true,
+    autoSearchSF: true,
+    transcriptionEnabled: true,
+    aiAnalysisEnabled: true,
+    saveMarkdown: true,
+    salesforceUrl: 'https://flyland.my.salesforce.com',
+    aiServerUrl: 'http://localhost:8000'
 };
 
+let callLog = [];
+
+// Load config on startup
+loadConfig();
+
+// Message handler
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('[ATS Background] Received message:', message.type);
 
@@ -15,21 +28,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'CTM_CALL_EVENT':
             handleCallEvent(message.payload);
             break;
+        case 'SEARCH_SALESFORCE':
+            handleSearchSalesforce(message.payload);
+            break;
+        case 'TRANSCRIPTION_COMPLETE':
+            handleTranscriptionComplete(message.payload);
+            break;
         case 'SF_RECORD_DATA':
             handleSfRecordData(message.payload);
-            break;
-        case 'ZOHO_CHAT_EVENT':
-            handleZohoChatEvent(message.payload);
             break;
         case 'ATS_ACTION':
             handleAtsAction(message.payload);
             break;
         case 'GET_CONFIG':
             sendResponse(ATS_CONFIG);
-            break;
-        case 'SET_CLIENT':
-            ATS_CONFIG.activeClient = message.client;
-            saveConfig();
             break;
     }
 
@@ -39,33 +51,121 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleCallEvent(payload) {
     console.log('[ATS] Call event:', payload);
 
-    if (!ATS_CONFIG.automationEnabled) return;
+    if (payload.event === 'call_started') {
+        callLog.push({
+            phone: payload.phoneNumber,
+            callerName: payload.callerName,
+            startTime: payload.timestamp,
+            status: payload.status
+        });
 
-    const { phoneNumber, status } = payload;
-    if (!phoneNumber) return;
+        showOverlayNotification(`Incoming call: ${payload.phoneNumber || 'Unknown'}`);
+    } else if (payload.event === 'call_ended') {
+        if (callLog.length > 0) {
+            const lastCall = callLog[callLog.length - 1];
+            lastCall.endTime = payload.timestamp;
+            lastCall.duration = payload.timestamp - lastCall.startTime;
+        }
+    }
+}
 
+async function handleSearchSalesforce(payload) {
+    const { phone } = payload;
+    if (!phone) return;
+
+    console.log('[ATS] Searching Salesforce for:', phone);
+
+    try {
+        const searchUrl = `${ATS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${encodeURIComponent(phone)}`;
+        
+        const tabs = await chrome.tabs.query({ url: '*://*.salesforce.com/*' });
+        
+        if (tabs.length > 0) {
+            await chrome.tabs.update(tabs[0].id, { url: searchUrl, active: true });
+            console.log('[ATS] Updated existing SF tab');
+        } else {
+            await chrome.tabs.create({ url: searchUrl });
+            console.log('[ATS] Created new SF tab');
+        }
+
+        showOverlayNotification(`Searching Salesforce for: ${phone}`);
+
+    } catch (error) {
+        console.error('[ATS] Error searching Salesforce:', error);
+    }
+}
+
+async function handleTranscriptionComplete(payload) {
+    console.log('[ATS] Transcription complete:', payload);
+    
+    callLog.push({
+        phone: payload.phone,
+        callerName: payload.callerName,
+        transcription: payload.markdown,
+        timestamp: payload.timestamp
+    });
+
+    showOverlayNotification('Transcription saved! Processing with AI...');
+
+    processWithAI(payload);
+}
+
+async function processWithAI(payload) {
+    if (!ATS_CONFIG.aiAnalysisEnabled) {
+        console.log('[ATS] AI Analysis disabled');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${ATS_CONFIG.aiServerUrl}/api/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                transcription: payload.markdown,
+                phone: payload.phone,
+                client: ATS_CONFIG.activeClient
+            })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            console.log('[ATS] AI Analysis result:', result);
+            
+            showOverlayNotification('AI Analysis complete!');
+            
+            await chrome.tabs.query({ url: '*://*.salesforce.com/*' }, (tabs) => {
+                if (tabs.length > 0) {
+                    chrome.tabs.sendMessage(tabs[0].id, {
+                        type: 'AI_ANALYSIS_RESULT',
+                        payload: result
+                    });
+                }
+            });
+        } else {
+            console.log('[ATS] AI server not available');
+        }
+    } catch (error) {
+        console.log('[ATS] AI server not running');
+    }
+}
+
+async function showOverlayNotification(message) {
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
-        chrome.tabs.sendMessage(tab.id, {
-            type: 'SHOW_OVERLAY',
-            data: {
-                status: 'Searching...',
-                phone: phoneNumber
-            }
-        });
-
+        if (tab && tab.id) {
+            chrome.tabs.sendMessage(tab.id, {
+                type: 'SHOW_NOTIFICATION',
+                payload: { message }
+            });
+        }
     } catch (error) {
-        console.error('[ATS] Error handling call event:', error);
+        console.error('[ATS] Error showing notification:', error);
     }
 }
 
 async function handleSfRecordData(payload) {
     console.log('[ATS] SF Record data:', payload);
-}
-
-async function handleZohoChatEvent(payload) {
-    console.log('[ATS] ZOHO Chat event:', payload);
 }
 
 async function handleAtsAction(payload) {
@@ -75,7 +175,7 @@ async function handleAtsAction(payload) {
     
     switch (action) {
         case 'search_sf':
-            openSalesforceSearch(data.phone);
+            handleSearchSalesforce({ phone: data.phone });
             break;
         case 'copy_note':
             copyToClipboard(data.note);
@@ -83,23 +183,6 @@ async function handleAtsAction(payload) {
         case 'insert_reply':
             insertReply(data.reply);
             break;
-    }
-}
-
-async function openSalesforceSearch(phoneNumber) {
-    const baseUrl = 'https://flyland.my.salesforce.com';
-    const searchUrl = `${baseUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${encodeURIComponent(phoneNumber)}`;
-
-    try {
-        const tabs = await chrome.tabs.query({ url: '*://*.salesforce.com/*' });
-        
-        if (tabs.length > 0) {
-            chrome.tabs.update(tabs[0].id, { url: searchUrl, active: true });
-        } else {
-            chrome.tabs.create({ url: searchUrl });
-        }
-    } catch (error) {
-        console.error('[ATS] Error opening SF search:', error);
     }
 }
 
@@ -114,32 +197,34 @@ async function copyToClipboard(text) {
 async function insertReply(text) {
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        chrome.tabs.sendMessage(tab.id, {
-            type: 'INSERT_TEXT',
-            text: text
-        });
+        if (tab && tab.id) {
+            chrome.tabs.sendMessage(tab.id, {
+                type: 'INSERT_TEXT',
+                text
+            });
+        }
     } catch (error) {
         console.error('[ATS] Error inserting reply:', error);
     }
 }
 
-async function saveConfig() {
-    try {
-        await chrome.storage.local.set({ atsConfig: ATS_CONFIG });
-    } catch (error) {
-        console.error('[ATS] Error saving config:', error);
-    }
-}
-
 async function loadConfig() {
     try {
-        const result = await chrome.storage.local.get('atsConfig');
-        if (result.atsConfig) {
-            Object.assign(ATS_CONFIG, result.atsConfig);
-        }
+        const keys = ['activeClient', 'automationEnabled', 'autoSearchSF', 'transcriptionEnabled', 
+                     'aiAnalysisEnabled', 'saveMarkdown', 'salesforceUrl', 'aiServerUrl'];
+        const stored = await chrome.storage.local.get(keys);
+        
+        if (stored.activeClient) ATS_CONFIG.activeClient = stored.activeClient;
+        if (stored.automationEnabled !== undefined) ATS_CONFIG.automationEnabled = stored.automationEnabled;
+        if (stored.autoSearchSF !== undefined) ATS_CONFIG.autoSearchSF = stored.autoSearchSF;
+        if (stored.transcriptionEnabled !== undefined) ATS_CONFIG.transcriptionEnabled = stored.transcriptionEnabled;
+        if (stored.aiAnalysisEnabled !== undefined) ATS_CONFIG.aiAnalysisEnabled = stored.aiAnalysisEnabled;
+        if (stored.saveMarkdown !== undefined) ATS_CONFIG.saveMarkdown = stored.saveMarkdown;
+        if (stored.salesforceUrl) ATS_CONFIG.salesforceUrl = stored.salesforceUrl;
+        if (stored.aiServerUrl) ATS_CONFIG.aiServerUrl = stored.aiServerUrl;
+        
+        console.log('[ATS] Config loaded:', ATS_CONFIG);
     } catch (error) {
         console.error('[ATS] Error loading config:', error);
     }
 }
-
-loadConfig();

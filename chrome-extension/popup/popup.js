@@ -1,24 +1,33 @@
-document.addEventListener('DOMContentLoaded', () => {
+/**
+ * ATS Popup - Main extension popup
+ */
+
+document.addEventListener('DOMContentLoaded', async () => {
     const clientSelect = document.getElementById('clientSelect');
     const automationToggle = document.getElementById('automationToggle');
     const testBtn = document.getElementById('testBtn');
     const configBtn = document.getElementById('configBtn');
     const statusEl = document.querySelector('.status');
 
+    // Load config
+    await ATS.init();
     loadConfig();
 
+    // Client selection
     clientSelect.addEventListener('change', async (e) => {
         const client = e.target.value;
-        await chrome.runtime.sendMessage({ type: 'SET_CLIENT', client });
+        await ATS.saveConfig({ activeClient: client });
         updateStatus(`Switched to ${client}`);
     });
 
+    // Automation toggle
     automationToggle.addEventListener('change', async (e) => {
         const enabled = e.target.checked;
-        await chrome.storage.local.set({ automationEnabled: enabled });
+        await ATS.saveConfig({ automationEnabled: enabled });
         updateStatus(enabled ? 'Automations enabled' : 'Automations disabled');
     });
 
+    // Test connection
     testBtn.addEventListener('click', async () => {
         updateStatus('Testing connection...');
         
@@ -37,23 +46,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Open config - using the correct URL method
     configBtn.addEventListener('click', () => {
-        window.open('config/config.html', '_blank');
+        const configUrl = chrome.runtime.getURL('config/config.html');
+        window.open(configUrl, '_blank');
     });
 
     async function loadConfig() {
-        try {
-            const result = await chrome.storage.local.get(['atsConfig', 'automationEnabled']);
-            
-            if (result.atsConfig?.activeClient) {
-                clientSelect.value = result.atsConfig.activeClient;
-            }
-            
-            if (result.automationEnabled !== undefined) {
-                automationToggle.checked = result.automationEnabled;
-            }
-        } catch (error) {
-            console.error('Error loading config:', error);
+        const config = ATS.config;
+        
+        if (config.activeClient) {
+            clientSelect.value = config.activeClient;
+        }
+        
+        if (config.automationEnabled !== undefined) {
+            automationToggle.checked = config.automationEnabled;
         }
     }
 

@@ -1,6 +1,11 @@
 # ATS Automation System
 
-> RPA-first automation for 6 BPO client companies
+> **MIGRATED**: Most automations now use CTM Triggers + Salesforce Flow instead of Python/Playwright.
+> See [Documentation/automations.md](Documentation/automations.md) for the revised CTM-native plan.
+
+## Overview
+
+Automation for 6 BPO client companies using CTM native features + Salesforce Flow
 
 ## Quick Start
 
@@ -87,10 +92,20 @@ See `docs/` folder for detailed documentation:
 
 ## Requirements
 
-- Python 3.10+
-- Chrome or Edge browser
-- 8GB RAM minimum
-- Network access to client portals
+### For CTM-Native Automation (Primary):
+- CTM account with Enterprise plan (for triggers/platform events)
+- Salesforce account with Flow permissions
+- CTM Lightning Adapter configured
+- Softphone Layout configured in Salesforce
+
+### For Custom Webhooks (Optional):
+- Zapier or Make account (for Google Sheets)
+- Fax API account (for #7)
+- Document generation API (for #11, #16)
+
+### Legacy Python (Only for 3 automations):
+- Python 3.10+ (only for #7, #11, #16 if needed)
+- Chrome/Edge browser
 
 ## Security
 

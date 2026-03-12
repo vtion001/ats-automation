@@ -25,11 +25,9 @@ def start_automation(client: str):
     """Start the automation for a specific client."""
     print(f"Starting ATS Automation for: {client}")
 
-    # Setup logging
     setup_logging(client)
     logger = get_logger(__name__)
 
-    # Load config
     try:
         config = ConfigLoader(client).load()
         logger.info(f"Loaded config for {client}")
@@ -39,18 +37,47 @@ def start_automation(client: str):
         print(f"  Available clients: {get_available_clients()}")
         return
 
-    # Check automations
     automations = config.get("automations", {})
     enabled = [k for k, v in automations.items() if v.get("enabled")]
 
     print(f"[OK] Enabled automations: {', '.join(enabled)}")
 
-    # TODO: Start the actual automation based on config
-    # For now, this is a placeholder
-    print(f"\n🚀 Automation ready!")
-    print(f"   Client: {config.get('display_name')}")
-    print(f"   Systems: {', '.join(config.get('systems', {}).keys())}")
-    print(f"   Automations: {len(enabled)} enabled")
+    if not enabled:
+        print("[!] No automations enabled for this client")
+        return
+
+    for auto_name in enabled:
+        print(f"\n> Running automation: {auto_name}")
+        try:
+            run_automation(client, auto_name)
+            print(f"[OK] {auto_name} completed")
+        except Exception as e:
+            print(f"[X] {auto_name} failed: {e}")
+            logger.exception(f"Automation {auto_name} failed")
+
+
+def run_automation(client: str, automation_name: str):
+    """Run a specific automation."""
+    import importlib.util
+
+    auto_module_path = PROJECT_ROOT / "clients" / client / "automations" / f"{automation_name}.py"
+
+    if not auto_module_path.exists():
+        raise FileNotFoundError(f"Automation script not found: {auto_module_path}")
+
+    spec = importlib.util.spec_from_file_location(f"automation_{automation_name}", auto_module_path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"Cannot load automation {automation_name}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    if hasattr(module, "run"):
+        module.run(client)
+    elif hasattr(module, "main"):
+        module.main(client)
+    else:
+        raise ValueError(f"Automation {automation_name} has no run() or main() function")
 
 
 def test_automation(client: str):

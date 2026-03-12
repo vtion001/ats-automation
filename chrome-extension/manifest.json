@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ATS Automation",
-  "version": "1.0.0",
-  "description": "RPA automation for BPO client workflows",
+  "version": "2.0.0",
+  "description": "RPA automation for BPO client workflows - CTM monitoring, transcription, Salesforce search",
   "permissions": [
     "activeTab",
     "storage",
@@ -19,6 +19,12 @@
     "*://*.availity.com/*",
     "*://*.verifytx.com/*"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/**/*", "config/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "background": {
     "service_worker": "background/service-worker.js"
   },
@@ -33,8 +39,19 @@
   "content_scripts": [
     {
       "matches": ["*://*.calltrackingmetrics.co/*"],
-      "js": ["content-scripts/ctm-monitor.js"],
-      "css": ["content-scripts/overlay.css"],
+      "js": [
+        "src/lib/core.js",
+        "src/services/ctm-service.js",
+        "src/services/salesforce-service.js",
+        "src/services/transcription-service.js",
+        "src/services/ai-service.js",
+        "src/modules/call-monitor.js",
+        "src/modules/overlay-ui.js",
+        "src/main.js"
+      ],
+      "css": [
+        "content-scripts/overlay.css"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -42,14 +59,24 @@
         "*://*.my.salesforce.com/*",
         "*://*.lightning.force.com/*"
       ],
-      "js": ["content-scripts/sf-reader.js"],
-      "css": ["content-scripts/overlay.css"],
+      "js": [
+        "src/lib/core.js",
+        "src/services/salesforce-service.js",
+        "src/modules/overlay-ui.js"
+      ],
+      "css": [
+        "content-scripts/overlay.css"
+      ],
       "run_at": "document_idle"
     },
     {
       "matches": ["*://*.zoho.com/*"],
-      "js": ["content-scripts/zoho-chat.js"],
-      "css": ["content-scripts/overlay.css"],
+      "js": [
+        "src/lib/core.js"
+      ],
+      "css": [
+        "content-scripts/overlay.css"
+      ],
       "run_at": "document_idle"
     }
   ],
