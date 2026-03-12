@@ -1,0 +1,11 @@
+{
+  "system": "ctm",
+  "client": "banyan",
+  "selectors": {
+    "call_notification": ".caller-id, .call-info",
+    "phone_number": "#phone-field, .phone-input",
+    "caller_name": ".caller-name",
+    "disposition_dropdown": "#disposition"
+  },
+  "notes": "Banyan CTM"
+}

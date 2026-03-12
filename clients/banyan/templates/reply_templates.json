@@ -1,0 +1,16 @@
+{
+  "client": "banyan",
+  "templates": {
+    "admissions": [
+      "Welcome to Banyan. Let me get you started on the admissions process.",
+      "Thank you for calling Banyan. How can I assist you today?"
+    ],
+    "transfer": [
+      "I'll transfer you to our admissions specialist.",
+      "Please hold while I connect you to someone who can help."
+    ],
+    "general": [
+      "Thank you for calling Banyan Recovery. How may I help?"
+    ]
+  }
+}

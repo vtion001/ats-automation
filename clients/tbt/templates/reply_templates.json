@@ -1,0 +1,20 @@
+{
+  "client": "tbt",
+  "templates": {
+    "vm": [
+      "Hi, this is [NAME] from TBT. Please call us back at 555-123-4567.",
+      "Hello, returning your call from TBT. Please contact us when convenient."
+    ],
+    "callback": [
+      "We'll call you back shortly.",
+      "A team member will reach out within the hour."
+    ],
+    "not_interested": [
+      "Thank you for your time. We'll remove you from our list.",
+      "We appreciate your response. You won't be contacted again."
+    ],
+    "general": [
+      "Thank you for answering. How can we help you today?"
+    ]
+  }
+}

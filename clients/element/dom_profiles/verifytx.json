@@ -1,0 +1,10 @@
+{
+  "system": "verifytx",
+  "client": "element",
+  "url_pattern": "*.app.verifytx.com",
+  "selectors": {
+    "patient_record": ".patientRow",
+    "insurance_status": ".statusField",
+    "eligibility": ".eligField"
+  }
+}

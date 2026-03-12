@@ -1,0 +1,11 @@
+{
+  "system": "availity",
+  "client": "element",
+  "url_pattern": "*.availity.com",
+  "selectors": {
+    "eligibility_result": ".eligCard, .coverage-card",
+    "patient_name": "[data-field='PatientName']",
+    "deductible": "[data-field='Deductible']",
+    "copay": "[data-field='Copay']"
+  }
+}
