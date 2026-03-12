@@ -33,9 +33,9 @@ def start_automation(client: str):
     try:
         config = ConfigLoader(client).load()
         logger.info(f"Loaded config for {client}")
-        print(f"✓ Config loaded: {config.get('display_name', client)}")
+        print(f"[OK] Config loaded: {config.get('display_name', client)}")
     except FileNotFoundError:
-        print(f"✗ Config not found for client: {client}")
+        print(f"[X] Config not found for client: {client}")
         print(f"  Available clients: {get_available_clients()}")
         return
 
@@ -43,7 +43,7 @@ def start_automation(client: str):
     automations = config.get("automations", {})
     enabled = [k for k, v in automations.items() if v.get("enabled")]
 
-    print(f"✓ Enabled automations: {', '.join(enabled)}")
+    print(f"[OK] Enabled automations: {', '.join(enabled)}")
 
     # TODO: Start the actual automation based on config
     # For now, this is a placeholder
@@ -63,28 +63,28 @@ def test_automation(client: str):
     try:
         config_loader = ConfigLoader(client)
         config = config_loader.load()
-        print("✓ Config loaded")
+        print("[OK] Config loaded")
 
         # Test DOM profiles
         systems = config.get("systems", {})
         for system in systems:
             profile = config_loader.get_dom_profile(system)
             if profile:
-                print(f"✓ DOM profile loaded: {system}")
+                print(f"[OK] DOM profile loaded: {system}")
             else:
-                print(f"⚠ No DOM profile: {system}")
+                print(f"[!] No DOM profile: {system}")
 
         # Test templates
         templates = config_loader.get_templates()
         if templates:
-            print(f"✓ Templates loaded")
+            print(f"[OK] Templates loaded")
         else:
-            print(f"⚠ No templates found")
+            print(f"[!] No templates found")
 
-        print("\n✅ All tests passed!")
+        print("\n[PASS] All tests passed!")
 
     except Exception as e:
-        print(f"✗ Test failed: {e}")
+        print(f"[X] Test failed: {e}")
         logger.exception("Test failed")
 
 

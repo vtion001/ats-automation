@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "ATS Automation",
+  "version": "1.0.0",
+  "description": "RPA automation for BPO client workflows",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.calltrackingmetrics.co/*",
+    "*://*.my.salesforce.com/*",
+    "*://*.lightning.force.com/*",
+    "*://*.zoho.com/*",
+    "*://*.ringcentral.com/*",
+    "*://*.kipuworks.com/*",
+    "*://*.collaboratemd.com/*",
+    "*://*.availity.com/*",
+    "*://*.verifytx.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.calltrackingmetrics.co/*"],
+      "js": ["content-scripts/ctm-monitor.js"],
+      "css": ["content-scripts/overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.my.salesforce.com/*",
+        "*://*.lightning.force.com/*"
+      ],
+      "js": ["content-scripts/sf-reader.js"],
+      "css": ["content-scripts/overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.zoho.com/*"],
+      "js": ["content-scripts/zoho-chat.js"],
+      "css": ["content-scripts/overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

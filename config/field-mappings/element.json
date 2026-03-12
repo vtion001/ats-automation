@@ -1,0 +1,28 @@
+{
+  "pdf_fields": {
+    "patient_name": ["Patient Name", "Name", "Full Name", "FullName"],
+    "patient_dob": ["Date of Birth", "DOB", "Birth Date"],
+    "patient_address": ["Address", "Patient Address", "Street Address"],
+    "patient_phone": ["Phone", "Phone Number", "Contact Number", "Telephone"],
+    "patient_email": ["Email", "Email Address", "E-mail"],
+    "insurance_id": ["Insurance ID", "Member ID", "Policy Number", "ID Number"],
+    "group_number": ["Group Number", "Group ID", "Group"],
+    "provider_name": ["Provider", "Provider Name", "Doctor", "Physician"],
+    "date_of_service": ["Date of Service", "Service Date", "DOS"],
+    "diagnosis_code": ["Diagnosis Code", "ICD-10", "DX Code", "Diagnosis"],
+    "cpt_code": ["CPT Code", "Procedure Code", "HCPCS"]
+  },
+  "sf_to_pdf_mapping": {
+    "Name": "patient_name",
+    "Phone": "patient_phone",
+    "Email": "patient_email",
+    "BillingAddress": "patient_address",
+    "Insurance_ID__c": "insurance_id",
+    "Group_Number__c": "group_number"
+  },
+  "dom_selectors": {
+    "patient_name": ["[data-field-name='Name']", ".forceRecordHeader .primaryName"],
+    "patient_phone": ["[data-field-name='Phone']", ".phone-field"],
+    "patient_email": ["[data-field-name='Email']", ".email-field"]
+  }
+}

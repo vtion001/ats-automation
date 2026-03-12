@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Automation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            width: 300px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #fff;
+            font-size: 13px;
+        }
+        .header {
+            padding: 16px;
+            background: #2d2d2d;
+            border-bottom: 1px solid #3d3d3d;
+        }
+        .header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #4CAF50;
+            margin-bottom: 4px;
+        }
+        .header .status {
+            font-size: 12px;
+            color: #888;
+        }
+        .header .status.active {
+            color: #4CAF50;
+        }
+        .section {
+            padding: 16px;
+            border-bottom: 1px solid #3d3d3d;
+        }
+        .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 12px;
+        }
+        .client-select {
+            width: 100%;
+            padding: 8px 12px;
+            background: #2d2d2d;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .client-select:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .toggle-label {
+            color: #ccc;
+        }
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+        }
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #3d3d3d;
+            border-radius: 24px;
+            transition: 0.3s;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: #fff;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        .toggle input:checked + .toggle-slider {
+            background: #4CAF50;
+        }
+        .toggle input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        .btn {
+            width: 100%;
+            padding: 10px 16px;
+            background: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 8px;
+        }
+        .btn:hover {
+            background: #45a049;
+        }
+        .btn.secondary {
+            background: #3d3d3d;
+        }
+        .btn.secondary:hover {
+            background: #4d4d4d;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .info-label {
+            color: #888;
+        }
+        .info-value {
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ATS Automation</h1>
+        <div class="status active">Ready</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Active Client</div>
+        <select class="client-select" id="clientSelect">
+            <option value="flyland">Flyland Recovery</option>
+            <option value="legacy">Legacy</option>
+            <option value="tbt">TBT</option>
+            <option value="banyan">Banyan</option>
+            <option value="takami">Takahami</option>
+            <option value="element">Element Medical</option>
+        </select>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Automation</div>
+        <div class="toggle-row">
+            <span class="toggle-label">Enable Automations</span>
+            <label class="toggle">
+                <input type="checkbox" id="automationToggle" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Quick Actions</div>
+        <button class="btn" id="testBtn">Test Connection</button>
+        <button class="btn secondary" id="configBtn">Open Config</button>
+    </div>
+
+    <div class="section">
+        <div class="info-row">
+            <span class="info-label">Version</span>
+            <span class="info-value">1.0.0</span>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

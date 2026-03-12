@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).parent.parent
 CLIENTS_DIR = PROJECT_ROOT / "clients"
 CORE_DIR = PROJECT_ROOT / "core"
 SERVER_URL = os.getenv("ATS_SERVER_URL", "http://localhost:8000")
