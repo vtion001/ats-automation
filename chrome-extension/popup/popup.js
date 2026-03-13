@@ -220,35 +220,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // Test button - uses StatusService
-    testBtn.addEventListener('click', async () => {
-        updateAllServiceStatus('checking');
-        
-        const results = await StatusService.runAllTests();
-        
-        updateServiceStatus('storage', results.storage);
-        updateServiceStatus('aiServer', results.aiServer);
-        updateServiceStatus('salesforce', results.salesforce);
-        updateServiceStatus('background', results.background);
-        updateServiceStatus('ctm', results.ctmMonitor);
-        
-        const allPassed = results.storage && results.aiServer && results.salesforce && results.background && results.ctmMonitor;
-        
-        if (allPassed) {
-            showStatus('All services online!', true);
-            updateMainStatus(true);
-        } else {
-            const failed = Object.entries(results).filter(([k,v]) => !v).map(([k]) => k).join(', ');
-            showStatus('Issues: ' + failed, false);
-            updateMainStatus(false);
-        }
-        
-        updateStats();
-    });
+    if (testBtn) {
+        testBtn.addEventListener('click', async () => {
+            updateAllServiceStatus('checking');
+            
+            const results = await StatusService.runAllTests();
+            
+            updateServiceStatus('storage', results.storage);
+            updateServiceStatus('aiServer', results.aiServer);
+            updateServiceStatus('salesforce', results.salesforce);
+            updateServiceStatus('background', results.background);
+            updateServiceStatus('ctm', results.ctmMonitor);
+            
+            const allPassed = results.storage && results.aiServer && results.salesforce && results.background && results.ctmMonitor;
+            
+            if (allPassed) {
+                showStatus('All services online!', true);
+                updateMainStatus(true);
+            } else {
+                const failed = Object.entries(results).filter(([k,v]) => !v).map(([k]) => k).join(', ');
+                showStatus('Issues: ' + failed, false);
+                updateMainStatus(false);
+            }
+            
+            updateStats();
+        });
+    }
     
     // Config button
-    configBtn.addEventListener('click', () => {
-        window.open(chrome.runtime.getURL('config/config.html'), '_blank');
-    });
+    if (configBtn) {
+        configBtn.addEventListener('click', () => {
+            window.open(chrome.runtime.getURL('config/config.html'), '_blank');
+        });
+    }
     
     // ====== Test Analysis Section ======
     const testNewLeadBtn = document.getElementById('testNewLeadBtn');
@@ -264,33 +268,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentTestType = null;
     
     // Test New Lead button
-    testNewLeadBtn.addEventListener('click', () => {
-        currentTestType = 'new-lead';
-        testInputArea.style.display = 'block';
-        testStatus.style.display = 'none';
-        
-        // Clear fields - user will upload audio or paste transcription
-        transcriptionInput.value = '';
-        testPhoneInput.value = '';
-        testClientSelect.value = 'flyland';
-        audioFileInput.value = '';
-    });
+    if (testNewLeadBtn) {
+        testNewLeadBtn.addEventListener('click', () => {
+            currentTestType = 'new-lead';
+            if (testInputArea) testInputArea.style.display = 'block';
+            if (testStatus) testStatus.style.display = 'none';
+            
+            // Clear fields - user will upload audio or paste transcription
+            if (transcriptionInput) transcriptionInput.value = '';
+            if (testPhoneInput) testPhoneInput.value = '';
+            if (testClientSelect) testClientSelect.value = 'flyland';
+            if (audioFileInput) audioFileInput.value = '';
+        });
+    }
     
     // Test Existing Lead button
-    testExistingLeadBtn.addEventListener('click', () => {
-        currentTestType = 'existing';
-        testInputArea.style.display = 'block';
-        testStatus.style.display = 'none';
-        
-        // Clear fields - user will upload audio or paste transcription
-        transcriptionInput.value = '';
-        testPhoneInput.value = '';
-        testClientSelect.value = 'flyland';
-        audioFileInput.value = '';
-    });
+    if (testExistingLeadBtn) {
+        testExistingLeadBtn.addEventListener('click', () => {
+            currentTestType = 'existing';
+            if (testInputArea) testInputArea.style.display = 'block';
+            if (testStatus) testStatus.style.display = 'none';
+            
+            // Clear fields - user will upload audio or paste transcription
+            if (transcriptionInput) transcriptionInput.value = '';
+            if (testPhoneInput) testPhoneInput.value = '';
+            if (testClientSelect) testClientSelect.value = 'flyland';
+            if (audioFileInput) audioFileInput.value = '';
+        });
+    }
     
     // Run Analysis button
-    runAnalysisBtn.addEventListener('click', async () => {
+    if (runAnalysisBtn) {
+        runAnalysisBtn.addEventListener('click', async () => {
         const audioFile = audioFileInput.files[0];
         let transcription = transcriptionInput.value.trim();
         const client = testClientSelect.value;
@@ -471,6 +480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             showTestStatus('Error: ' + error.message, 'error');
         }
     });
+    }
     
     function showTestStatus(message, status) {
         testStatus.style.display = 'block';
