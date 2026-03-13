@@ -1,0 +1,36 @@
+{
+  "client_name": "tbt",
+  "display_name": "TBT (We The Best)",
+  "description": "BPO - outbound lead management - SF Lightning only (NO CTM)",
+  "systems": {
+    "salesforce": {
+      "name": "Salesforce Lightning",
+      "url_pattern": "*.lightning.force.com",
+      "enabled": true,
+      "note": "Primary system - no CTM"
+    }
+  },
+  "automations": {
+    "lead_pruning": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1,
+      "note": "CSV watcher for unresponsive leads"
+    },
+    "lead_pull": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1,
+      "note": "SF queue monitoring"
+    },
+    "reply_suggester": {
+      "enabled": true,
+      "priority": "MEDIUM",
+      "phase": 2
+    }
+  },
+  "critical_notes": [
+    "TBT has NO CTM - uses Salesforce Lightning exclusively",
+    "TBT shares SF instance with Flyland - must filter by owner"
+  ]
+}

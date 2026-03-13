@@ -11,8 +11,8 @@ const AGS_CONFIG = {
     transcriptionEnabled: true,
     aiAnalysisEnabled: true,
     saveMarkdown: true,
-    salesforceUrl: '',  // Will be loaded from storage or user config
-    aiServerUrl: 'http://localhost:8000'
+    aiServerUrl: 'http://20.125.46.59:8000',
+    salesforceUrl: 'https://flyland.my.salesforce.com'
 };
 
 let callLog = [];
@@ -46,11 +46,59 @@ async function loadConfig() {
         if (stored.aiServerUrl) AGS_CONFIG.aiServerUrl = stored.aiServerUrl;
         if (stored.activeClient) AGS_CONFIG.activeClient = stored.activeClient;
         
+        // Initialize storage with defaults if not set
+        if (!stored.aiServerUrl) {
+            await chrome.storage.local.set({ aiServerUrl: 'http://20.125.46.59:8000' });
+        }
+        if (!stored.salesforceUrl) {
+            await chrome.storage.local.set({ salesforceUrl: 'https://flyland.my.salesforce.com' });
+        }
+        
         console.log('[AGS] Config loaded:', AGS_CONFIG);
     } catch (error) {
         console.error('[AGS] Error loading config:', error);
     }
 }
+
+// Handle extension icon click - open as floating window if enabled
+chrome.action.onClicked.addListener(async (tab) => {
+    try {
+        const result = await chrome.storage.local.get('popupFloatEnabled');
+        
+        if (result.popupFloatEnabled) {
+            const windows = await chrome.windows.getAll();
+            const existingWindow = windows.find(w => 
+                w.type === 'popup' && 
+                w.url && 
+                w.url.includes('popup.html')
+            );
+            
+            if (existingWindow) {
+                await chrome.windows.update(existingWindow.id, { focused: true });
+            } else {
+                await chrome.windows.create({
+                    url: chrome.runtime.getURL('popup/popup.html'),
+                    type: 'popup',
+                    width: 420,
+                    height: 700,
+                    focused: true
+                });
+            }
+        } else {
+            // Default behavior - let Chrome handle the popup
+            // This won't work with onClicked, so we open the popup page directly
+            await chrome.windows.create({
+                url: chrome.runtime.getURL('popup/popup.html'),
+                type: 'popup',
+                width: 420,
+                height: 700,
+                focused: true
+            });
+        }
+    } catch (error) {
+        console.error('[AGS] Error handling click:', error);
+    }
+});
 
 // Remove duplicate function at end of file
 

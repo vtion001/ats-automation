@@ -4,7 +4,7 @@ Processes call transcriptions and provides AI-powered insights using OpenRouter
 With Flyland-specific knowledge base integration
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
@@ -13,6 +13,7 @@ from loguru import logger
 import re
 import json
 import os
+import tempfile
 from datetime import datetime, timedelta
 import requests
 from dotenv import load_dotenv
@@ -93,6 +94,68 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy", "ai_enabled": bool(API_KEY), "provider": "openrouter", "kb_loaded": list(KNOWLEDGE_BASES.keys())}
+
+# Transcription endpoint - try Whisper, fallback to mock
+try:
+    import whisper
+    WHISPER_MODEL = None
+    def load_whisper():
+        global WHISPER_MODEL
+        if WHISPER_MODEL is None:
+            logger.info("Loading Whisper base model...")
+            WHISPER_MODEL = whisper.load_model("base")
+            logger.info("Whisper model loaded")
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+    logger.warning("Whisper not available, audio transcription disabled")
+
+@app.post("/api/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    """Transcribe audio file using Whisper"""
+    if not WHISPER_AVAILABLE:
+        return {"error": "Whisper not installed. Install with: pip install openwhisper"}
+    
+    try:
+        load_whisper()
+        
+        # Save uploaded file to temp
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        logger.info(f"Transcribing audio: {file.filename}")
+        
+        # Transcribe
+        result = WHISPER_MODEL.transcribe(tmp_path)
+        transcription = result["text"].strip()
+        
+        # Extract phone number from transcription
+        phone_pattern = r'\+?1?[-.\s]?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}'
+        phones = re.findall(phone_pattern, transcription)
+        phone = phones[0] if phones else None
+        
+        # Clean phone
+        if phone:
+            phone = re.sub(r'[^\d+]', '', phone)
+            if not phone.startswith('+'):
+                phone = '+1' + phone
+        
+        # Remove temp file
+        os.unlink(tmp_path)
+        
+        logger.info(f"Transcription complete: {len(transcription)} chars, phone: {phone}")
+        
+        return {
+            "transcription": transcription,
+            "phone": phone,
+            "duration": result.get("duration", 0)
+        }
+        
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        return {"error": str(e)}
 
 @app.get("/api/kb/{client}")
 async def get_knowledge_base(client: str):

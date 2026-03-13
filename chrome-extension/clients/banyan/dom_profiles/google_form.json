@@ -1,0 +1,11 @@
+{
+  "system": "google_form",
+  "client": "banyan",
+  "url_pattern": "*.google.com/forms/*",
+  "selectors": {
+    "form_fields": ".freebirdFormviewerViewItemsItemItem",
+    "submit_button": ".freebirdFormviewerViewNavigationSubmitButton"
+  },
+  "prefill_pattern": "?entry.FIELD_ID=value",
+  "notes": "Google Form is submit-only - use URL pre-fill approach"
+}

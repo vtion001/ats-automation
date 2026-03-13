@@ -1,0 +1,44 @@
+{
+  "client_name": "banyan",
+  "display_name": "Banyan",
+  "description": "Addiction counseling - Google Form tracker",
+  "systems": {
+    "ctm": {
+      "name": "Call Tracking Metrics",
+      "url_pattern": "*.calltrackingmetrics.co",
+      "enabled": true
+    },
+    "salesforce": {
+      "name": "Salesforce",
+      "url_pattern": "*.salesforce.com",
+      "enabled": true
+    },
+    "google_form": {
+      "name": "Google Form Tracker",
+      "url_pattern": "*.google.com/forms/*",
+      "enabled": true,
+      "note": "Use URL pre-fill approach"
+    }
+  },
+  "automations": {
+    "ctm_sf_popup": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1
+    },
+    "auto_tracking": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1
+    },
+    "note_summarizer": {
+      "enabled": true,
+      "priority": "MEDIUM",
+      "phase": 2
+    }
+  },
+  "critical_notes": [
+    "Tracker is Google Form - submit only, use URL pre-fill",
+    "Alternative: Direct Google Sheet write via Playwright"
+  ]
+}

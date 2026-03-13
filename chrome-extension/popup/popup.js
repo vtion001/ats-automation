@@ -183,6 +183,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
+    // Pin/Float button - opens popup as standalone window
+    const pinBtn = document.getElementById('pinBtn');
+    if (pinBtn) {
+        pinBtn.addEventListener('click', async () => {
+            const isPinned = pinBtn.classList.contains('pinned');
+            
+            if (isPinned) {
+                pinBtn.classList.remove('pinned');
+                await StorageService.set({ popupFloatEnabled: false });
+                showStatus('Floating mode disabled', true);
+            } else {
+                pinBtn.classList.add('pinned');
+                await StorageService.set({ popupFloatEnabled: true });
+                
+                chrome.windows.create({
+                    url: chrome.runtime.getURL('popup/popup.html'),
+                    type: 'popup',
+                    width: 420,
+                    height: 700,
+                    focused: true
+                }).then((window) => {
+                    showStatus('Opening as floating window...', true);
+                    window.close();
+                }).catch((err) => {
+                    console.error('Failed to create window:', err);
+                });
+            }
+        });
+        
+        StorageService.get('popupFloatEnabled').then(result => {
+            if (result.popupFloatEnabled) {
+                pinBtn.classList.add('pinned');
+            }
+        });
+    }
+    
     // Test button - uses StatusService
     testBtn.addEventListener('click', async () => {
         updateAllServiceStatus('checking');
@@ -223,6 +259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const testPhoneInput = document.getElementById('testPhoneInput');
     const testClientSelect = document.getElementById('testClientSelect');
     const runAnalysisBtn = document.getElementById('runAnalysisBtn');
+    const audioFileInput = document.getElementById('audioFileInput');
     
     let currentTestType = null;
     
@@ -232,10 +269,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         testInputArea.style.display = 'block';
         testStatus.style.display = 'none';
         
-        // Pre-fill with mock transcription for testing
-        transcriptionInput.value = `Hello, I'm calling because I'm looking for help. I've been struggling with addiction and I really need to get into a program. I have about 3 days clean now. I have Blue Cross insurance through my employer. I'm located in Florida. I want to know what options I have for treatment. My name is John Smith. I'm really ready to get help.`;
-        testPhoneInput.value = '+15551234567';
+        // Clear fields - user will upload audio or paste transcription
+        transcriptionInput.value = '';
+        testPhoneInput.value = '';
         testClientSelect.value = 'flyland';
+        audioFileInput.value = '';
     });
     
     // Test Existing Lead button
@@ -244,36 +282,77 @@ document.addEventListener('DOMContentLoaded', async () => {
         testInputArea.style.display = 'block';
         testStatus.style.display = 'none';
         
-        // Pre-fill with mock transcription for testing
-        transcriptionInput.value = `Hi, this is Sarah Johnson. I've been a patient with you guys before. I completed the program last year. I'm calling because I need to schedule a follow-up appointment. I have some questions about my insurance coverage. Also, I've been feeling some cravings lately and I wanted to talk to someone. Can you help me?`;
-        testPhoneInput.value = '+15559876543';
+        // Clear fields - user will upload audio or paste transcription
+        transcriptionInput.value = '';
+        testPhoneInput.value = '';
         testClientSelect.value = 'flyland';
+        audioFileInput.value = '';
     });
     
     // Run Analysis button
     runAnalysisBtn.addEventListener('click', async () => {
+        const audioFile = audioFileInput.files[0];
         const transcription = transcriptionInput.value.trim();
-        const phone = testPhoneInput.value.trim();
         const client = testClientSelect.value;
+        let phone = testPhoneInput.value.trim();
         
-        if (!transcription) {
-            showTestStatus('Please enter or select a transcription', 'error');
+        const serverUrl = await StatusService.getAIServerUrl();
+        const actualUrl = serverUrl.includes('localhost') ? 'http://20.125.46.59:8000' : serverUrl;
+        
+        // If audio file provided, transcribe first
+        if (audioFile) {
+            showTestStatus('Transcribing audio...', 'loading');
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', audioFile);
+                
+                const transcribeResponse = await fetch(`${actualUrl}/api/transcribe`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!transcribeResponse.ok) {
+                    const err = await transcribeResponse.json();
+                    throw new Error(err.error || 'Transcription failed');
+                }
+                
+                const transcribeResult = await transcribeResponse.json();
+                transcriptionInput.value = transcribeResult.transcription;
+                
+                // Use extracted phone if available, otherwise keep manual entry
+                if (transcribeResult.phone && !phone) {
+                    phone = transcribeResult.phone;
+                    testPhoneInput.value = phone;
+                }
+                
+                showTestStatus('Transcription complete! Running analysis...', 'loading');
+                
+            } catch (error) {
+                showTestStatus('Transcription error: ' + error.message, 'error');
+                return;
+            }
+        }
+        
+        if (!transcriptionInput.value.trim()) {
+            showTestStatus('Please upload audio or enter transcription', 'error');
             return;
         }
         
         showTestStatus('Running AI Analysis...', 'loading');
         
         try {
-            // Get AI Server URL
-            const config = await ATS.getConfig();
-            const serverUrl = config.aiServerUrl || 'http://localhost:8000';
+            // Get AI Server URL - use Azure as default
+            const serverUrl = await StatusService.getAIServerUrl();
+            const actualUrl = serverUrl.includes('localhost') ? 'http://20.125.46.59:8000' : serverUrl;
+            console.log('[Test Analysis] Using URL:', actualUrl);
             
             // Send to AI server for analysis
-            const response = await fetch(`${serverUrl}/api/analyze`, {
+            const response = await fetch(`${actualUrl}/api/analyze`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    transcription: transcription,
+                    transcription: transcriptionInput.value.trim(),
                     phone: phone,
                     client: client
                 })
@@ -286,11 +365,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const analysis = await response.json();
             
             // Now get the action determination
-            const actionResponse = await fetch(`${serverUrl}/api/determine-action`, {
+            const actionResponse = await fetch(`${actualUrl}/api/determine-action`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    transcription: transcription,
+                    transcription: transcriptionInput.value.trim(),
                     analysis: analysis,
                     phone: phone,
                     client: client
@@ -365,6 +444,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
         } catch (error) {
             console.error('Test analysis error:', error);
+            console.error('Server URL was:', actualUrl);
             showTestStatus('Error: ' + error.message, 'error');
         }
     });

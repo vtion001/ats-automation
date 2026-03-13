@@ -40,9 +40,39 @@
         }
         .header {
             background: var(--bg-white);
-            padding: 24px 20px;
+            padding: 20px;
             text-align: center;
             border-bottom: 1px solid var(--border);
+            position: relative;
+        }
+        .header-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 6px;
+        }
+        .header-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-white);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+        .header-btn:hover {
+            background: var(--bg-light);
+            color: var(--text-primary);
+        }
+        .header-btn.pinned {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
         }
         .logo {
             width: 64px;
@@ -688,6 +718,11 @@
 </head>
 <body>
     <div class="header">
+        <div class="header-controls">
+            <button class="header-btn" id="pinBtn" title="Pin as floating window">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+            </button>
+        </div>
         <div class="logo">
             <img src="https://res.cloudinary.com/dbviya1rj/image/upload/v1773384037/gpnkwelbdcwfjmw5axtx.webp" alt="AGS Logo">
         </div>
@@ -889,7 +924,7 @@
         </div>
         <div class="info-row">
             <span class="info-label">Server</span>
-            <span class="info-value" id="serverStatus">localhost:8000</span>
+            <span class="info-value" id="serverStatus">20.125.46.59:8000</span>
         </div>
     </div>
 

@@ -1,0 +1,54 @@
+{
+  "client": "legacy",
+  "name": "Legacy Services",
+  "industry": "BPO Services",
+  "qualification_criteria": {
+    "hot_lead": {
+      "keywords": ["interested", "want", "need", "definitely", "call back", "sign up", "contract", "proposal"],
+      "score_weight": 30,
+      "description": "Business decision maker interested in services"
+    },
+    "warm_lead": {
+      "keywords": ["maybe", "information", "details", "pricing", "quote", "capabilities", "what do you offer"],
+      "score_weight": 15,
+      "description": "Needs more information"
+    },
+    "urgent": {
+      "keywords": ["urgent", "asap", "immediately", "emergency", "deadline", "rush"],
+      "score_weight": 25,
+      "description": "Time-sensitive inquiry"
+    },
+    "enterprise": {
+      "keywords": ["enterprise", "large", "500", "1000", "employees", "corporate", "global"],
+      "score_weight": 20,
+      "description": "Large enterprise potential"
+    },
+    "unqualified": {
+      "keywords": ["not interested", "no thank", "wrong number", "competitor", "already have"],
+      "score_weight": -30,
+      "description": "Not a qualified lead"
+    }
+  },
+  "departments": {
+    "sales": {
+      "name": "Sales Team",
+      "keywords": ["interested", "pricing", "quote", "proposal", "demo"],
+      "transfer_trigger": "score >= 50"
+    },
+    "support": {
+      "name": "Customer Support",
+      "keywords": ["help", "issue", "problem", "technical", "bug"],
+      "transfer_trigger": "has support keywords"
+    },
+    "enterprise": {
+      "name": "Enterprise Sales",
+      "keywords": ["enterprise", "large", "corporate", "global"],
+      "transfer_trigger": "has enterprise"
+    }
+  },
+  "qualification_thresholds": {
+    "hot": 65,
+    "warm": 35,
+    "cold": 0
+  }
+}

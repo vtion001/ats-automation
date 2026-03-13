@@ -1,0 +1,11 @@
+{
+  "system": "ringcentral",
+  "client": "takami",
+  "url_pattern": "*.ringcentral.com",
+  "selectors": {
+    "active_call": ".callActive, .call-info",
+    "caller_id": ".callerInfo, [class*='phone']",
+    "call_status": ".callStatus"
+  },
+  "notes": "Takahami uses RingCentral - NOT CTM"
+}
