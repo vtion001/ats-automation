@@ -15,11 +15,14 @@ const DEFAULT_CONFIG = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('[Config] Page loaded');
     await loadConfig();
     setupEventListeners();
+    console.log('[Config] Event listeners set up');
 });
 
 async function loadConfig() {
+    console.log('[Config] Loading config...');
     const keys = Object.keys(DEFAULT_CONFIG);
     const result = await chrome.storage.local.get(keys);
     
@@ -33,11 +36,15 @@ async function loadConfig() {
     document.getElementById('aiServerUrl').value = result.aiServerUrl || DEFAULT_CONFIG.aiServerUrl;
     document.getElementById('ctmSelectors').value = result.ctmSelectors || DEFAULT_CONFIG.ctmSelectors;
     document.getElementById('apiKey').value = result.apiKey || '';
+    console.log('[Config] Config loaded:', result);
 }
 
 function setupEventListeners() {
+    console.log('[Config] Setting up event listeners...');
+    
     // Save button
     document.getElementById('saveBtn').addEventListener('click', async () => {
+        console.log('[Config] Save button clicked');
         const config = {
             activeClient: document.getElementById('clientSelect').value,
             automationEnabled: document.getElementById('automationEnabled').checked,
@@ -53,6 +60,7 @@ function setupEventListeners() {
 
         try {
             await chrome.storage.local.set(config);
+            console.log('[Config] Saved:', config);
             showStatus('Configuration saved successfully!', 'success');
         } catch (e) {
             console.error('Save error:', e);
@@ -62,6 +70,7 @@ function setupEventListeners() {
 
     // Reset button
     document.getElementById('resetBtn').addEventListener('click', async () => {
+        console.log('[Config] Reset button clicked');
         await chrome.storage.local.set(DEFAULT_CONFIG);
         await loadConfig();
         showStatus('Configuration reset to defaults', 'info');
@@ -69,6 +78,7 @@ function setupEventListeners() {
 
     // Clear button
     document.getElementById('clearBtn').addEventListener('click', async () => {
+        console.log('[Config] Clear button clicked');
         if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
             await chrome.storage.local.clear();
             await loadConfig();
@@ -78,6 +88,7 @@ function setupEventListeners() {
 }
 
 function showStatus(message, type = 'success') {
+    console.log('[Config] Showing status:', message, type);
     const status = document.getElementById('status');
     status.textContent = message;
     status.className = 'status ' + type;
