@@ -73,7 +73,7 @@
         
         console.log('[AGS] ATS fallback created');
     } else {
-        console.log('[AGS] ATS already exists from core.js');
+        console.log('[AGS] ATS core loaded');
     }
 })();
 // =========================================
@@ -356,8 +356,22 @@ const QualificationManager = {
     isListening: false,
     
     async loadKnowledgeBase(clientId) {
+        // Try to load new Flyland KB first (path is relative to extension root)
         try {
-            const response = await fetch(chrome.runtime.getURL('../../clients/' + clientId + '/knowledge-base/qualification.json'));
+            const newKbUrl = chrome.runtime.getURL(`clients/${clientId}/knowledge-base/flyland-kb.json`);
+            const response = await fetch(newKbUrl);
+            if (response.ok) {
+                this.knowledgeBase = await response.json();
+                console.log('[AGS] Knowledge base loaded for:', clientId);
+                return this.knowledgeBase;
+            }
+        } catch(e) {
+            console.log('[AGS] flyland-kb.json not found, trying qualification.json');
+        }
+        
+        // Fallback to old qualification.json
+        try {
+            const response = await fetch(chrome.runtime.getURL(`clients/${clientId}/knowledge-base/qualification.json`));
             if (response.ok) {
                 this.knowledgeBase = await response.json();
                 console.log('[AGS] Knowledge base loaded for:', clientId);
@@ -769,9 +783,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
+    // Helper function to get configured AI server URL
+    async function getAIServerUrl() {
+        const result = await new Promise(resolve => {
+            chrome.storage.local.get('aiServerUrl', resolve);
+        });
+        return result.aiServerUrl || 'http://localhost:8000';
+    }
+    
     async function testAIServer() {
         try {
-            const response = await fetch('http://localhost:8000/health', { 
+            const serverUrl = await getAIServerUrl();
+            const response = await fetch(`${serverUrl}/health`, { 
                 method: 'GET', 
                 signal: AbortSignal.timeout(5000) 
             });
@@ -803,21 +826,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function checkServerConnection() {
         try {
-            const response = await fetch('http://localhost:8000/health', { 
+            const serverUrl = await getAIServerUrl();
+            const response = await fetch(`${serverUrl}/health`, { 
                 method: 'GET', 
                 signal: AbortSignal.timeout(3000) 
             });
             if (response.ok) {
                 updateMainStatus(true);
                 updateServiceStatus('aiServer', true);
-                serverStatus.textContent = 'localhost:8000';
+                serverStatus.textContent = serverUrl.replace('http://', '').replace('https://', '');
             } else {
                 updateMainStatus(false);
                 updateServiceStatus('aiServer', false);
+                serverStatus.textContent = 'Connection failed';
             }
         } catch (error) {
             updateMainStatus(false);
             updateServiceStatus('aiServer', false);
+            serverStatus.textContent = 'Not connected';
         }
     }
 
@@ -847,7 +873,8 @@ async function testStorage() {
 
 async function testAIServer() {
     try {
-        const response = await fetch('http://localhost:8000/health', { 
+        const serverUrl = await getAIServerUrl();
+        const response = await fetch(`${serverUrl}/health', { 
             method: 'GET', 
             signal: AbortSignal.timeout(5000) 
         });
@@ -879,21 +906,29 @@ async function testConfig() {
 
     async function checkServerConnection() {
         try {
-            const response = await fetch('http://localhost:8000/health', { 
+            // Get the configured AI server URL from storage
+            const result = await new Promise(resolve => {
+                chrome.storage.local.get('aiServerUrl', resolve);
+            });
+            const serverUrl = result.aiServerUrl || 'http://localhost:8000';
+            
+            const response = await fetch(`${serverUrl}/health', { 
                 method: 'GET', 
                 signal: AbortSignal.timeout(3000) 
             });
             if (response.ok) {
                 updateMainStatus(true);
                 updateServiceStatus('aiServer', true);
-                serverStatus.textContent = 'localhost:8000';
+                serverStatus.textContent = serverUrl.replace('http://', '').replace('https://', '');
             } else {
                 updateMainStatus(false);
                 updateServiceStatus('aiServer', false);
+                serverStatus.textContent = 'Connection failed';
             }
         } catch (error) {
             updateMainStatus(false);
             updateServiceStatus('aiServer', false);
+            serverStatus.textContent = 'Not connected';
         }
     }
 

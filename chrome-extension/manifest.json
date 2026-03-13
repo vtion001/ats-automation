@@ -22,7 +22,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/**/*", "config/*"],
+      "resources": ["src/**/*", "config/*", "../clients/**/*"],
       "matches": ["<all_urls>"]
     }
   ],
