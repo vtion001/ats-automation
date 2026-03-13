@@ -95,6 +95,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const configBtn = document.getElementById('configBtn');
     const serverStatus = document.getElementById('serverStatus');
     
+    // Initialize OverlayUI for test analysis
+    const overlayUI = new OverlayUI();
+    
     // Load settings
     const config = await StorageService.getConfig();
     
@@ -210,6 +213,175 @@ document.addEventListener('DOMContentLoaded', async () => {
     configBtn.addEventListener('click', () => {
         window.open(chrome.runtime.getURL('config/config.html'), '_blank');
     });
+    
+    // ====== Test Analysis Section ======
+    const testNewLeadBtn = document.getElementById('testNewLeadBtn');
+    const testExistingLeadBtn = document.getElementById('testExistingLeadBtn');
+    const testInputArea = document.getElementById('testInputArea');
+    const testStatus = document.getElementById('testStatus');
+    const transcriptionInput = document.getElementById('transcriptionInput');
+    const testPhoneInput = document.getElementById('testPhoneInput');
+    const testClientSelect = document.getElementById('testClientSelect');
+    const runAnalysisBtn = document.getElementById('runAnalysisBtn');
+    
+    let currentTestType = null;
+    
+    // Test New Lead button
+    testNewLeadBtn.addEventListener('click', () => {
+        currentTestType = 'new-lead';
+        testInputArea.style.display = 'block';
+        testStatus.style.display = 'none';
+        
+        // Pre-fill with mock transcription for testing
+        transcriptionInput.value = `Hello, I'm calling because I'm looking for help. I've been struggling with addiction and I really need to get into a program. I have about 3 days clean now. I have Blue Cross insurance through my employer. I'm located in Florida. I want to know what options I have for treatment. My name is John Smith. I'm really ready to get help.`;
+        testPhoneInput.value = '+15551234567';
+        testClientSelect.value = 'flyland';
+    });
+    
+    // Test Existing Lead button
+    testExistingLeadBtn.addEventListener('click', () => {
+        currentTestType = 'existing';
+        testInputArea.style.display = 'block';
+        testStatus.style.display = 'none';
+        
+        // Pre-fill with mock transcription for testing
+        transcriptionInput.value = `Hi, this is Sarah Johnson. I've been a patient with you guys before. I completed the program last year. I'm calling because I need to schedule a follow-up appointment. I have some questions about my insurance coverage. Also, I've been feeling some cravings lately and I wanted to talk to someone. Can you help me?`;
+        testPhoneInput.value = '+15559876543';
+        testClientSelect.value = 'flyland';
+    });
+    
+    // Run Analysis button
+    runAnalysisBtn.addEventListener('click', async () => {
+        const transcription = transcriptionInput.value.trim();
+        const phone = testPhoneInput.value.trim();
+        const client = testClientSelect.value;
+        
+        if (!transcription) {
+            showTestStatus('Please enter or select a transcription', 'error');
+            return;
+        }
+        
+        showTestStatus('Running AI Analysis...', 'loading');
+        
+        try {
+            // Get AI Server URL
+            const config = await ATS.getConfig();
+            const serverUrl = config.aiServerUrl || 'http://localhost:8000';
+            
+            // Send to AI server for analysis
+            const response = await fetch(`${serverUrl}/api/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    transcription: transcription,
+                    phone: phone,
+                    client: client
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`AI Server error: ${response.status}`);
+            }
+            
+            const analysis = await response.json();
+            
+            // Now get the action determination
+            const actionResponse = await fetch(`${serverUrl}/api/determine-action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    transcription: transcription,
+                    analysis: analysis,
+                    phone: phone,
+                    client: client
+                })
+            });
+            
+            const action = await actionResponse.json();
+            
+            // Combine results
+            const fullResult = {
+                ...analysis,
+                ...action,
+                phone: phone,
+                callerName: analysis.caller_name || null,
+                testType: currentTestType
+            };
+            
+            showTestStatus('Analysis complete!', 'success');
+            
+            // Send to overlay to display results
+            if (window.overlayUI) {
+                // Build caller info display data
+                const callerInfoDisplay = [];
+                
+                if (phone) {
+                    callerInfoDisplay.push({
+                        label: 'Phone',
+                        value: phone,
+                        confidence: 1.0,
+                        source: 'ctm',
+                        isHighConfidence: true
+                    });
+                }
+                
+                if (analysis.detected_state) {
+                    callerInfoDisplay.push({
+                        label: 'State',
+                        value: analysis.detected_state,
+                        confidence: analysis.state_confidence || 0.7,
+                        source: 'ai',
+                        isHighConfidence: (analysis.state_confidence || 0.7) >= 0.8
+                    });
+                }
+                
+                if (analysis.detected_insurance) {
+                    callerInfoDisplay.push({
+                        label: 'Insurance',
+                        value: analysis.detected_insurance,
+                        confidence: analysis.insurance_confidence || 0.6,
+                        source: 'ai',
+                        isHighConfidence: (analysis.insurance_confidence || 0.6) >= 0.7
+                    });
+                }
+                
+                if (analysis.detected_sober_days) {
+                    callerInfoDisplay.push({
+                        label: 'Sober',
+                        value: `${analysis.detected_sober_days} days`,
+                        confidence: analysis.sober_confidence || 0.7,
+                        source: 'ai',
+                        isHighConfidence: (analysis.sober_confidence || 0.7) >= 0.7
+                    });
+                }
+                
+                window.overlayUI.showCallerInfo(callerInfoDisplay, {
+                    qualificationScore: analysis.qualification_score || 0,
+                    recommended_department: action.transfer_department || analysis.recommended_department,
+                    action: action.action,
+                    callNotes: action.call_notes
+                }, phone);
+            }
+            
+        } catch (error) {
+            console.error('Test analysis error:', error);
+            showTestStatus('Error: ' + error.message, 'error');
+        }
+    });
+    
+    function showTestStatus(message, status) {
+        testStatus.style.display = 'block';
+        testStatus.className = 'test-status ' + status;
+        testStatus.querySelector('.test-status-text')?.remove();
+        
+        const span = document.createElement('span');
+        span.className = 'test-status-text';
+        span.textContent = message;
+        testStatus.appendChild(span);
+    }
+    
+    // Make overlayUI globally accessible
+    window.overlayUI = overlayUI;
     
     // Check server connection
     async function checkServerConnection() {

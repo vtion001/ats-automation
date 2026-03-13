@@ -180,6 +180,67 @@
         }
     }
 
+    // Populate Contact form fields
+    function populateContactForm(data) {
+        ATS.logger.info('Populating Contact form with:', data);
+        
+        // Phone field
+        const phoneField = document.querySelector('[name="Phone"], input[title="Phone"], input.slds-input[placeholder*="Phone"]');
+        if (phoneField && data.phone) {
+            phoneField.value = data.phone;
+            phoneField.dispatchEvent(new Event('input', { bubbles: true }));
+            phoneField.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        // First Name field
+        const firstNameField = document.querySelector('[name="FirstName"], input[title="First Name"], input.slds-input[placeholder*="First"]');
+        if (firstNameField && data.firstName) {
+            firstNameField.value = data.firstName;
+            firstNameField.dispatchEvent(new Event('input', { bubbles: true }));
+            firstNameField.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        // Last Name field
+        const lastNameField = document.querySelector('[name="LastName"], input[title="Last Name"], input.slds-input[placeholder*="Last"]');
+        if (lastNameField && data.lastName) {
+            lastNameField.value = data.lastName;
+            lastNameField.dispatchEvent(new Event('input', { bubbles: true }));
+            lastNameField.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        // Description field
+        const descField = document.querySelector('[name="Description"], textarea[title="Description"], textarea.slds-textarea');
+        if (descField && data.description) {
+            descField.value = data.description;
+            descField.dispatchEvent(new Event('input', { bubbles: true }));
+            descField.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        // Lead Source dropdown
+        const leadSourceField = document.querySelector('[name="LeadSource"], select[title="Lead Source"]');
+        if (leadSourceField) {
+            for (let option of leadSourceField.options) {
+                if (option.text.includes('Inbound')) {
+                    leadSourceField.value = option.value;
+                    leadSourceField.dispatchEvent(new Event('change', { bubbles: true }));
+                    break;
+                }
+            }
+        }
+        
+        // Status dropdown
+        const statusField = document.querySelector('[name="Status"], select[title="Status"]');
+        if (statusField && data.status) {
+            for (let option of statusField.options) {
+                if (option.text.includes('Open')) {
+                    statusField.value = option.value;
+                    statusField.dispatchEvent(new Event('change', { bubbles: true }));
+                    break;
+                }
+            }
+        }
+    }
+
     // Listen for messages from background/popup
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         switch (message.type) {
@@ -195,6 +256,11 @@
                 
             case 'POPULATE_TASK':
                 populateTaskForm(message.payload);
+                sendResponse({ success: true });
+                break;
+                
+            case 'POPULATE_CONTACT':
+                populateContactForm(message.payload);
                 sendResponse({ success: true });
                 break;
                 

@@ -45,7 +45,9 @@
         "src/lib/core.js",
         "src/services/ctm-service.js",
         "src/services/salesforce-service.js",
-        "src/services/salesforce-actions-service.js",
+        "src/services/salesforce-contact-service.js",
+        "src/services/salesforce-action-service.js",
+        "src/services/caller-info-service.js",
         "src/services/transcription-service.js",
         "src/services/ai-service.js",
         "src/modules/call-monitor.js",
@@ -65,7 +67,8 @@
       "js": [
         "src/lib/core.js",
         "src/services/salesforce-service.js",
-        "src/services/salesforce-actions-service.js",
+        "src/services/salesforce-contact-service.js",
+        "src/services/salesforce-action-service.js",
         "content-scripts/sf-reader.js",
         "src/modules/overlay-ui.js"
       ],

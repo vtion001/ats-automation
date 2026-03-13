@@ -133,6 +133,74 @@ class OverlayUI {
             }
             .ats-status-badge.log_call { background: #dbeafe; color: #2563eb; }
             .ats-status-badge.new_task { background: #d1fae5; color: #059669; }
+            
+            /* New Lead Button Styles */
+            .ats-info-list { margin: 12px 0; }
+            .ats-info-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 10px;
+                background: #f8fafc;
+                border-radius: 6px;
+                margin-bottom: 6px;
+                font-size: 12px;
+            }
+            .ats-info-label { color: #64748b; }
+            .ats-info-value { color: #1e293b; font-weight: 500; }
+            .ats-info-confidence {
+                font-size: 10px;
+                padding: 2px 6px;
+                border-radius: 10px;
+                margin-left: 8px;
+            }
+            .ats-info-confidence.high { background: #d1fae5; color: #059669; }
+            .ats-info-confidence.medium { background: #fef3c7; color: #d97706; }
+            .ats-info-confidence.low { background: #fee2e2; color: #dc2626; }
+            .ats-info-source {
+                font-size: 9px;
+                color: #94a3b8;
+                margin-left: 4px;
+            }
+            .ats-score-badge {
+                display: inline-block;
+                padding: 6px 12px;
+                border-radius: 20px;
+                font-weight: 600;
+                font-size: 14px;
+            }
+            .ats-score-badge.hot { background: #fee2e2; color: #dc2626; }
+            .ats-score-badge.warm { background: #fef3c7; color: #d97706; }
+            .ats-score-badge.cold { background: #dbeafe; color: #2563eb; }
+            .ats-divider { height: 1px; background: #e2e8f0; margin: 14px 0; }
+            .ats-recommendation {
+                background: #f0fdf4;
+                border: 1px solid #22c55e;
+                border-radius: 6px;
+                padding: 10px 12px;
+                font-size: 12px;
+                color: #166534;
+                margin-top: 12px;
+            }
+            .ats-button-primary {
+                background: #2563eb; color: #fff; border: none;
+                padding: 12px 20px; border-radius: 8px; cursor: pointer;
+                font-size: 14px; font-weight: 600; width: 100%; transition: all 0.2s;
+                display: flex; align-items: center; justify-content: center; gap: 8px;
+            }
+            .ats-button-primary:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
+            .ats-button-secondary {
+                background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;
+                padding: 12px 20px; border-radius: 8px; cursor: pointer;
+                font-size: 14px; font-weight: 500; width: 100%; transition: all 0.2s;
+                margin-top: 8px;
+            }
+            .ats-button-secondary:hover { background: #e2e8f0; }
+            .ats-button-group { margin-top: 16px; }
+            .ats-header-info { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+            .ats-phone-icon { font-size: 20px; }
+            .ats-phone-number { font-size: 18px; font-weight: 700; color: #1e293b; }
+            .ats-status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         `;
     }
 
@@ -157,56 +225,85 @@ class OverlayUI {
         setTimeout(() => notif.remove(), 5000);
     }
 
-    // Show data in overlay
+    // Show data in overlay with new lead buttons
     showData(data) {
         this.create();
         const content = document.querySelector(`#${this.overlayId} .ats-overlay-content`);
         
         let html = '';
         
+        // Phone display
         if (data.phone) {
-            html += `<div class="ats-field"><div class="ats-field-label">Phone</div><div class="ats-field-value">${data.phone}</div></div>`;
+            html += `
+                <div class="ats-header-info">
+                    <span class="ats-phone-icon">📞</span>
+                    <span class="ats-phone-number">${data.phone}</span>
+                </div>
+            `;
         }
-        if (data.callerName) {
-            html += `<div class="ats-field"><div class="ats-field-label">Caller</div><div class="ats-field-value">${data.callerName}</div></div>`;
+
+        // Status row with score
+        html += `<div class="ats-status-row">`;
+        if (data.qualificationScore !== undefined) {
+            const scoreClass = data.qualificationScore >= 70 ? 'hot' : data.qualificationScore >= 40 ? 'warm' : 'cold';
+            html += `<span class="ats-score-badge ${scoreClass}">Score: ${data.qualificationScore}</span>`;
         }
         if (data.status) {
-            html += `<div class="ats-field"><div class="ats-field-label">Status</div><div class="ats-field-value">${data.status}</div></div>`;
+            html += `<span class="ats-field-value">${data.status}</span>`;
         }
+        html += `</div>`;
+        
+        html += `<div class="ats-divider"></div>`;
+
+        // Caller info with confidence (from CallerInfoService)
+        if (data.callerInfo && data.callerInfo.length > 0) {
+            html += `<div class="ats-field"><div class="ats-field-label">📋 Extracted Information</div></div>`;
+            html += `<div class="ats-info-list">`;
+            
+            for (const info of data.callerInfo) {
+                const confClass = info.isHighConfidence ? 'high' : info.confidence >= 0.5 ? 'medium' : 'low';
+                const sourceLabel = info.source === 'ctm' ? 'CTM' : info.source === 'ai' ? 'AI' : '';
+                html += `
+                    <div class="ats-info-item">
+                        <span class="ats-info-label">${info.label}:</span>
+                        <span>
+                            <span class="ats-info-value">${info.value}</span>
+                            <span class="ats-info-confidence ${confClass}">${Math.round(info.confidence * 100)}%</span>
+                            ${sourceLabel ? `<span class="ats-info-source">${sourceLabel}</span>` : ''}
+                        </span>
+                    </div>
+                `;
+            }
+            html += `</div>`;
+        }
+
+        // Tags
         if (data.tags && data.tags.length > 0) {
             html += `<div class="ats-field"><div class="ats-field-label">Tags</div><div class="ats-field-value">${data.tags.map(tag => `<span class="ats-tag ${tag}">${tag}</span>`).join('')}</div></div>`;
         }
+
+        // Summary
         if (data.summary) {
             html += `<div class="ats-field"><div class="ats-field-label">Summary</div><div class="ats-field-value">${data.summary}</div></div>`;
         }
-        if (data.suggestedNotes) {
-            html += `<div class="ats-field"><div class="ats-field-label">Notes</div><div class="ats-field-value" style="white-space: pre-line;">${data.suggestedNotes}</div></div>`;
-        }
-        if (data.suggestedDisposition) {
-            html += `<div class="ats-field"><div class="ats-field-label">Disposition</div><div class="ats-field-value">${data.suggestedDisposition}</div></div>`;
+
+        // Recommendation
+        if (data.recommendation) {
+            html += `<div class="ats-recommendation">🎯 ${data.recommendation}</div>`;
         }
 
-        // Show Salesforce Action (Log a Call vs New Task)
-        if (data.action) {
-            const actionLabel = data.action === 'new_task' ? 'New Task' : 'Log a Call';
-            html += `<div class="ats-field"><div class="ats-field-label">Recommended Action</div>`;
-            html += `<div class="ats-field-value"><span class="ats-status-badge ${data.action}">${actionLabel}</span></div></div>`;
-            
-            if (data.reason) {
-                html += `<div class="ats-action-reason">${data.reason}</div>`;
-            }
-            
-            if (data.taskSubject && data.action === 'new_task') {
-                html += `<div class="ats-field"><div class="ats-field-label">Task Subject</div><div class="ats-field-value">${data.taskSubject}</div></div>`;
-                html += `<div class="ats-field"><div class="ats-field-label">Due Date</div><div class="ats-field-value">${data.taskDueDate}</div></div>`;
-            }
-            
-            if (data.callSubject && data.action === 'log_call') {
-                html += `<div class="ats-field"><div class="ats-field-label">Call Subject</div><div class="ats-field-value">${data.callSubject}</div></div>`;
-            }
+        // Two Buttons (New Lead + Existing Lead)
+        if (data.showButtons) {
+            html += `<div class="ats-button-group">`;
+            html += `<button class="ats-button-primary" data-action="new-lead">`;
+            html += `✨ New Lead - Create Contact</button>`;
+            html += `<button class="ats-button-secondary" data-action="existing-lead">`;
+            html += `🔍 Existing Lead</button>`;
+            html += `</div>`;
         }
 
-        if (data.actions) {
+        // Legacy: Show action buttons if no new buttons
+        if (!data.showButtons && data.actions) {
             html += '<div class="ats-actions">';
             for (const action of data.actions) {
                 html += `<button class="ats-button ${action.secondary ? 'secondary' : ''}" data-action="${action.type}">${action.label}</button>`;
@@ -223,6 +320,85 @@ class OverlayUI {
                 ATS.sendMessage({
                     type: ATS.Messages.ATS_ACTION,
                     payload: { action: actionType, data }
+                });
+            });
+        });
+    }
+
+    // Show caller info specifically (for after call ends)
+    showCallerInfo(callerInfo, analysis, phone) {
+        this.create();
+        const content = document.querySelector(`#${this.overlayId} .ats-overlay-content`);
+        
+        let html = '';
+        
+        // Phone
+        html += `
+            <div class="ats-header-info">
+                <span class="ats-phone-icon">📞</span>
+                <span class="ats-phone-number">${phone || 'Unknown'}</span>
+            </div>
+        `;
+
+        // Score
+        const score = analysis?.qualificationScore || 0;
+        const scoreClass = score >= 70 ? 'hot' : score >= 40 ? 'warm' : 'cold';
+        const statusLabel = score >= 70 ? 'Hot Lead' : score >= 40 ? 'Warm Lead' : 'Cold Lead';
+        
+        html += `
+            <div class="ats-status-row">
+                <span class="ats-score-badge ${scoreClass}">${score}</span>
+                <span style="font-weight:600;color:#64748b">${statusLabel}</span>
+            </div>
+            <div class="ats-divider"></div>
+        `;
+
+        // Extracted info with confidence
+        if (callerInfo && callerInfo.length > 0) {
+            html += `<div class="ats-field"><div class="ats-field-label">📋 Extracted Information</div></div>`;
+            html += `<div class="ats-info-list">`;
+            
+            for (const info of callerInfo) {
+                const confClass = info.isHighConfidence ? 'high' : info.confidence >= 0.5 ? 'medium' : 'low';
+                const sourceLabel = info.source === 'ctm' ? 'CTM' : info.source === 'ai' ? 'AI' : '';
+                html += `
+                    <div class="ats-info-item">
+                        <span class="ats-info-label">${info.label}:</span>
+                        <span>
+                            <span class="ats-info-value">${info.value}</span>
+                            <span class="ats-info-confidence ${confClass}">${Math.round(info.confidence * 100)}%</span>
+                            ${sourceLabel ? `<span class="ats-info-source">${sourceLabel}</span>` : ''}
+                        </span>
+                    </div>
+                `;
+            }
+            html += `</div>`;
+        }
+
+        // Recommendation
+        const recommendation = analysis?.recommended_department || 'Transfer to appropriate department';
+        html += `<div class="ats-recommendation">🎯 Recommendation: ${recommendation}</div>`;
+
+        // Two Buttons
+        html += `<div class="ats-button-group">`;
+        html += `<button class="ats-button-primary" data-action="new-lead">✨ New Lead - Create Contact</button>`;
+        html += `<button class="ats-button-secondary" data-action="existing-lead">🔍 Existing Lead</button>`;
+        html += `</div>`;
+
+        content.innerHTML = html;
+
+        // Add action handlers
+        content.querySelectorAll('[data-action]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const actionType = e.target.getAttribute('data-action');
+                ATS.sendMessage({
+                    type: ATS.Messages.ATS_ACTION,
+                    payload: { 
+                        action: actionType, 
+                        callerInfo: callerInfo,
+                        analysis: analysis,
+                        phone: phone
+                    }
                 });
             });
         });

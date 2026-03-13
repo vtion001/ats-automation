@@ -596,6 +596,94 @@
             color: #f59e0b;
             border-radius: 4px;
         }
+        
+        /* Test Analysis Styles */
+        .test-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .test-btn {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+        .test-btn.new-lead {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        .test-btn.new-lead:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .test-btn.existing-lead {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+        }
+        .test-btn.existing-lead:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+        .test-input-area {
+            background: var(--bg-light);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+        .test-field {
+            margin-bottom: 12px;
+        }
+        .test-field label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .test-field input[type="text"],
+        .test-field input[type="file"],
+        .test-field textarea,
+        .test-field select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+            color: var(--text-primary);
+        }
+        .test-field input:focus,
+        .test-field textarea:focus,
+        .test-field select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .test-status {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .test-status.loading {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+        .test-status.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+        .test-status.error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
     </style>
 </head>
 <body>
@@ -714,6 +802,49 @@
         </div>
     </div>
 
+    <div class="section" id="testAnalysisSection">
+        <div class="section-title">🎤 Test Analysis</div>
+        <div class="test-buttons">
+            <button class="btn test-btn new-lead" id="testNewLeadBtn">
+                🎯 Test New Lead
+            </button>
+            <button class="btn test-btn existing-lead" id="testExistingLeadBtn">
+                🔍 Test Existing Lead
+            </button>
+        </div>
+        <div class="test-input-area" id="testInputArea" style="display:none;">
+            <div class="test-field">
+                <label>Audio File (optional):</label>
+                <input type="file" id="audioFileInput" accept="audio/*">
+            </div>
+            <div class="test-field">
+                <label>Or paste transcription:</label>
+                <textarea id="transcriptionInput" placeholder="Paste transcription here..." rows="4"></textarea>
+            </div>
+            <div class="test-field">
+                <label>Phone Number:</label>
+                <input type="text" id="testPhoneInput" placeholder="+1555123456">
+            </div>
+            <div class="test-field">
+                <label>Client:</label>
+                <select id="testClientSelect">
+                    <option value="flyland">Flyland Recovery</option>
+                    <option value="legacy">Legacy Services</option>
+                    <option value="tbt">TBT Communications</option>
+                    <option value="banyan">Banyan Health</option>
+                    <option value="takami">Takahami Medical</option>
+                    <option value="element">Element Medical</option>
+                </select>
+            </div>
+            <button class="btn" id="runAnalysisBtn" style="width:100%; margin-top:12px;">
+                ▶ Run Analysis
+            </button>
+        </div>
+        <div class="test-status" id="testStatus" style="display:none;">
+            <span class="test-status-text"></span>
+        </div>
+    </div>
+
     <div class="section" id="notesSection">
         <div class="section-title">
             <span>Live Notes</span>
@@ -772,6 +903,7 @@
     <script src="../src/popup/services/status-service.js"></script>
     <script src="../src/popup/managers/notes-manager.js"></script>
     <script src="../src/popup/managers/qualification-manager.js"></script>
+    <script src="../src/modules/overlay-ui.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

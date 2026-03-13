@@ -1,17 +1,21 @@
 /**
  * Call Monitor Module
  * Main module that orchestrates CTM monitoring, transcription, and Salesforce search
+ * Handles button-trigger flow for New Lead / Existing Lead
  */
 
 class CallMonitor {
     constructor() {
         this.ctmService = new CTMService();
         this.salesforceService = new SalesforceService();
-        this.salesforceActionsService = new SalesforceActionsService();
+        this.salesforceContactService = new SalesforceContactService();
+        this.salesforceActionService = new SalesforceActionService();
         this.transcriptionService = new TranscriptionService();
         this.aiService = new AIService();
+        this.callerInfoService = new CallerInfoService();
         
         this.currentCall = null;
+        this.currentAnalysis = null;
         this.isMonitoring = false;
     }
 
@@ -21,7 +25,8 @@ class CallMonitor {
         
         await ATS.init();
         await this.salesforceService.init();
-        await this.salesforceActionsService.init();
+        await this.salesforceContactService.init();
+        await this.salesforceActionService.init();
         await this.aiService.init();
         
         // Set up transcription callbacks
@@ -83,6 +88,9 @@ class CallMonitor {
         
         ATS.logger.info('Call started:', this.currentCall);
         
+        // Initialize caller info from CTM
+        await this.callerInfoService.initFromCTM(this.currentCall);
+        
         // Notify background script
         ATS.sendMessage({
             type: ATS.Messages.CTM_CALL_EVENT,
@@ -100,7 +108,7 @@ class CallMonitor {
         }
     }
 
-    // Handle call end - FULL AUTOMATED FLOW
+    // Handle call end - BUTTON TRIGGER FLOW (not auto-run)
     async handleCallEnd() {
         if (!this.currentCall) return;
         
@@ -132,105 +140,114 @@ class CallMonitor {
                 ATS.config.activeClient
             );
             
-            // Store analysis with call data
-            this.currentCall.analysis = analysis;
+            // Store analysis
+            this.currentAnalysis = analysis;
+            
+            // Update caller info with AI results
+            this.callerInfoService.updateFromAI(analysis);
             
             ATS.logger.info('AI Analysis:', analysis);
             
-            // Show analysis in overlay
+            // Show overlay with BUTTONS instead of auto-executing
             ATS.sendMessage({
-                type: ATS.Messages.AI_ANALYSIS_RESULT,
+                type: ATS.Messages.SHOW_CALL_SUMMARY,
                 payload: {
-                    ...analysis,
-                    callerName: this.currentCall.callerName,
-                    phone: this.currentCall.phoneNumber
+                    callerInfo: this.callerInfoService.getDisplayInfo(),
+                    analysis: analysis,
+                    phone: this.currentCall.phoneNumber,
+                    showButtons: true
                 }
             });
-
-            // AUTO-EXECUTE: Log to Salesforce based on AI decision
-            await this.autoLogToSalesforce(analysis);
         }
         
-        this.currentCall = null;
+        // Don't nullify currentCall - wait for button click
+        // this.currentCall = null;
     }
 
-    // Automatically log to Salesforce based on AI analysis
-    async autoLogToSalesforce(analysis) {
-        ATS.logger.info('Auto-logging to Salesforce with action:', analysis.action);
+    // Handle "New Lead" button click
+    async handleNewLead() {
+        ATS.logger.info('New Lead button clicked');
         
         try {
-            // Get current Salesforce record (if user is on a Lead/Contact page)
-            const currentRecord = await this.salesforceActionsService.getCurrentRecord();
+            // Prepare contact data from caller info
+            const contactData = this.callerInfoService.prepareContactData(this.currentAnalysis);
             
-            let recordId = null;
-            
-            if (currentRecord && currentRecord.recordId) {
-                recordId = currentRecord.recordId;
-                ATS.logger.info('Found current SF record:', recordId, currentRecord.objectType);
-            } else {
-                // Try to find record by phone number
-                const searchResult = await this.salesforceActionsService.findRecordByPhone(this.currentCall.phoneNumber);
-                
-                if (searchResult) {
-                    ATS.logger.info('Search initiated in Salesforce for phone:', this.currentCall.phoneNumber);
-                    // Show notification asking user to select the record
-                    ATS.sendMessage({
-                        type: ATS.Messages.SHOW_NOTIFICATION,
-                        payload: { 
-                            message: 'Please select the correct Lead/Contact record in Salesforce, then the action will be auto-completed.' 
-                        }
-                    });
-                    
-                    // Set up listener for record selection
-                    await this.waitForRecordSelection(analysis);
-                    return;
-                }
+            if (!contactData) {
+                ATS.logger.error('No caller info available for contact creation');
+                return;
             }
+            
+            // Create Contact in Salesforce
+            const result = await this.salesforceContactService.createContact(contactData);
+            
+            ATS.logger.info('Contact creation result:', result);
+            
+            // Show notification
+            ATS.sendMessage({
+                type: ATS.Messages.SHOW_NOTIFICATION,
+                payload: { 
+                    message: 'Contact form opened - please review and save' 
+                }
+            });
+            
+        } catch (error) {
+            ATS.logger.error('Error creating contact:', error);
+        }
+    }
 
-            if (recordId) {
-                // Execute the AI-determined action
-                const actionResult = await this.salesforceActionsService.executeSfAction(recordId, analysis, this.currentCall.phoneNumber);
+    // Handle "Existing Lead" button click
+    async handleExistingLead() {
+        ATS.logger.info('Existing Lead button clicked');
+        
+        try {
+            // Search Salesforce by phone
+            const searchResult = await this.salesforceContactService.searchByPhone(this.currentCall.phoneNumber);
+            
+            if (searchResult) {
+                ATS.logger.info('Search initiated for phone:', this.currentCall.phoneNumber);
                 
-                ATS.logger.info('Auto-log result:', actionResult);
-                
-                // Show result notification
-                const actionLabel = analysis.action === 'new_task' ? 'New Task' : 'Log a Call';
+                // Show notification to select record
                 ATS.sendMessage({
                     type: ATS.Messages.SHOW_NOTIFICATION,
                     payload: { 
-                        message: `Auto-${actionLabel}: ${analysis.reason}` 
+                        message: 'Please select the existing Lead/Contact in Salesforce' 
                     }
                 });
-            } else {
-                ATS.logger.warn('No Salesforce record found to log to');
+                
+                // Wait for record selection, then create log/task
+                await this.waitForRecordSelection();
             }
+            
         } catch (error) {
-            ATS.logger.error('Error in auto-log to Salesforce:', error);
+            ATS.logger.error('Error in existing lead flow:', error);
         }
     }
 
-    // Wait for user to select a record in Salesforce
-    async waitForRecordSelection(analysis) {
+    // Wait for user to select a record in Salesforce, then create log/task
+    async waitForRecordSelection() {
         ATS.logger.info('Waiting for user to select Salesforce record...');
         
-        // Set up a one-time listener for SF record data
         const checkInterval = setInterval(async () => {
-            const currentRecord = await this.salesforceActionsService.getCurrentRecord();
+            const currentRecord = await this.salesforceContactService.getCurrentRecord();
             
             if (currentRecord && currentRecord.recordId) {
                 clearInterval(checkInterval);
                 ATS.logger.info('Record selected:', currentRecord.recordId);
                 
-                // Execute the action
-                await this.salesforceActionsService.executeSfAction(currentRecord.recordId, analysis, this.currentCall.phoneNumber);
-                
-                const actionLabel = analysis.action === 'new_task' ? 'New Task' : 'Log a Call';
-                ATS.sendMessage({
-                    type: ATS.Messages.SHOW_NOTIFICATION,
-                    payload: { 
-                        message: `✓ Auto-${actionLabel} completed for selected record` 
-                    }
-                });
+                // Execute the action (log call or task)
+                if (this.currentAnalysis) {
+                    await this.salesforceActionService.executeWithNavigation(
+                        currentRecord.recordId, 
+                        this.currentAnalysis
+                    );
+                    
+                    ATS.sendMessage({
+                        type: ATS.Messages.SHOW_NOTIFICATION,
+                        payload: { 
+                            message: '✓ Log/Task completed for selected record' 
+                        }
+                    });
+                }
             }
         }, 2000);
         

@@ -150,11 +150,15 @@ Analyze the transcription and return a JSON object with these fields:
 - suggested_notes: Key points and action items
 - follow_up_required: true or false
 - qualification_score: 0-100 score based on KB criteria
-- detected_state: US state if mentioned
-- detected_insurance: Type of insurance if mentioned
-- detected_sober_days: Days sober if mentioned
+- detected_state: US state if mentioned (confidence 0.0-1.0)
+- detected_insurance: Type of insurance if mentioned (confidence 0.0-1.0)
+- detected_sober_days: Days sober if mentioned (confidence 0.0-1.0)
+- caller_name: Caller name if mentioned (confidence 0.0-1.0)
 - recommended_department: Which department to transfer to
 - call_type: One of: treatment, meeting, family, facility, competitor, talkline
+
+Return confidence scores for each extracted field (0.0 = not confident, 1.0 = very confident).
+If a field is not mentioned in the transcription, set it to null with confidence 0.
 
 IMPORTANT: Use the knowledge base provided to determine:
 1. Qualification based on sober time and insurance
