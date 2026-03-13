@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // Pin/Float button - opens popup as standalone window
+    // Pin/Float button - toggles floating mode preference
     const pinBtn = document.getElementById('pinBtn');
     if (pinBtn) {
         pinBtn.addEventListener('click', async () => {
@@ -196,19 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 pinBtn.classList.add('pinned');
                 await StorageService.set({ popupFloatEnabled: true });
-                
-                chrome.windows.create({
-                    url: chrome.runtime.getURL('popup/popup.html'),
-                    type: 'popup',
-                    width: 420,
-                    height: 700,
-                    focused: true
-                }).then((window) => {
-                    showStatus('Opening as floating window...', true);
-                    window.close();
-                }).catch((err) => {
-                    console.error('Failed to create window:', err);
-                });
+                showStatus('Floating mode enabled - click extension icon to open', true);
             }
         });
         
@@ -261,11 +249,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const runAnalysisBtn = document.getElementById('runAnalysisBtn');
     const audioFileInput = document.getElementById('audioFileInput');
     
+    console.log('[Test Analysis] Elements found:', {
+        testNewLeadBtn: !!testNewLeadBtn,
+        testExistingLeadBtn: !!testExistingLeadBtn,
+        runAnalysisBtn: !!runAnalysisBtn,
+        audioFileInput: !!audioFileInput
+    });
+    
     let currentTestType = null;
     
     // Test New Lead button
-    testNewLeadBtn.addEventListener('click', () => {
-        currentTestType = 'new-lead';
+    if (testNewLeadBtn) {
+        testNewLeadBtn.addEventListener('click', () => {
+            console.log('[Test] New Lead button clicked');
+            currentTestType = 'new-lead';
         testInputArea.style.display = 'block';
         testStatus.style.display = 'none';
         
@@ -281,8 +278,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     // Test Existing Lead button
-    testExistingLeadBtn.addEventListener('click', () => {
-        currentTestType = 'existing';
+    if (testExistingLeadBtn) {
+        testExistingLeadBtn.addEventListener('click', () => {
+            console.log('[Test] Existing Lead button clicked');
+            currentTestType = 'existing';
         testInputArea.style.display = 'block';
         testStatus.style.display = 'none';
         
@@ -298,8 +297,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     // Run Analysis button
-    runAnalysisBtn.addEventListener('click', async () => {
-        const audioFile = audioFileInput.files[0];
+    if (runAnalysisBtn) {
+        runAnalysisBtn.addEventListener('click', async () => {
+            console.log('[Test] Run Analysis button clicked');
+            const audioFile = audioFileInput?.files[0];
         let transcription = transcriptionInput.value.trim();
         const client = testClientSelect.value;
         let phone = testPhoneInput.value.trim();
