@@ -124,6 +124,318 @@ function getClientName(clientId) {
     return names[clientId] || clientId;
 }
 
+// ====== NOTES & QUALIFICATION SYSTEM ======
+const NotesManager = {
+    notes: [],
+    maxNotes: 50,
+    
+    async load(clientId) {
+        const key = 'ats_notes_' + clientId;
+        return new Promise(resolve => {
+            chrome.storage.local.get(key, result => {
+                this.notes = result[key] || [];
+                this.render();
+                resolve(this.notes);
+            });
+        });
+    },
+    
+    async addNote(text, type = 'manual') {
+        if (!text.trim()) return;
+        
+        const note = {
+            id: Date.now(),
+            text: text.trim(),
+            type: type,
+            timestamp: new Date().toISOString(),
+            keywords: []
+        };
+        
+        // Detect keywords
+        note.keywords = this.detectKeywords(text);
+        if (note.keywords.length > 0) {
+            note.type = 'keyword';
+        }
+        
+        this.notes.unshift(note);
+        if (this.notes.length > this.maxNotes) {
+            this.notes = this.notes.slice(0, this.maxNotes);
+        }
+        
+        await this.save();
+        this.render();
+        
+        // Trigger qualification update
+        QualificationManager.updateFromNotes(this.notes);
+        
+        return note;
+    },
+    
+    detectKeywords(text) {
+        const keywords = [];
+        const textLower = text.toLowerCase();
+        
+        const keywordPatterns = {
+            'interested': ['interested', 'want', 'need', 'looking for'],
+            'pricing': ['pricing', 'cost', 'price', 'how much', 'expensive'],
+            'insurance': ['insurance', 'coverage', 'benefits', 'aetna', 'cigna', 'blue cross'],
+            'schedule': ['appointment', 'schedule', 'book', 'meeting', 'when'],
+            'family': ['family', 'son', 'daughter', 'husband', 'wife', 'parent'],
+            'crisis': ['crisis', 'emergency', 'suicidal', 'danger', 'overdose'],
+            'unqualified': ['not interested', 'no thank', 'wrong number']
+        };
+        
+        for (const [category, words] of Object.entries(keywordPatterns)) {
+            for (const word of words) {
+                if (textLower.includes(word)) {
+                    keywords.push(category);
+                    break;
+                }
+            }
+        }
+        
+        return [...new Set(keywords)];
+    },
+    
+    async save() {
+        const key = 'ats_notes_' + (document.getElementById('clientSelect')?.value || 'flyland');
+        await new Promise(resolve => {
+            chrome.storage.local.set({ [key]: this.notes }, resolve);
+        });
+    },
+    
+    render() {
+        const container = document.getElementById('notesContainer');
+        const empty = document.getElementById('notesEmpty');
+        const count = document.getElementById('noteCount');
+        
+        if (!container) return;
+        
+        count.textContent = this.notes.length;
+        
+        if (this.notes.length === 0) {
+            if (empty) empty.style.display = 'block';
+            container.innerHTML = '';
+            container.appendChild(empty);
+            return;
+        }
+        
+        if (empty) empty.style.display = 'none';
+        
+        container.innerHTML = this.notes.map(note => `
+            <div class="note-item">
+                <span class="note-type ${note.type}">${note.type}</span>
+                <span class="note-text">${this.escapeHtml(note.text)}</span>
+                <span class="note-time">${this.formatTime(note.timestamp)}</span>
+            </div>
+        `).join('');
+    },
+    
+    formatTime(timestamp) {
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    },
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    },
+    
+    async clear() {
+        this.notes = [];
+        await this.save();
+        this.render();
+    }
+};
+
+const QualificationManager = {
+    knowledgeBase: null,
+    currentScore: 0,
+    detectedKeywords: [],
+    isListening: false,
+    
+    async loadKnowledgeBase(clientId) {
+        try {
+            const response = await fetch(chrome.runtime.getURL('../../clients/' + clientId + '/knowledge-base/qualification.json'));
+            if (response.ok) {
+                this.knowledgeBase = await response.json();
+                console.log('[AGS] Knowledge base loaded for:', clientId);
+            } else {
+                console.log('[AGS] Using default knowledge base');
+                this.knowledgeBase = this.getDefaultKB();
+            }
+        } catch(e) {
+            console.log('[AGS] Using default knowledge base');
+            this.knowledgeBase = this.getDefaultKB();
+        }
+        return this.knowledgeBase;
+    },
+    
+    getDefaultKB() {
+        return {
+            qualification_criteria: {
+                hot_lead: { keywords: ['interested', 'want', 'need', 'definitely', 'call back'], score_weight: 25 },
+                warm_lead: { keywords: ['maybe', 'information', 'details', 'pricing'], score_weight: 15 },
+                scheduling: { keywords: ['appointment', 'schedule', 'book', 'meeting'], score_weight: 20 },
+                insurance: { keywords: ['insurance', 'coverage', 'benefits'], score_weight: 15 },
+                crisis: { keywords: ['emergency', 'crisis', 'suicidal'], score_weight: 30 },
+                unqualified: { keywords: ['not interested', 'no thank', 'wrong number'], score_weight: -25 }
+            },
+            departments: {
+                intake: { name: 'Admissions', keywords: ['admission', 'intake', 'program'] },
+                insurance: { name: 'Insurance', keywords: ['insurance', 'coverage', 'benefits'] },
+                crisis: { name: 'Crisis Line', keywords: ['emergency', 'crisis', 'suicidal'] }
+            },
+            qualification_thresholds: { hot: 60, warm: 30, cold: 0 }
+        };
+    },
+    
+    updateFromNotes(notes) {
+        this.detectedKeywords = [];
+        let totalScore = 0;
+        const criteria = this.knowledgeBase?.qualification_criteria || {};
+        
+        for (const note of notes) {
+            for (const keyword of note.keywords) {
+                if (!this.detectedKeywords.includes(keyword)) {
+                    this.detectedKeywords.push(keyword);
+                }
+            }
+        }
+        
+        // Calculate score
+        for (const [category, data] of Object.entries(criteria)) {
+            for (const keyword of this.detectedKeywords) {
+                if (data.keywords.includes(keyword)) {
+                    totalScore += data.score_weight;
+                }
+            }
+        }
+        
+        this.currentScore = Math.max(0, Math.min(100, totalScore));
+        this.render();
+        
+        // Send to background for department routing
+        if (chrome.runtime?.id) {
+            chrome.runtime.sendMessage({
+                action: 'QUALIFICATION_UPDATE',
+                data: {
+                    score: this.currentScore,
+                    keywords: this.detectedKeywords,
+                    client: document.getElementById('clientSelect')?.value || 'flyland'
+                }
+            });
+        }
+    },
+    
+    setListeningState(listening) {
+        this.isListening = listening;
+        const status = document.getElementById('qualStatus');
+        if (status) {
+            status.className = 'qualification-status ' + (listening ? 'listening' : '');
+            status.querySelector('span').textContent = listening ? 'Listening to call...' : 'Waiting for call...';
+        }
+    },
+    
+    analyzeCall(transcription) {
+        if (!transcription) {
+            this.setListeningState(false);
+            return;
+        }
+        
+        this.setListeningState(true);
+        const status = document.getElementById('qualStatus');
+        if (status) {
+            status.className = 'qualification-status analyzing';
+            status.querySelector('span').textContent = 'Analyzing call...';
+        }
+        
+        // Add transcription as note
+        NotesManager.addNote(transcription.substring(0, 500), 'auto');
+        
+        // Trigger AI analysis
+        setTimeout(() => {
+            this.setListeningState(false);
+            this.render();
+        }, 2000);
+    },
+    
+    render() {
+        const result = document.getElementById('qualResult');
+        const badge = document.getElementById('qualBadge');
+        const score = document.getElementById('qualScore');
+        const reason = document.getElementById('qualReason');
+        const deptName = document.getElementById('deptName');
+        const keywordsList = document.getElementById('keywordsList');
+        
+        if (!result) return;
+        
+        // Keywords
+        if (keywordsList) {
+            keywordsList.innerHTML = this.detectedKeywords.length > 0 
+                ? this.detectedKeywords.map(k => `<span class="keyword-tag">${k}</span>`).join('')
+                : '<span class="keyword-tag">None</span>';
+        }
+        
+        // Score and badge
+        const thresholds = this.knowledgeBase?.qualification_thresholds || { hot: 60, warm: 30 };
+        let badgeText = 'New Lead';
+        let badgeClass = 'cold';
+        
+        if (this.currentScore >= thresholds.hot) {
+            badgeText = 'Hot Lead';
+            badgeClass = 'hot';
+        } else if (this.currentScore >= thresholds.warm) {
+            badgeText = 'Warm Lead';
+            badgeClass = 'warm';
+        } else if (this.currentScore <= -20) {
+            badgeText = 'Unqualified';
+            badgeClass = 'unqualified';
+        }
+        
+        if (badge) {
+            badge.textContent = badgeText;
+            badge.className = 'qual-badge ' + badgeClass;
+        }
+        
+        if (score) {
+            score.textContent = 'Score: ' + this.currentScore + '%';
+        }
+        
+        // Reason
+        const reasons = [];
+        if (this.detectedKeywords.includes('crisis')) reasons.push('Crisis detected');
+        if (this.detectedKeywords.includes('interested')) reasons.push('High interest');
+        if (this.detectedKeywords.includes('schedule')) reasons.push('Wants to schedule');
+        if (this.detectedKeywords.includes('insurance')) reasons.push('Insurance inquiry');
+        if (this.detectedKeywords.includes('unqualified')) reasons.push('Not interested');
+        
+        if (reason) {
+            reason.textContent = reasons.length > 0 ? reasons.join(', ') : 'Analyzing...';
+        }
+        
+        // Department routing
+        const departments = this.knowledgeBase?.departments || {};
+        let recommendedDept = '-';
+        
+        for (const [key, dept] of Object.entries(departments)) {
+            for (const keyword of this.detectedKeywords) {
+                if (dept.keywords.includes(keyword)) {
+                    recommendedDept = dept.name;
+                    break;
+                }
+            }
+        }
+        
+        if (deptName) {
+            deptName.textContent = recommendedDept;
+        }
+        
+        result.style.display = 'block';
+    }
+};
+
 // Main initialization
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[AGS] Popup loading...');
@@ -163,11 +475,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateServiceStatus('background', true);
     updateServiceStatus('ctm', true);
 
+    // Initialize Notes and Qualification
+    const currentClient = clientSelect?.value || 'flyland';
+    await NotesManager.load(currentClient);
+    await QualificationManager.loadKnowledgeBase(currentClient);
+
+    // Add note event
+    const noteInput = document.getElementById('noteInput');
+    const addNoteBtn = document.getElementById('addNoteBtn');
+    
+    if (addNoteBtn && noteInput) {
+        addNoteBtn.addEventListener('click', async () => {
+            const text = noteInput.value;
+            if (text.trim()) {
+                await NotesManager.addNote(text, 'manual');
+                noteInput.value = '';
+            }
+        });
+        
+        noteInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                const text = noteInput.value;
+                if (text.trim()) {
+                    await NotesManager.addNote(text, 'manual');
+                    noteInput.value = '';
+                }
+            }
+        });
+    }
+
+    // Listen for messages from background
+    if (chrome.runtime?.onMessage) {
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.action === 'CALL_TRANSCRIPTION') {
+                QualificationManager.analyzeCall(message.transcription);
+            } else if (message.action === 'KEYWORD_DETECTED') {
+                NotesManager.addNote('Keyword detected: ' + message.keyword, 'keyword');
+            }
+        });
+    }
+
     // Event listeners
     clientSelect.addEventListener('change', async (e) => {
         await saveSettings({ activeClient: e.target.value });
         showStatus('Switched to ' + getClientName(e.target.value), true);
         chrome.runtime.sendMessage({ action: 'CLIENT_CHANGED', client: e.target.value });
+        
+        // Reload knowledge base and notes for new client
+        await NotesManager.load(e.target.value);
+        await QualificationManager.loadKnowledgeBase(e.target.value);
     });
 
     callMonitorToggle.addEventListener('change', async (e) => {

@@ -329,6 +329,216 @@
             background: var(--warning);
             animation: pulse 1s infinite;
         }
+        
+        /* Notes Section */
+        .section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .note-count {
+            background: var(--primary);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        .notes-container {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-light);
+        }
+        .notes-empty {
+            padding: 16px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+        .note-item {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .note-item:last-child {
+            border-bottom: none;
+        }
+        .note-text {
+            flex: 1;
+            color: var(--text-primary);
+            word-break: break-word;
+        }
+        .note-time {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-left: 8px;
+            white-space: nowrap;
+        }
+        .note-type {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 8px;
+            font-weight: 500;
+        }
+        .note-type.auto {
+            background: rgba(37, 99, 235, 0.1);
+            color: var(--primary);
+        }
+        .note-type.manual {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+        .note-type.keyword {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+        .note-input-row {
+            display: flex;
+            gap: 8px;
+        }
+        .note-input {
+            flex: 1;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 12px;
+            resize: none;
+            font-family: inherit;
+        }
+        .note-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .btn-note-add {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-note-add:hover {
+            background: var(--primary-dark);
+        }
+        
+        /* Qualification Section */
+        .qualification-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: var(--bg-light);
+            border-radius: 6px;
+            margin-bottom: 12px;
+        }
+        .qual-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+        .qualification-status.listening .qual-indicator {
+            background: var(--success);
+            animation: pulse 1.5s infinite;
+        }
+        .qualification-status.analyzing .qual-indicator {
+            background: var(--warning);
+            animation: pulse 0.5s infinite;
+        }
+        .qual-result {
+            background: var(--bg-light);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .qual-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .qual-badge.hot {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+        .qual-badge.warm {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+        .qual-badge.cold {
+            background: rgba(37, 99, 235, 0.1);
+            color: var(--primary);
+        }
+        .qual-badge.unqualified {
+            background: rgba(100, 116, 139, 0.1);
+            color: var(--text-secondary);
+        }
+        .qual-score {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .qual-reason {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .qual-dept {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: var(--bg-white);
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+        .dept-label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .dept-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        .qual-keywords {
+            padding: 10px;
+            background: var(--bg-light);
+            border-radius: 6px;
+        }
+        .keywords-title {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .keywords-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .keyword-tag {
+            font-size: 11px;
+            padding: 4px 8px;
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -440,6 +650,43 @@
                 <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 Config
             </button>
+        </div>
+    </div>
+
+    <div class="section" id="notesSection">
+        <div class="section-title">
+            <span>Live Notes</span>
+            <span class="note-count" id="noteCount">0</span>
+        </div>
+        <div class="notes-container" id="notesContainer">
+            <div class="notes-empty" id="notesEmpty">No notes yet. Notes will appear automatically during calls.</div>
+        </div>
+        <div class="note-input-row">
+            <textarea class="note-input" id="noteInput" placeholder="Add a quick note..." rows="2"></textarea>
+            <button class="btn-note-add" id="addNoteBtn" title="Add Note">+</button>
+        </div>
+    </div>
+
+    <div class="section" id="qualificationSection">
+        <div class="section-title">AI Caller Qualification</div>
+        <div class="qualification-status" id="qualStatus">
+            <div class="qual-indicator"></div>
+            <span>Waiting for call...</span>
+        </div>
+        <div class="qual-result" id="qualResult" style="display: none;">
+            <div class="qual-badge" id="qualBadge">New Lead</div>
+            <div class="qual-score" id="qualScore">Score: 0%</div>
+            <div class="qual-reason" id="qualReason">Analyzing...</div>
+            <div class="qual-dept" id="qualDept">
+                <span class="dept-label">Transfer to:</span>
+                <span class="dept-name" id="deptName">-</span>
+            </div>
+        </div>
+        <div class="qual-keywords" id="qualKeywords">
+            <div class="keywords-title">Detected Keywords:</div>
+            <div class="keywords-list" id="keywordsList">
+                <span class="keyword-tag">None</span>
+            </div>
         </div>
     </div>
 
