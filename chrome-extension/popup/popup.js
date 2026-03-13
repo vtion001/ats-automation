@@ -684,8 +684,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const results = {
             storage: false,
             aiServer: false,
+            salesforce: false,
             background: false,
-            ctmMonitor: true
+            ctmMonitor: false
         };
         
         try {
@@ -707,6 +708,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         try {
+            const sfResult = await testSalesforce();
+            results.salesforce = sfResult;
+            updateServiceStatus('salesforce', sfResult);
+        } catch(e) { 
+            results.salesforce = false;
+            updateServiceStatus('salesforce', false);
+        }
+        
+        try {
             const bgResult = await testBackground();
             results.background = bgResult;
             updateServiceStatus('background', bgResult);
@@ -716,13 +726,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         try {
-            const configResult = await testConfig();
-            results.config = configResult;
-        } catch(e) { results.config = false; }
+            const ctmResult = await testCTM();
+            results.ctmMonitor = ctmResult;
+            updateServiceStatus('ctm', ctmResult);
+        } catch(e) { 
+            results.ctmMonitor = false;
+            updateServiceStatus('ctm', false);
+        }
         
-        updateServiceStatus('ctm', results.ctmMonitor);
-        
-        const allPassed = results.storage && results.aiServer && results.background;
+        const allPassed = results.storage && results.aiServer && results.salesforce && results.background && results.ctmMonitor;
         
         if (allPassed) {
             showStatus('All services online!', true);
@@ -754,7 +766,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     function updateAllServiceStatus(status) {
-        const services = ['storage', 'aiServer', 'background', 'ctm'];
+        const services = ['storage', 'aiServer', 'salesforce', 'background', 'ctm'];
         services.forEach(service => {
             const statusEl = document.getElementById(service + 'Status');
             if (!statusEl) return;
@@ -824,6 +836,39 @@ document.addEventListener('DOMContentLoaded', async () => {
                 resolve(response && response.pong === true);
             });
         });
+    }
+    
+    async function testSalesforce() {
+        try {
+            const result = await new Promise(resolve => {
+                chrome.storage.local.get('salesforceUrl', resolve);
+            });
+            const sfUrl = result.salesforceUrl;
+            if (!sfUrl) {
+                console.log('[Popup] Salesforce URL not configured');
+                return false;
+            }
+            const response = await fetch(`${sfUrl}/services/data/`, { 
+                method: 'GET', 
+                signal: AbortSignal.timeout(5000),
+                credentials: 'include'
+            });
+            return response.ok || response.status === 401;
+        } catch(e) {
+            console.log('[Popup] Salesforce test error:', e.message);
+            return false;
+        }
+    }
+    
+    async function testCTM() {
+        try {
+            const result = await new Promise(resolve => {
+                chrome.storage.local.get('ctmSelectors', resolve);
+            });
+            return !!result.ctmSelectors;
+        } catch(e) {
+            return false;
+        }
     }
     
     async function testConfig() {
