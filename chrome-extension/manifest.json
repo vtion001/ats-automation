@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "ATS Automation",
-  "version": "2.0.0",
-  "description": "RPA automation for BPO client workflows - CTM monitoring, transcription, Salesforce search",
+  "name": "AGS Automation Tool",
+  "version": "2.1.0",
+  "description": "BPO client workflow automation - CTM monitoring, transcription, Salesforce integration",
   "permissions": [
     "activeTab",
     "storage",
     "scripting"
   ],
   "host_permissions": [
-    "*://*.calltrackingmetrics.co/*",
+    "*://*.calltrackingmetrics.com/*",
     "*://*.my.salesforce.com/*",
     "*://*.lightning.force.com/*",
     "*://*.zoho.com/*",
@@ -38,7 +38,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.calltrackingmetrics.co/*"],
+      "matches": ["*://*.calltrackingmetrics.com/*"],
       "js": [
         "src/lib/core.js",
         "src/services/ctm-service.js",

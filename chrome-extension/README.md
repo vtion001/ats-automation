@@ -1,6 +1,6 @@
-# ATS Automation Chrome Extension
+# AGS Automation Tool
 
-**Version:** 2.0.0  
+**Version:** 2.1.0  
 **Platform:** Chrome (Manifest V3)
 
 ---

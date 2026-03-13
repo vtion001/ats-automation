@@ -11,7 +11,7 @@
         transcriptionEnabled: true,
         autoSearchSF: true,
         client: 'flyland',
-        salesforceUrl: 'https://flyland.my.salesforce.com'
+        salesforceUrl: ''  // Will be loaded from storage
     };
 
     let lastCallState = null;

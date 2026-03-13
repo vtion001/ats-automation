@@ -9,8 +9,16 @@ Automation for 6 BPO client companies using CTM native features + Salesforce Flo
 
 ## Quick Start
 
-### 1. Install Dependencies
+### Option 1: Docker (Recommended for easy setup)
+```bash
+# Start AI server
+docker-compose up -d
 
+# View logs
+docker-compose logs -f ai-server
+```
+
+### Option 2: Python directly
 ```bash
 # Clone or download this project
 cd ats-automation

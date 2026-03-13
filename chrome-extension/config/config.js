@@ -9,8 +9,8 @@ const DEFAULT_CONFIG = {
     transcriptionEnabled: true,
     aiAnalysisEnabled: true,
     saveMarkdown: true,
-    salesforceUrl: 'https://flyland.my.salesforce.com',
-    aiServerUrl: 'http://localhost:8000',
+    salesforceUrl: '',  // User must configure this
+    aiServerUrl: 'http://localhost:8001',
     ctmSelectors: '.call-status, .incoming-call, .phone-number, .call-info, .caller-id'
 };
 

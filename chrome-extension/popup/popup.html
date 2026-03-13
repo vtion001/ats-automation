@@ -3,75 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ATS Automation</title>
+    <title>AGS Automation Tool</title>
     <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-light: #3b82f6;
+            --accent: #06b6d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --bg-white: #ffffff;
+            --bg-light: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-hover: #f1f5f9;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --border: #e2e8f0;
+            --border-light: #f1f5f9;
+            --shadow: 0 1px 3px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+        }
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
         body {
-            width: 300px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1e1e1e;
-            color: #fff;
-            font-size: 13px;
+            width: 360px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-white);
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.5;
         }
         .header {
-            padding: 16px;
-            background: #2d2d2d;
-            border-bottom: 1px solid #3d3d3d;
+            background: var(--bg-white);
+            padding: 24px 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+        .logo {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 12px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
         .header h1 {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 600;
-            color: #4CAF50;
+            color: var(--text-primary);
             margin-bottom: 4px;
         }
-        .header .status {
+        .header .tagline {
             font-size: 12px;
-            color: #888;
+            color: var(--text-secondary);
         }
-        .header .status.active {
-            color: #4CAF50;
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px;
+            background: var(--bg-light);
+            border-bottom: 1px solid var(--border);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+        .status-dot.inactive {
+            background: var(--text-muted);
+            animation: none;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .status-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .status-text.active {
+            color: var(--success);
         }
         .section {
             padding: 16px;
-            border-bottom: 1px solid #3d3d3d;
+            border-bottom: 1px solid var(--border-light);
         }
         .section-title {
             font-size: 11px;
+            font-weight: 600;
             text-transform: uppercase;
-            color: #888;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
             margin-bottom: 12px;
         }
         .client-select {
             width: 100%;
-            padding: 8px 12px;
-            background: #2d2d2d;
-            border: 1px solid #3d3d3d;
-            border-radius: 4px;
-            color: #fff;
-            font-size: 13px;
+            padding: 12px 14px;
+            background: var(--bg-white);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
             cursor: pointer;
+            transition: all 0.2s;
+        }
+        .client-select:hover {
+            border-color: var(--primary);
         }
         .client-select:focus {
             outline: none;
-            border-color: #4CAF50;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
         .toggle-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            padding: 12px;
+            background: var(--bg-light);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .toggle-row:last-child {
+            margin-bottom: 0;
         }
         .toggle-label {
-            color: #ccc;
+            display: flex;
+            flex-direction: column;
+        }
+        .toggle-label span:first-child {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        .toggle-label span:last-child {
+            font-size: 12px;
+            color: var(--text-muted);
         }
         .toggle {
             position: relative;
-            width: 44px;
-            height: 24px;
+            width: 48px;
+            height: 26px;
+            flex-shrink: 0;
         }
         .toggle input {
             opacity: 0;
@@ -85,101 +173,289 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: #3d3d3d;
-            border-radius: 24px;
+            background: #cbd5e1;
+            border-radius: 26px;
             transition: 0.3s;
         }
         .toggle-slider:before {
             position: absolute;
             content: "";
-            height: 18px;
-            width: 18px;
+            height: 20px;
+            width: 20px;
             left: 3px;
             bottom: 3px;
-            background: #fff;
+            background: white;
             border-radius: 50%;
             transition: 0.3s;
+            box-shadow: var(--shadow);
         }
         .toggle input:checked + .toggle-slider {
-            background: #4CAF50;
+            background: var(--primary);
         }
         .toggle input:checked + .toggle-slider:before {
-            transform: translateX(20px);
+            transform: translateX(22px);
+        }
+        .btn-row {
+            display: flex;
+            gap: 8px;
         }
         .btn {
-            width: 100%;
-            padding: 10px 16px;
-            background: #4CAF50;
-            color: #fff;
+            flex: 1;
+            padding: 12px 16px;
+            background: var(--primary);
+            color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 13px;
             font-weight: 500;
-            margin-top: 8px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
         .btn:hover {
-            background: #45a049;
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+        .btn:active {
+            transform: translateY(0);
         }
         .btn.secondary {
-            background: #3d3d3d;
+            background: var(--bg-white);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
         }
         .btn.secondary:hover {
-            background: #4d4d4d;
+            background: var(--bg-light);
+            border-color: var(--primary);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .stat-card {
+            background: var(--bg-light);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
         }
         .info-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .info-row:last-child {
+            border-bottom: none;
         }
         .info-label {
-            color: #888;
+            color: var(--text-muted);
         }
         .info-value {
-            color: #fff;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .footer {
+            padding: 12px 16px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        .icon {
+            width: 16px;
+            height: 16px;
+        }
+        .service-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: var(--bg-white);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .service-row:last-child {
+            margin-bottom: 0;
+        }
+        .service-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+        .service-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            transition: all 0.3s;
+        }
+        .status-indicator.online {
+            background: var(--success);
+            box-shadow: 0 0 6px var(--success);
+        }
+        .status-indicator.offline {
+            background: var(--error);
+        }
+        .status-indicator.checking {
+            background: var(--warning);
+            animation: pulse 1s infinite;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>ATS Automation</h1>
-        <div class="status active">Ready</div>
+        <div class="logo">
+            <img src="https://res.cloudinary.com/dbviya1rj/image/upload/v1773384037/gpnkwelbdcwfjmw5axtx.webp" alt="AGS Logo">
+        </div>
+        <h1>AGS Automation Tool</h1>
+        <div class="tagline">BPO Workflow Automation</div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-dot" id="statusDot"></div>
+        <span class="status-text active" id="statusText">Ready</span>
+    </div>
+
+    <div class="section" id="servicesSection">
+        <div class="section-title">Service Status</div>
+        <div class="service-row">
+            <span class="service-name">Storage</span>
+            <span class="service-status" id="storageStatus"><span class="status-indicator"></span></span>
+        </div>
+        <div class="service-row">
+            <span class="service-name">AI Server</span>
+            <span class="service-status" id="aiServerStatus"><span class="status-indicator"></span></span>
+        </div>
+        <div class="service-row">
+            <span class="service-name">Background</span>
+            <span class="service-status" id="backgroundStatus"><span class="status-indicator"></span></span>
+        </div>
+        <div class="service-row">
+            <span class="service-name">CTM Monitor</span>
+            <span class="service-status" id="ctmStatus"><span class="status-indicator"></span></span>
+        </div>
     </div>
 
     <div class="section">
         <div class="section-title">Active Client</div>
         <select class="client-select" id="clientSelect">
             <option value="flyland">Flyland Recovery</option>
-            <option value="legacy">Legacy</option>
-            <option value="tbt">TBT</option>
-            <option value="banyan">Banyan</option>
-            <option value="takami">Takahami</option>
+            <option value="legacy">Legacy Services</option>
+            <option value="tbt">TBT Communications</option>
+            <option value="banyan">Banyan Health</option>
+            <option value="takami">Takahami Medical</option>
             <option value="element">Element Medical</option>
         </select>
     </div>
 
     <div class="section">
-        <div class="section-title">Automation</div>
+        <div class="section-title">Automation Controls</div>
         <div class="toggle-row">
-            <span class="toggle-label">Enable Automations</span>
+            <div class="toggle-label">
+                <span>Call Monitoring</span>
+                <span>Detect incoming calls on CTM</span>
+            </div>
             <label class="toggle">
-                <input type="checkbox" id="automationToggle" checked>
+                <input type="checkbox" id="callMonitorToggle" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <div class="toggle-label">
+                <span>Salesforce Sync</span>
+                <span>Auto-search and update records</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" id="sfSyncToggle" checked>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="toggle-row">
+            <div class="toggle-label">
+                <span>AI Analysis</span>
+                <span>Transcription & insights</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" id="aiToggle" checked>
                 <span class="toggle-slider"></span>
             </label>
         </div>
     </div>
 
     <div class="section">
+        <div class="section-title">Today's Activity</div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="callsCount">0</div>
+                <div class="stat-label">Calls</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="searchesCount">0</div>
+                <div class="stat-label">Searches</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="analysisCount">0</div>
+                <div class="stat-label">Analyzed</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
         <div class="section-title">Quick Actions</div>
-        <button class="btn" id="testBtn">Test Connection</button>
-        <button class="btn secondary" id="configBtn">Open Config</button>
+        <div class="btn-row">
+            <button class="btn" id="testBtn">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Test
+            </button>
+            <button class="btn secondary" id="configBtn">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                Config
+            </button>
+        </div>
     </div>
 
     <div class="section">
         <div class="info-row">
             <span class="info-label">Version</span>
-            <span class="info-value">1.0.0</span>
+            <span class="info-value">2.1.0</span>
         </div>
+        <div class="info-row">
+            <span class="info-label">Server</span>
+            <span class="info-value" id="serverStatus">localhost:8000</span>
+        </div>
+    </div>
+
+    <div class="footer">
+        <a href="#" id="docsLink">Documentation</a> · <a href="#" id="supportLink">Support</a>
     </div>
 
     <script src="../src/lib/core.js"></script>
