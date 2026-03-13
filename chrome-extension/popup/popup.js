@@ -791,6 +791,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         return result.aiServerUrl || 'http://localhost:8000';
     }
     
+    async function testStorage() {
+        return new Promise((resolve) => {
+            chrome.storage.local.set({ '__test_key': 'test_value' }, () => {
+                chrome.storage.local.get('__test_key', (result) => {
+                    chrome.storage.local.remove('__test_key', () => {
+                        resolve(result['__test_key'] === 'test_value');
+                    });
+                });
+            });
+        });
+    }
+    
     async function testAIServer() {
         try {
             const serverUrl = await getAIServerUrl();
@@ -858,92 +870,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     console.log('[AGS] Popup ready');
 });
-
-async function testStorage() {
-    return new Promise((resolve) => {
-        chrome.storage.local.set({ '__test_key': 'test_value' }, () => {
-            chrome.storage.local.get('__test_key', (result) => {
-                chrome.storage.local.remove('__test_key', () => {
-                    resolve(result['__test_key'] === 'test_value');
-                });
-            });
-        });
-    });
-}
-
-async function testAIServer() {
-    try {
-        const serverUrl = await getAIServerUrl();
-        const response = await fetch(`${serverUrl}/health', { 
-            method: 'GET', 
-            signal: AbortSignal.timeout(5000) 
-        });
-        return response.ok;
-    } catch(e) {
-        return false;
-    }
-}
-
-async function testBackground() {
-    return new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: 'PING' }, (response) => {
-            resolve(response && response.pong === true);
-        });
-    });
-}
-
-async function testConfig() {
-    return new Promise((resolve) => {
-        chrome.storage.local.get('ats_config', (result) => {
-            resolve(true);
-        });
-    });
-}
-
-    configBtn.addEventListener('click', () => {
-        window.open(chrome.runtime.getURL('config/config.html'), '_blank');
-    });
-
-    async function checkServerConnection() {
-        try {
-            // Get the configured AI server URL from storage
-            const result = await new Promise(resolve => {
-                chrome.storage.local.get('aiServerUrl', resolve);
-            });
-            const serverUrl = result.aiServerUrl || 'http://localhost:8000';
-            
-            const response = await fetch(`${serverUrl}/health', { 
-                method: 'GET', 
-                signal: AbortSignal.timeout(3000) 
-            });
-            if (response.ok) {
-                updateMainStatus(true);
-                updateServiceStatus('aiServer', true);
-                serverStatus.textContent = serverUrl.replace('http://', '').replace('https://', '');
-            } else {
-                updateMainStatus(false);
-                updateServiceStatus('aiServer', false);
-                serverStatus.textContent = 'Connection failed';
-            }
-        } catch (error) {
-            updateMainStatus(false);
-            updateServiceStatus('aiServer', false);
-            serverStatus.textContent = 'Not connected';
-        }
-    }
-
-    function setOfflineStatus() {
-        statusDot.classList.add('inactive');
-        statusText.classList.remove('active');
-        statusText.textContent = 'Server Offline';
-        serverStatus.textContent = 'Not connected';
-    }
-
-    function updateStats() {
-        chrome.storage.local.get('ats_stats', (result) => {
-            const stats = result.ats_stats || { calls: 0, searches: 0, analysis: 0 };
-            document.getElementById('callsCount').textContent = stats.calls || 0;
-            document.getElementById('searchesCount').textContent = stats.searches || 0;
-            document.getElementById('analysisCount').textContent = stats.analysis || 0;
-        });
-    }
