@@ -65,23 +65,34 @@ chrome.action.onClicked.addListener(async (tab) => {
     try {
         const result = await chrome.storage.local.get('popupFloatEnabled');
         
-        const windows = await chrome.windows.getAll();
-        const existingWindow = windows.find(w => 
-            w.type === 'popup' && 
-            w.url && 
-            w.url.includes('popup.html')
-        );
-        
-        if (existingWindow) {
-            await chrome.windows.update(existingWindow.id, { focused: true });
+        if (result.popupFloatEnabled) {
+            const windows = await chrome.windows.getAll();
+            const existingWindow = windows.find(w => 
+                w.type === 'popup' && 
+                w.url && 
+                w.url.includes('popup.html')
+            );
+            
+            if (existingWindow) {
+                await chrome.windows.update(existingWindow.id, { focused: true });
+            } else {
+                await chrome.windows.create({
+                    url: chrome.runtime.getURL('popup/popup.html'),
+                    type: 'popup',
+                    width: 420,
+                    height: 700,
+                    focused: true
+                });
+            }
         } else {
+            // Default behavior - let Chrome handle the popup
+            // This won't work with onClicked, so we open the popup page directly
             await chrome.windows.create({
                 url: chrome.runtime.getURL('popup/popup.html'),
                 type: 'popup',
                 width: 420,
                 height: 700,
-                focused: true,
-                alwaysOnTop: result.popupFloatEnabled || false
+                focused: true
             });
         }
     } catch (error) {

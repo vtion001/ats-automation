@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // Pin/Float button - toggles floating mode preference
+    // Pin/Float button - opens popup as standalone window
     const pinBtn = document.getElementById('pinBtn');
     if (pinBtn) {
         pinBtn.addEventListener('click', async () => {
@@ -196,7 +196,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 pinBtn.classList.add('pinned');
                 await StorageService.set({ popupFloatEnabled: true });
-                showStatus('Floating mode enabled - click extension icon to open', true);
+                
+                chrome.windows.create({
+                    url: chrome.runtime.getURL('popup/popup.html'),
+                    type: 'popup',
+                    width: 420,
+                    height: 700,
+                    focused: true
+                }).then((window) => {
+                    showStatus('Opening as floating window...', true);
+                    window.close();
+                }).catch((err) => {
+                    console.error('Failed to create window:', err);
+                });
             }
         });
         
@@ -249,66 +261,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     const runAnalysisBtn = document.getElementById('runAnalysisBtn');
     const audioFileInput = document.getElementById('audioFileInput');
     
-    console.log('[Test Analysis] Elements found:', {
-        testNewLeadBtn: !!testNewLeadBtn,
-        testExistingLeadBtn: !!testExistingLeadBtn,
-        runAnalysisBtn: !!runAnalysisBtn,
-        audioFileInput: !!audioFileInput
-    });
-    
     let currentTestType = null;
     
     // Test New Lead button
-    if (testNewLeadBtn) {
-        testNewLeadBtn.addEventListener('click', () => {
-            console.log('[Test] New Lead button clicked');
-            currentTestType = 'new-lead';
+    testNewLeadBtn.addEventListener('click', () => {
+        currentTestType = 'new-lead';
         testInputArea.style.display = 'block';
         testStatus.style.display = 'none';
         
-        // Clear and show file input hint
-        audioFileInput.value = '';
-        audioFileInput.removeAttribute('data-test-file');
-        
+        // Clear fields - user will upload audio or paste transcription
         transcriptionInput.value = '';
         testPhoneInput.value = '';
         testClientSelect.value = 'flyland';
-        
-        showTestStatus('Select the audio file: new-leads.mp3 from Desktop/test-audio, then click Run Analysis', 'loading');
+        audioFileInput.value = '';
     });
     
     // Test Existing Lead button
-    if (testExistingLeadBtn) {
-        testExistingLeadBtn.addEventListener('click', () => {
-            console.log('[Test] Existing Lead button clicked');
-            currentTestType = 'existing';
+    testExistingLeadBtn.addEventListener('click', () => {
+        currentTestType = 'existing';
         testInputArea.style.display = 'block';
         testStatus.style.display = 'none';
         
-        // Clear and show file input hint
-        audioFileInput.value = '';
-        audioFileInput.removeAttribute('data-test-file');
-        
+        // Clear fields - user will upload audio or paste transcription
         transcriptionInput.value = '';
         testPhoneInput.value = '';
         testClientSelect.value = 'flyland';
-        
-        showTestStatus('Select the audio file: existing-client.mp3 from Desktop/test-audio, then click Run Analysis', 'loading');
+        audioFileInput.value = '';
     });
     
     // Run Analysis button
-    if (runAnalysisBtn) {
-        runAnalysisBtn.addEventListener('click', async () => {
-            console.log('[Test] Run Analysis button clicked');
-            const audioFile = audioFileInput?.files[0];
-        let transcription = transcriptionInput.value.trim();
+    runAnalysisBtn.addEventListener('click', async () => {
+        const audioFile = audioFileInput.files[0];
+        const transcription = transcriptionInput.value.trim();
         const client = testClientSelect.value;
         let phone = testPhoneInput.value.trim();
         
         const serverUrl = await StatusService.getAIServerUrl();
         const actualUrl = serverUrl.includes('localhost') ? 'http://20.125.46.59:8000' : serverUrl;
         
-        // If audio file is selected, transcribe it first
+        // If audio file provided, transcribe first
         if (audioFile) {
             showTestStatus('Transcribing audio...', 'loading');
             
@@ -327,41 +318,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 
                 const transcribeResult = await transcribeResponse.json();
-                transcription = transcribeResult.transcription;
-                transcriptionInput.value = transcription;
+                transcriptionInput.value = transcribeResult.transcription;
                 
+                // Use extracted phone if available, otherwise keep manual entry
                 if (transcribeResult.phone && !phone) {
                     phone = transcribeResult.phone;
                     testPhoneInput.value = phone;
                 }
                 
                 showTestStatus('Transcription complete! Running analysis...', 'loading');
-                
-            } catch (error) {
-                console.error('Transcription error:', error);
-                
-                // Fallback: use sample transcriptions if transcription fails
-                if (currentTestType === 'new-lead') {
-                    transcription = `Hello, I'm calling because I'm looking for help with addiction. I've been struggling and I really need to get into a program. I have about 3 days clean now. I have Blue Cross insurance through my employer. I'm located in Florida. I want to know what options I have for treatment. My name is John Smith. I'm really ready to get help.`;
-                    transcriptionInput.value = transcription;
-                    showTestStatus('Using sample transcription (server not updated). Running analysis...', 'loading');
-                } else if (currentTestType === 'existing') {
-                    transcription = `Hi, this is Sarah Johnson. I've been a patient with you guys before. I completed the program last year. I'm calling because I need to schedule a follow-up appointment. I have some questions about my insurance coverage. Also, I've been feeling some cravings lately and I wanted to talk to someone. Can you help me?`;
-                    transcriptionInput.value = transcription;
-                    showTestStatus('Using sample transcription (server not updated). Running analysis...', 'loading');
-                } else {
-                    showTestStatus('Transcription failed: ' + error.message, 'error');
-                    return;
-                }
-            }
-        }
-        
-        if (!transcription) {
-            showTestStatus('Please select an audio file or enter transcription', 'error');
-            return;
-        }
-        
-        showTestStatus('Running AI Analysis...', 'loading');
                 
             } catch (error) {
                 showTestStatus('Transcription error: ' + error.message, 'error');
