@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+  <app appid='jncbpgnflmcfnehadjjgddmhgecbelkf'>
+    <updatecheck 
+      codebase='https://releases.ats-automation.local/ats-automation-2.1.0.crx' 
+      version='2.1.0' 
+      prodversionmin='90.0.0.0'>
+    </updatecheck>
+  </app>
+</gupdate>

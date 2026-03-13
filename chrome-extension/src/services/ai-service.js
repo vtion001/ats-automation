@@ -16,6 +16,18 @@ class AIService {
             complaint: ['problem', 'issue', 'terrible', 'worst', 'angry', 'frustrated', 'complaint'],
             billing: ['bill', 'invoice', 'payment', 'charge', 'refund', 'insurance', 'coverage']
         };
+        
+        this.sfActionKeywords = {
+            log_call: [
+                'just calling', 'checking in', 'quick update', 'follow up on', 'wanted to let you know',
+                'inform', 'update', 'notify', '告知', '更新', '進捗', '報告'
+            ],
+            new_task: [
+                'call back', 'schedule', 'appointment', 'meeting', 'remind me', 'to do', 'task',
+                'follow up', 'get back to', 'will call', 'need to call', 'action item',
+                '折返し', '予定', 'タスク', 'リマインダー', '次回'
+            ]
+        };
     }
 
     // Initialize with config
@@ -57,6 +69,134 @@ class AIService {
         }
 
         return await response.json();
+    }
+
+    // Determine which Salesforce action to use based on transcription
+    determineSfAction(transcription, tags, analysis) {
+        const text = (transcription || '').toLowerCase();
+        
+        // Default to log_call
+        let suggestedAction = 'log_call';
+        let reason = 'General call notes';
+        
+        // Check for task-related keywords
+        let taskKeywordsFound = 0;
+        for (const keyword of this.sfActionKeywords.new_task) {
+            if (text.includes(keyword.toLowerCase())) {
+                taskKeywordsFound++;
+            }
+        }
+        
+        // Check for call logging keywords
+        let callKeywordsFound = 0;
+        for (const keyword of this.sfActionKeywords.log_call) {
+            if (text.includes(keyword.toLowerCase())) {
+                callKeywordsFound++;
+            }
+        }
+        
+        // Decision logic based on keywords and tags
+        if (tags.includes('follow-up') || tags.includes('scheduling') || taskKeywordsFound > 0) {
+            suggestedAction = 'new_task';
+            reason = 'Follow-up or scheduling required';
+        } else if (tags.includes('hot-lead') && taskKeywordsFound > 0) {
+            suggestedAction = 'new_task';
+            reason = 'Hot lead with follow-up needed';
+        } else if (callKeywordsFound > taskKeywordsFound && callKeywordsFound > 0) {
+            suggestedAction = 'log_call';
+            reason = 'Informational call - logged';
+        } else if (tags.includes('complaint') || tags.includes('unqualified')) {
+            suggestedAction = 'log_call';
+            reason = 'Call logged for record';
+        } else if (analysis.followUpRequired) {
+            suggestedAction = 'new_task';
+            reason = 'Follow-up marked as required';
+        }
+        
+        // Build suggested task/log data
+        const actionData = {
+            action: suggestedAction,
+            reason: reason,
+            taskSubject: this.generateTaskSubject(tags, analysis),
+            taskDueDate: this.generateTaskDueDate(tags),
+            callSubject: this.generateCallSubject(analysis),
+            callNotes: this.generateCallNotes(transcription, tags, analysis)
+        };
+        
+        return actionData;
+    }
+
+    // Generate task subject based on tags
+    generateTaskSubject(tags, analysis) {
+        if (tags.includes('scheduling') || tags.includes('pricing')) {
+            return `Follow up: ${analysis.summary || 'Inquiry call'}`;
+        }
+        if (tags.includes('hot-lead')) {
+            return `Hot Lead Follow-up: ${analysis.summary || 'Interested caller'}`;
+        }
+        if (tags.includes('follow-up')) {
+            return `Call Back: ${analysis.summary || 'Follow-up required'}`;
+        }
+        return `Call Note: ${analysis.summary || 'General call'}`;
+    }
+
+    // Generate task due date
+    generateTaskDueDate(tags) {
+        const today = new Date();
+        if (tags.includes('hot-lead')) {
+            today.setDate(today.getDate() + 1); // Tomorrow for hot leads
+        } else if (tags.includes('scheduling')) {
+            today.setDate(today.getDate() + 3); // 3 days for scheduling
+        } else {
+            today.setDate(today.getDate() + 7); // 7 days default
+        }
+        return today.toISOString().split('T')[0];
+    }
+
+    // Generate call subject
+    generateCallSubject(analysis) {
+        if (analysis.sentiment === 'positive') {
+            return `Inbound Call - Interested`;
+        }
+        if (analysis.sentiment === 'negative') {
+            return `Inbound Call - Not Interested`;
+        }
+        return `Inbound Call - ${analysis.suggestedDisposition || 'New'}`;
+    }
+
+    // Generate call notes
+    generateCallNotes(transcription, tags, analysis) {
+        let notes = '';
+        
+        if (analysis.suggestedNotes) {
+            notes += analysis.suggestedNotes + '\n\n';
+        }
+        
+        if (tags.includes('hot-lead')) {
+            notes += '**Action Required**: Hot lead - prioritize follow-up\n';
+        }
+        
+        if (tags.includes('follow-up')) {
+            notes += '**Follow-up Required**: Caller requested callback\n';
+        }
+        
+        if (tags.includes('scheduling')) {
+            notes += '**Scheduling Interest**: Caller wants to schedule appointment\n';
+        }
+        
+        if (tags.includes('pricing')) {
+            notes += '**Pricing Inquiry**: Sent pricing information request\n';
+        }
+        
+        // Add transcription summary if available
+        if (transcription && transcription.length > 0) {
+            notes += `\n**Call Summary**:\n${transcription.substring(0, 500)}`;
+            if (transcription.length > 500) {
+                notes += '...';
+            }
+        }
+        
+        return notes || 'Call recorded via ATS Automation';
     }
 
     // Local keyword-based analysis
@@ -117,7 +257,7 @@ class AIService {
             summaryParts.push(`Extended call (${wordCount} words)`);
         }
 
-        return {
+        const baseAnalysis = {
             phone,
             tags: [...new Set(tags)], // Remove duplicates
             sentiment,
@@ -126,6 +266,14 @@ class AIService {
             suggestedNotes: this.generateNotes(tags, text, phone),
             followUpRequired,
             timestamp: new Date().toISOString()
+        };
+        
+        // Determine Salesforce action
+        const sfActionData = this.determineSfAction(transcription, baseAnalysis.tags, baseAnalysis);
+        
+        return {
+            ...baseAnalysis,
+            ...sfActionData
         };
     }
 

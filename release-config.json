@@ -1,0 +1,9 @@
+{
+  "version": "2.1.0",
+  "output_dir": "releases",
+  "extension_name": "ATS Automation",
+  "extension_id": "jncbpgnflmcfnehadjjgddmhgecbelkf",
+  "update_server": "https://releases.ats-automation.local",
+  "chrome_web_store": false,
+  "auto_update": true
+}

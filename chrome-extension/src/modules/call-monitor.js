@@ -7,6 +7,7 @@ class CallMonitor {
     constructor() {
         this.ctmService = new CTMService();
         this.salesforceService = new SalesforceService();
+        this.salesforceActionsService = new SalesforceActionsService();
         this.transcriptionService = new TranscriptionService();
         this.aiService = new AIService();
         
@@ -20,6 +21,7 @@ class CallMonitor {
         
         await ATS.init();
         await this.salesforceService.init();
+        await this.salesforceActionsService.init();
         await this.aiService.init();
         
         // Set up transcription callbacks
@@ -98,7 +100,7 @@ class CallMonitor {
         }
     }
 
-    // Handle call end
+    // Handle call end - FULL AUTOMATED FLOW
     async handleCallEnd() {
         if (!this.currentCall) return;
         
@@ -120,7 +122,7 @@ class CallMonitor {
             type: ATS.Messages.CTM_CALL_EVENT,
             payload: { ...this.currentCall, event: 'call_ended' }
         });
-        
+
         // Analyze with AI
         if (ATS.config.aiAnalysisEnabled) {
             const transcript = this.transcriptionService.getTranscript();
@@ -130,16 +132,113 @@ class CallMonitor {
                 ATS.config.activeClient
             );
             
-            // Send analysis result
-            ATS.sendMessage({
-                type: ATS.Messages.AI_ANALYSIS_RESULT,
-                payload: analysis
-            });
+            // Store analysis with call data
+            this.currentCall.analysis = analysis;
             
             ATS.logger.info('AI Analysis:', analysis);
+            
+            // Show analysis in overlay
+            ATS.sendMessage({
+                type: ATS.Messages.AI_ANALYSIS_RESULT,
+                payload: {
+                    ...analysis,
+                    callerName: this.currentCall.callerName,
+                    phone: this.currentCall.phoneNumber
+                }
+            });
+
+            // AUTO-EXECUTE: Log to Salesforce based on AI decision
+            await this.autoLogToSalesforce(analysis);
         }
         
         this.currentCall = null;
+    }
+
+    // Automatically log to Salesforce based on AI analysis
+    async autoLogToSalesforce(analysis) {
+        ATS.logger.info('Auto-logging to Salesforce with action:', analysis.action);
+        
+        try {
+            // Get current Salesforce record (if user is on a Lead/Contact page)
+            const currentRecord = await this.salesforceActionsService.getCurrentRecord();
+            
+            let recordId = null;
+            
+            if (currentRecord && currentRecord.recordId) {
+                recordId = currentRecord.recordId;
+                ATS.logger.info('Found current SF record:', recordId, currentRecord.objectType);
+            } else {
+                // Try to find record by phone number
+                const searchResult = await this.salesforceActionsService.findRecordByPhone(this.currentCall.phoneNumber);
+                
+                if (searchResult) {
+                    ATS.logger.info('Search initiated in Salesforce for phone:', this.currentCall.phoneNumber);
+                    // Show notification asking user to select the record
+                    ATS.sendMessage({
+                        type: ATS.Messages.SHOW_NOTIFICATION,
+                        payload: { 
+                            message: 'Please select the correct Lead/Contact record in Salesforce, then the action will be auto-completed.' 
+                        }
+                    });
+                    
+                    // Set up listener for record selection
+                    await this.waitForRecordSelection(analysis);
+                    return;
+                }
+            }
+
+            if (recordId) {
+                // Execute the AI-determined action
+                const actionResult = await this.salesforceActionsService.executeSfAction(recordId, analysis, this.currentCall.phoneNumber);
+                
+                ATS.logger.info('Auto-log result:', actionResult);
+                
+                // Show result notification
+                const actionLabel = analysis.action === 'new_task' ? 'New Task' : 'Log a Call';
+                ATS.sendMessage({
+                    type: ATS.Messages.SHOW_NOTIFICATION,
+                    payload: { 
+                        message: `Auto-${actionLabel}: ${analysis.reason}` 
+                    }
+                });
+            } else {
+                ATS.logger.warn('No Salesforce record found to log to');
+            }
+        } catch (error) {
+            ATS.logger.error('Error in auto-log to Salesforce:', error);
+        }
+    }
+
+    // Wait for user to select a record in Salesforce
+    async waitForRecordSelection(analysis) {
+        ATS.logger.info('Waiting for user to select Salesforce record...');
+        
+        // Set up a one-time listener for SF record data
+        const checkInterval = setInterval(async () => {
+            const currentRecord = await this.salesforceActionsService.getCurrentRecord();
+            
+            if (currentRecord && currentRecord.recordId) {
+                clearInterval(checkInterval);
+                ATS.logger.info('Record selected:', currentRecord.recordId);
+                
+                // Execute the action
+                await this.salesforceActionsService.executeSfAction(currentRecord.recordId, analysis, this.currentCall.phoneNumber);
+                
+                const actionLabel = analysis.action === 'new_task' ? 'New Task' : 'Log a Call';
+                ATS.sendMessage({
+                    type: ATS.Messages.SHOW_NOTIFICATION,
+                    payload: { 
+                        message: `✓ Auto-${actionLabel} completed for selected record` 
+                    }
+                });
+            }
+        }, 2000);
+        
+        // Timeout after 30 seconds
+        setTimeout(() => {
+            clearInterval(checkInterval);
+            ATS.logger.info('Record selection timeout');
+        }, 30000);
     }
 
     // Manual search

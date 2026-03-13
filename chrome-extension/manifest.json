@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "AGS Automation Tool",
+  "name": "ATS Automation",
   "version": "2.1.0",
   "description": "BPO client workflow automation - CTM monitoring, transcription, Salesforce integration",
+  "update_url": "https://releases.ats-automation.local/update.xml",
   "permissions": [
     "activeTab",
     "storage",
@@ -43,6 +44,7 @@
         "src/lib/core.js",
         "src/services/ctm-service.js",
         "src/services/salesforce-service.js",
+        "src/services/salesforce-actions-service.js",
         "src/services/transcription-service.js",
         "src/services/ai-service.js",
         "src/modules/call-monitor.js",
@@ -62,6 +64,8 @@
       "js": [
         "src/lib/core.js",
         "src/services/salesforce-service.js",
+        "src/services/salesforce-actions-service.js",
+        "content-scripts/sf-reader.js",
         "src/modules/overlay-ui.js"
       ],
       "css": [
