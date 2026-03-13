@@ -10,7 +10,7 @@ const DEFAULT_CONFIG = {
     aiAnalysisEnabled: true,
     saveMarkdown: true,
     salesforceUrl: '',  // User must configure this
-    aiServerUrl: 'http://localhost:8001',
+    aiServerUrl: 'http://localhost:8000',
     ctmSelectors: '.call-status, .incoming-call, .phone-number, .call-info, .caller-id'
 };
 

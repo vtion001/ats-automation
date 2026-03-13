@@ -9,9 +9,18 @@ from typing import Optional, List
 import uvicorn
 from loguru import logger
 import re
+import json
 from datetime import datetime
+import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="ATS AI Server")
+
+API_KEY = os.getenv("ATS_API_KEY", "")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 class TranscriptionRequest(BaseModel):
     transcription: str
@@ -45,12 +54,97 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "ai_enabled": bool(API_KEY)}
+
+async def analyze_with_openai(transcription: str, phone: Optional[str] = None, client: str = "flyland") -> dict:
+    """Analyze transcription using OpenRouter AI"""
+    
+    system_prompt = """You are an expert sales call analyzer. Analyze the transcription and return a JSON object with:
+- tags: Array of relevant tags (hot-lead, unqualified, follow-up, pricing, scheduling, information, complaint, billing)
+- sentiment: "positive", "neutral", or "negative"
+- summary: Brief 1-2 sentence summary of the call
+- suggested_disposition: Appropriate disposition (New, Qualified, Unqualified, Callback Scheduled, etc.)
+- suggested_notes: Key points and action items
+- follow_up_required: true or false
+
+Respond ONLY with valid JSON."""
+
+    user_message = f"Analyze this call transcription{' for phone number ' + phone if phone else ''}:\n\n{transcription}"
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://ats-automation.local",
+            "X-Title": "ATS Automation"
+        }
+        
+        payload = {
+            "model": "anthropic/claude-3-haiku",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            "max_tokens": 1000,
+            "temperature": 0.3
+        }
+        
+        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"]
+            
+            # Parse JSON from response
+            try:
+                # Clean the content to extract valid JSON
+                content = content.strip()
+                # Handle potential markdown code blocks
+                if content.startswith('```'):
+                    content = content.split('```')[1]
+                    if content.startswith('json'):
+                        content = content[4:]
+                analysis = json.loads(content.strip())
+                return analysis
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse AI response as JSON: {e}")
+                return {"error": "Failed to parse AI response", "raw": content}
+        else:
+            logger.error(f"OpenRouter API error: {response.status_code} - {response.text}")
+            return {"error": f"API error: {response.status_code}"}
+            
+    except Exception as e:
+        logger.error(f"AI analysis error: {e}")
+        return {"error": str(e)}
 
 @app.post("/api/analyze")
 async def analyze_transcription(request: TranscriptionRequest):
     """Analyze transcription and return insights"""
     try:
+        # Use OpenRouter AI if API key is available
+        if API_KEY:
+            ai_result = await analyze_with_openai(
+                request.transcription, 
+                request.phone, 
+                request.client or "flyland"
+            )
+            
+            if "error" not in ai_result:
+                return {
+                    "phone": request.phone,
+                    "tags": ai_result.get("tags", []),
+                    "sentiment": ai_result.get("sentiment", "neutral"),
+                    "summary": ai_result.get("summary", ""),
+                    "suggested_disposition": ai_result.get("suggested_disposition", "New"),
+                    "suggested_notes": ai_result.get("suggested_notes", ""),
+                    "follow_up_required": ai_result.get("follow_up_required", False),
+                    "timestamp": datetime.now().isoformat(),
+                    "ai_analyzed": True
+                }
+            else:
+                logger.warning(f"AI analysis failed, falling back to keyword analysis: {ai_result.get('error')}")
+        
+        # Fallback to keyword-based analysis
         text = request.transcription.lower() if request.transcription else ""
         
         tags = []

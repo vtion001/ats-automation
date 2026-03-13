@@ -2,61 +2,79 @@
  * AGS Popup - Main extension popup
  */
 
-// ====== ATS FALLBACK - MUST BE FIRST ======
+// ====== ATS FALLBACK - EXTEND, NOT REPLACE ======
 (function() {
     'use strict';
     
-    // Create ATS object with ALL required methods
-    window.ATS = {
-        config: { 
-            debug: true, 
-            apiUrl: 'http://localhost:8000', 
-            storageKey: 'ats_config' 
-        },
-        
-        init: async function() {
-            console.log('[AGS] Initializing...');
-            try {
-                const stored = await new Promise(resolve => {
-                    chrome.storage.local.get(this.config.storageKey, resolve);
-                });
-                if (stored[this.config.storageKey]) {
-                    Object.assign(this.config, stored[this.config.storageKey]);
+    // Extend ATS if it exists, otherwise create minimal fallback
+    if (!window.ATS) {
+        window.ATS = {
+            config: { 
+                debug: true, 
+                apiUrl: 'http://localhost:8000', 
+                storageKey: 'ats_config' 
+            },
+            
+            init: async function() {
+                console.log('[AGS] Initializing...');
+                try {
+                    const stored = await new Promise(resolve => {
+                        chrome.storage.local.get(this.config.storageKey, resolve);
+                    });
+                    if (stored[this.config.storageKey]) {
+                        Object.assign(this.config, stored[this.config.storageKey]);
+                    }
+                } catch(e) {
+                    console.error('[AGS] Init error:', e);
                 }
-            } catch(e) {
-                console.error('[AGS] Init error:', e);
-            }
-            return this;
-        },
-        
-        getConfig: async function() {
-            return new Promise(resolve => {
-                chrome.storage.local.get(this.config.storageKey, result => {
-                    resolve(result[this.config.storageKey] || {});
+                return this;
+            },
+            
+            getConfig: async function() {
+                return new Promise(resolve => {
+                    chrome.storage.local.get(this.config.storageKey, result => {
+                        resolve(result[this.config.storageKey] || {});
+                    });
                 });
-            });
-        },
-        
-        saveConfig: async function(config) {
-            return new Promise(resolve => {
-                chrome.storage.local.set({ [this.config.storageKey]: config }, () => {
-                    resolve(true);
+            },
+            
+            saveConfig: async function(config) {
+                return new Promise(resolve => {
+                    chrome.storage.local.set({ [this.config.storageKey]: config }, () => {
+                        resolve(true);
+                    });
                 });
-            });
-        },
-        
-        log: function(msg, data) {
-            if (this.config.debug) {
-                console.log('[AGS]', msg, data || '');
+            },
+            
+            log: function(msg, data) {
+                if (this.config.debug) {
+                    console.log('[AGS]', msg, data || '');
+                }
+            },
+            
+            error: function(msg, data) {
+                console.error('[AGS ERROR]', msg, data || '');
             }
-        },
+        };
         
-        error: function(msg, data) {
-            console.error('[AGS ERROR]', msg, data || '');
-        }
-    };
-    
-    console.log('[AGS] ATS object created');
+        // Add storage utility if not present
+        window.ATS.storage = {
+            async get(keys) {
+                return new Promise(resolve => {
+                    chrome.storage.local.get(keys, resolve);
+                });
+            },
+            async set(items) {
+                return new Promise(resolve => {
+                    chrome.storage.local.set(items, resolve);
+                });
+            }
+        };
+        
+        console.log('[AGS] ATS fallback created');
+    } else {
+        console.log('[AGS] ATS already exists from core.js');
+    }
 })();
 // =========================================
 
@@ -229,10 +247,10 @@ const NotesManager = {
                     <span class="note-text" id="note-text-${index}">${this.escapeHtml(note.text)}</span>
                 </div>
                 <div class="note-actions">
-                    <button class="note-action-btn edit" onclick="NotesManager.editNote(${index})" title="Edit">
+                    <button class="note-action-btn edit" data-action="edit" data-index="${index}" title="Edit">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                     </button>
-                    <button class="note-action-btn delete" onclick="NotesManager.deleteNote(${index})" title="Delete">
+                    <button class="note-action-btn delete" data-action="delete" data-index="${index}" title="Delete">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                     </button>
                 </div>
@@ -261,10 +279,10 @@ const NotesManager = {
         const actions = noteItem.querySelector('.note-actions');
         
         actions.innerHTML = `
-            <button class="note-action-btn save" onclick="NotesManager.saveEdit(${index})" title="Save">
+            <button class="note-action-btn save" data-action="save" data-index="${index}" title="Save">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
             </button>
-            <button class="note-action-btn cancel" onclick="NotesManager.cancelEdit(${index})" title="Cancel">
+            <button class="note-action-btn cancel" data-action="cancel" data-index="${index}" title="Cancel">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         `;
@@ -561,6 +579,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentClient = clientSelect?.value || 'flyland';
     await NotesManager.load(currentClient);
     await QualificationManager.loadKnowledgeBase(currentClient);
+    
+    // Event delegation for note actions (avoids CSP issues with inline handlers)
+    const notesContainer = document.getElementById('notesContainer');
+    if (notesContainer) {
+        notesContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            
+            const action = btn.dataset.action;
+            const index = parseInt(btn.dataset.index, 10);
+            
+            if (action === 'edit') {
+                NotesManager.editNote(index);
+            } else if (action === 'delete') {
+                NotesManager.deleteNote(index);
+            } else if (action === 'save') {
+                NotesManager.saveEdit(index);
+            } else if (action === 'cancel') {
+                NotesManager.cancelEdit(index);
+            }
+        });
+    }
 
     // Add note event
     const noteInput = document.getElementById('noteInput');

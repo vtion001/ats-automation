@@ -12,7 +12,7 @@ const AGS_CONFIG = {
     aiAnalysisEnabled: true,
     saveMarkdown: true,
     salesforceUrl: '',  // Will be loaded from storage or user config
-    aiServerUrl: 'http://localhost:8001'
+    aiServerUrl: 'http://localhost:8000'
 };
 
 let callLog = [];

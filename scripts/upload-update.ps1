@@ -1,3 +1,5 @@
+#!/bin/bash
+cat > /var/www/ats-extension/update.xml << 'XMLEOF'
 <?xml version='1.0' encoding='UTF-8'?>
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='jncbpgnflmcfnehadjjgddmhgecbelkf'>
@@ -8,3 +10,5 @@
     </updatecheck>
   </app>
 </gupdate>
+XMLEOF
+echo "update.xml created"

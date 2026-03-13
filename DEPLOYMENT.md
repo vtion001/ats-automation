@@ -1,139 +1,105 @@
 # ATS Automation - Deployment Guide
 
-## Current Issue
-Unpacked extensions require manual reload after each update. This is causing issues when updating multiple workstations.
+## Current Setup
 
-## Solutions
+**Update Server:** http://20.125.46.59 (Azure VM)
 
-### Option 1: Chrome Web Store (Recommended for Production)
-
-**Pros:**
-- Automatic updates to all workstations
-- No manual intervention needed
-- Trusted by users
-
-**Cons:**
-- Requires $5 one-time developer fee
-- Extension review process (can take days)
-
-**Steps:**
-1. Go to [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-2. Pay one-time fee ($5)
-3. Package extension: `zip -r ats-automation.zip chrome-extension/`
-4. Upload as new item
-5. Publish (can be unlisted for internal use)
-6. All workstations will auto-update
+The extension is hosted on the Azure VM and can be accessed via HTTP.
 
 ---
 
-### Option 2: Self-Hosted Update Server (For Internal Use)
+## Installation on New Workstations
 
-**Pros:**
-- No external fees
-- Full control over updates
-- Can use internal network
+### Step 1: Get the Extension Files
 
-**Cons:**
-- Requires hosting a server
-- More setup required
-
-**Implementation:**
-
-1. **Host the CRX file** on a web server:
-   ```
-   https://your-internal-server.com/ats-automation.crx
-   ```
-
-2. **Create update XML** at `https://your-internal-server.com/update.xml`:
-   ```xml
-   <?xml version='1.0' encoding='UTF-8'?>
-   <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
-     <app appid='YOUR_EXTENSION_ID'>
-       <updatecheck codebase='https://your-internal-server.com/ats-automation.crx' version='2.1.0' />
-     </app>
-   </gupdate>
-   ```
-
-3. **Add to manifest.json:**
-   ```json
-   "update_url": "https://your-internal-server.com/update.xml"
-   ```
-
----
-
-### Option 3: Simplified Manual Update (Quick Fix)
-
-**For immediate relief:**
-
-1. Create a batch script that workstations can run:
-   ```batch
-   @echo off
-   echo Updating ATS Automation...
-   cd %USERPROFILE%\Documents\ats-automation
-   git pull
-   echo Extension folder updated!
-   echo Please reload extension in Chrome: chrome://extensions/
-   pause
-   ```
-
-2. Or use a startup script to auto-reload:
-
----
-
-## Recommended Workflow
-
-### For Development (Current)
-- Use unpacked extension
-- Manual reload after updates
-
-### For Production
-
-**Step 1: Package Extension**
-```bash
-cd ats-automation
-zip -r ats-automation-v2.1.0.zip chrome-extension/
-```
-
-**Step 2: Choose Deployment Method**
-- **Small team (< 5)**: Use Option 3 with notification script
-- **Medium team (5-20)**: Use Option 2 (self-hosted)
-- **Large team (20+)**: Use Option 1 (Chrome Web Store)
-
-**Step 3: Automate**
-- Set up GitHub Actions to auto-package on release
-- Use a simple internal server for updates
-
----
-
-## Quick Fix: Auto-Reload Script
-
-Create `update-automation.bat`:
+**Option A: From GitHub Repository (Recommended)**
 ```batch
-@echo off
-cd /d "%USERPROFILE%\Desktop\repository\ats-automation"
-git pull
-echo.
-echo ========================================
-echo Extension updated! Reloading...
-echo ========================================
-echo.
-echo To complete update:
-echo 1. Open Chrome
-echo 2. Go to chrome://extensions/
-echo 3. Click reload on ATS Automation
-echo.
-pause
+cd %USERPROFILE%\Desktop
+git clone https://github.com/vtion001/ats-automation.git
 ```
+
+**Option B: From Shared Network Location**
+Copy the `ats-automation` folder to the workstation's Desktop.
+
+### Step 2: Load Extension in Chrome
+1. Open Chrome
+2. Go to `chrome://extensions/`
+3. Enable "Developer mode" (top right)
+4. Click "Load unpacked"
+5. Select the `chrome-extension` folder
+
+### Step 3: Test
+- Click the extension icon in Chrome
+- Verify it loads correctly
+
+---
+
+## Updating Existing Workstations
+
+### Method 1: Git Pull (Recommended)
+
+If you have the repository cloned:
+```batch
+cd %USERPROFILE%\Desktop\repository\ats-automation
+git pull
+```
+
+Then reload the extension:
+1. Go to `chrome://extensions/`
+2. Click "Reload" on ATS Automation
+
+### Method 2: Using Update Script
+
+Run the update script:
+```batch
+%USERPROFILE%\Desktop\repository\ats-automation\update-extension.bat
+```
+
+This will:
+- Check for updates from the server
+- Pull latest changes from GitHub
+- Show instructions to reload
+
+---
+
+## Auto-Update Setup (For Multiple Workstations)
+
+### Option 1: Chrome Web Store ($5 one-time)
+1. Go to [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+2. Pay $5 fee
+3. Upload packaged extension
+4. Published extensions auto-update
+
+### Option 2: Group Policy (Enterprise)
+Chrome Enterprise allows forced extensions via Group Policy.
+
+### Option 3: Scheduled Task
+Create a scheduled task on each workstation:
+```batch
+schtasks /create /tn "ATS Update" /tr "path\to\update-extension.bat" /sc daily
+```
+
+---
+
+## Troubleshooting
+
+### Extension Not Loading
+- Ensure Developer mode is ON
+- Check for errors in Chrome: `chrome://extensions/`
+- Try removing and reloading
+
+### Update Script Not Working
+- Ensure Git is installed
+- Verify network access to github.com
+
+### Need Help?
+Check `chrome-extension/popup/support.html` in the extension
 
 ---
 
 ## Extension ID
+```
+jncbpgnflmcfnehadjjgddmhgecbelkf
+```
 
-Your current extension ID (for update configuration):
-- **ID**: `jncbpgnflmcfnehadjjgddmhgecbelkf` (example)
-- **Note**: ID changes when you repackage - keep the same .pem file
-
-To find your extension ID:
-1. Go to `chrome://extensions/`
-2. Enable "Developer mode"
-3. The ID is shown under the extension name
+This ID is used for Chrome to identify the extension for updates.
