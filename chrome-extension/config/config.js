@@ -1,19 +1,7 @@
 /**
  * ATS Configuration Page Script
- * Uses shared StorageService for config management
+ * Uses shared StorageService and config constants
  */
-
-const DEFAULT_CONFIG = {
-    activeClient: 'flyland',
-    automationEnabled: true,
-    autoSearchSF: true,
-    transcriptionEnabled: true,
-    aiAnalysisEnabled: true,
-    saveMarkdown: true,
-    salesforceUrl: '',
-    aiServerUrl: 'http://localhost:8000',
-    ctmSelectors: '.call-status, .incoming-call, .phone-number, .call-info, .caller-id'
-};
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadConfig();
@@ -21,22 +9,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadConfig() {
-    const keys = Object.keys(DEFAULT_CONFIG);
+    const defaults = StorageService.getDefaults();
+    const keys = Object.keys(defaults);
     const result = await StorageService.get(keys);
     
-    document.getElementById('clientSelect').value = result.activeClient || DEFAULT_CONFIG.activeClient;
+    document.getElementById('clientSelect').value = result.activeClient || defaults.activeClient;
     document.getElementById('automationEnabled').checked = result.automationEnabled !== false;
     document.getElementById('autoSearchSF').checked = result.autoSearchSF !== false;
     document.getElementById('transcriptionEnabled').checked = result.transcriptionEnabled !== false;
     document.getElementById('aiAnalysisEnabled').checked = result.aiAnalysisEnabled !== false;
     document.getElementById('saveMarkdown').checked = result.saveMarkdown !== false;
-    document.getElementById('salesforceUrl').value = result.salesforceUrl || DEFAULT_CONFIG.salesforceUrl;
-    document.getElementById('aiServerUrl').value = result.aiServerUrl || DEFAULT_CONFIG.aiServerUrl;
-    document.getElementById('ctmSelectors').value = result.ctmSelectors || DEFAULT_CONFIG.ctmSelectors;
+    document.getElementById('salesforceUrl').value = result.salesforceUrl || defaults.salesforceUrl;
+    document.getElementById('aiServerUrl').value = result.aiServerUrl || defaults.aiServerUrl;
+    document.getElementById('ctmSelectors').value = result.ctmSelectors || defaults.ctmSelectors;
     document.getElementById('apiKey').value = result.apiKey || '';
 }
 
 function setupEventListeners() {
+    const defaults = StorageService.getDefaults();
+    
     document.getElementById('saveBtn').addEventListener('click', async () => {
         const config = {
             activeClient: document.getElementById('clientSelect').value,
@@ -60,7 +51,7 @@ function setupEventListeners() {
     });
 
     document.getElementById('resetBtn').addEventListener('click', async () => {
-        await StorageService.set(DEFAULT_CONFIG);
+        await StorageService.set(defaults);
         await loadConfig();
         showStatus('Configuration reset to defaults', 'info');
     });

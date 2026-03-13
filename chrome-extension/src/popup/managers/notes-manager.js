@@ -1,5 +1,6 @@
 /**
  * Notes Manager - Handles note creation, editing, deletion, and display
+ * Uses StorageService for persistence
  */
 
 const NotesManager = {
@@ -7,14 +8,9 @@ const NotesManager = {
     maxNotes: 50,
     
     async load(clientId) {
-        const key = 'ats_notes_' + clientId;
-        return new Promise(resolve => {
-            chrome.storage.local.get(key, result => {
-                this.notes = result[key] || [];
-                this.render();
-                resolve(this.notes);
-            });
-        });
+        this.notes = await StorageService.getNotes(clientId);
+        this.render();
+        return this.notes;
     },
     
     async addNote(text, type = 'manual') {
@@ -75,10 +71,8 @@ const NotesManager = {
     },
     
     async save() {
-        const key = 'ats_notes_' + (document.getElementById('clientSelect')?.value || 'flyland');
-        await new Promise(resolve => {
-            chrome.storage.local.set({ [key]: this.notes }, resolve);
-        });
+        const clientId = document.getElementById('clientSelect')?.value || 'flyland';
+        await StorageService.saveNotes(clientId, this.notes);
     },
     
     render() {
