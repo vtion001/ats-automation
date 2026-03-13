@@ -2,16 +2,14 @@
 CTM-SF Auto-Account Access
 Automatically opens Salesforce account when call comes via CTM
 
-Client: Flyland Recovery
-Priority: HIGH
-Phase: 1
+Uses existing Chrome browser session where extension is installed.
+Connect to Chrome via debugging port: chrome.exe --remote-debugging-port=9222
 """
 
-from playwright.sync_api import sync_playwright, Page
-from core.browser_manager import BrowserManager
 from core.config_loader import ConfigLoader
 from core.logger import get_logger
 import time
+import asyncio
 
 logger = get_logger(__name__)
 
@@ -19,12 +17,10 @@ logger = get_logger(__name__)
 class CTMSFAutoAccess:
     """Automatically look up and display Salesforce account for incoming CTM calls."""
 
-    def __init__(self, client: str = "flyland"):
+    def __init__(self, client: str = "flyland", debug_port: int = 9222):
         self.client = client
         self.config = ConfigLoader(client)
-        self.browser_manager = None
-        self.ctm_page = None
-        self.sf_page = None
+        self.debug_port = debug_port
 
     def start(self):
         """Start the automation."""
@@ -35,71 +31,95 @@ class CTMSFAutoAccess:
             return
 
         logger.info("Starting CTM-SF Auto Access automation")
+        logger.info("=" * 50)
+        logger.info("IMPORTANT: Chrome must be running with remote debugging:")
+        logger.info("  chrome.exe --remote-debugging-port=9222")
+        logger.info("=" * 50)
 
-        self.browser_manager = BrowserManager(headless=False)
+        asyncio.run(self.run_automation())
 
-        with self.browser_manager as browser:
-            context = browser.new_context()
+    async def run_automation(self):
+        """Run the automation connecting to existing Chrome."""
+        try:
+            from playwright.async_api import async_playwright
+            
+            async with async_playwright() as p:
+                try:
+                    browser = await p.chromium.connect_over_cdp(
+                        f"http://localhost:{self.debug_port}/"
+                    )
+                except Exception as e:
+                    logger.error(f"Cannot connect to Chrome on port {self.debug_port}")
+                    logger.error(f"Make sure Chrome is running with: chrome.exe --remote-debugging-port=9222")
+                    logger.error(f"Error: {e}")
+                    return
 
-            # Open CTM
-            logger.info("Opening CTM...")
-            self.ctm_page = context.new_page()
-            self.ctm_page.goto("https://www.calltrackingmetrics.com")
+                logger.info("Connected to Chrome browser")
 
-            # Agent logs in manually (automation works on existing session)
-            logger.info("Please log into CTM. Automation will start after login.")
+                contexts = browser.contexts
+                if not contexts:
+                    logger.error("No browser contexts found")
+                    return
 
-            # Wait for login
-            self.ctm_page.wait_for_url("**/account**", timeout=60000)
-            logger.info("CTM logged in, starting call monitoring...")
+                context = contexts[0]
+                
+                ctm_page = None
+                for page in context.pages:
+                    if "calltrackingmetrics" in page.url.lower():
+                        ctm_page = page
+                        break
+                
+                if not ctm_page:
+                    logger.error("CTM page not found. Please open CTM in Chrome first.")
+                    logger.info("Open https://www.calltrackingmetrics.com in Chrome and log in.")
+                    return
+                
+                logger.info(f"Found CTM page: {ctm_page.url}")
+                logger.info("Monitoring for calls... (Press Ctrl+C to stop)")
+                
+                poll_interval = 0.5
+                while True:
+                    try:
+                        call_data = await self.detect_call(ctm_page)
+                        if call_data:
+                            logger.info(f"Call detected: {call_data}")
+                            await self.lookup_salesforce(context, call_data["phone"])
+                    except Exception as e:
+                        logger.debug(f"Monitoring: {e}")
+                    
+                    await asyncio.sleep(poll_interval)
+                    
+        except Exception as e:
+            logger.error(f"Automation error: {e}")
 
-            # Start monitoring for calls
-            self.monitor_calls(context)
-
-    def monitor_calls(self, context):
-        """Monitor CTM for incoming calls."""
-        poll_interval = 500  # ms
-
-        while True:
-            try:
-                call_data = self.detect_call(self.ctm_page)
-                if call_data:
-                    logger.info(f"Call detected: {call_data}")
-                    self.lookup_salesforce(context, call_data["phone"])
-            except Exception as e:
-                logger.error(f"Error monitoring calls: {e}")
-
-            time.sleep(poll_interval / 1000)
-
-    def detect_call(self, page: Page) -> dict:
+    async def detect_call(self, page):
         """Detect if there's an active call in CTM."""
         try:
-            # Look for call notification elements
-            call_element = page.query_selector(".call-info, .caller-id, [class*='call-active']")
-
+            call_element = await page.query_selector(".call-info, .caller-id, [class*='call-active']")
+            
             if call_element:
-                phone_element = page.query_selector("[class*='phone']")
+                phone_element = await page.query_selector("[class*='phone']")
                 if phone_element:
-                    phone = phone_element.text_content()
+                    phone = await phone_element.text_content()
                     if phone:
                         return {"phone": phone.strip(), "timestamp": time.time()}
         except Exception as e:
             logger.debug(f"No call detected: {e}")
-
+        
         return None
 
-    def lookup_salesforce(self, context, phone: str):
+    async def lookup_salesforce(self, context, phone: str):
         """Look up the phone number in Salesforce."""
         try:
             logger.info(f"Looking up {phone} in Salesforce...")
-
-            # Open Salesforce in new tab
+            
             sf_url = f"https://flyland.lightning.force.com/lightning/setup/FindRecords?term={phone}"
-            self.sf_page = context.new_page()
-            self.sf_page.goto(sf_url)
-
+            
+            sf_page = await context.new_page()
+            await sf_page.goto(sf_url)
+            
             logger.info("Salesforce search opened")
-
+            
         except Exception as e:
             logger.error(f"Error looking up Salesforce: {e}")
 

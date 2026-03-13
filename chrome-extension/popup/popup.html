@@ -369,10 +369,64 @@
         .note-item:last-child {
             border-bottom: none;
         }
+        .note-content {
+            flex: 1;
+            display: flex;
+            align-items: flex-start;
+            min-width: 0;
+        }
         .note-text {
             flex: 1;
             color: var(--text-primary);
             word-break: break-word;
+        }
+        .note-text.editing {
+            background: var(--bg-input);
+            border: 1px solid var(--primary);
+            border-radius: 4px;
+            padding: 4px 8px;
+            outline: none;
+        }
+        .note-actions {
+            display: flex;
+            gap: 4px;
+            margin-left: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .note-item:hover .note-actions {
+            opacity: 1;
+        }
+        .note-action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .note-action-btn:hover {
+            background: var(--bg-hover);
+        }
+        .note-action-btn.edit:hover {
+            color: var(--primary);
+        }
+        .note-action-btn.delete:hover {
+            color: #ef4444;
+        }
+        .note-action-btn.save {
+            color: #22c55e;
+        }
+        .note-action-btn.cancel {
+            color: #ef4444;
+        }
+        .note-action-btn svg {
+            width: 14px;
+            height: 14px;
         }
         .note-time {
             font-size: 10px;
