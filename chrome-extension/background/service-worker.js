@@ -52,6 +52,8 @@ async function loadConfig() {
     }
 }
 
+// Remove duplicate function at end of file
+
 // Message handler
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('[AGS Background] Received message:', message.type || message.action);
@@ -261,26 +263,5 @@ async function insertReply(text) {
         }
     } catch (error) {
         console.error('[AGS] Error inserting reply:', error);
-    }
-}
-
-async function loadConfig() {
-    try {
-        const keys = ['activeClient', 'automationEnabled', 'autoSearchSF', 'transcriptionEnabled', 
-                     'aiAnalysisEnabled', 'saveMarkdown', 'salesforceUrl', 'aiServerUrl'];
-        const stored = await chrome.storage.local.get(keys);
-        
-        if (stored.activeClient) AGS_CONFIG.activeClient = stored.activeClient;
-        if (stored.automationEnabled !== undefined) AGS_CONFIG.automationEnabled = stored.automationEnabled;
-        if (stored.autoSearchSF !== undefined) AGS_CONFIG.autoSearchSF = stored.autoSearchSF;
-        if (stored.transcriptionEnabled !== undefined) AGS_CONFIG.transcriptionEnabled = stored.transcriptionEnabled;
-        if (stored.aiAnalysisEnabled !== undefined) AGS_CONFIG.aiAnalysisEnabled = stored.aiAnalysisEnabled;
-        if (stored.saveMarkdown !== undefined) AGS_CONFIG.saveMarkdown = stored.saveMarkdown;
-        if (stored.salesforceUrl) AGS_CONFIG.salesforceUrl = stored.salesforceUrl;
-        if (stored.aiServerUrl) AGS_CONFIG.aiServerUrl = stored.aiServerUrl;
-        
-        console.log('[AGS] Config loaded:', AGS_CONFIG);
-    } catch (error) {
-        console.error('[AGS] Error loading config:', error);
     }
 }
