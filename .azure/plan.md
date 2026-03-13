@@ -92,7 +92,7 @@
 
 ## Status
 - [x] Plan created
+- [x] Dockerfile updated
+- [x] Deployment scripts created
 - [ ] Approved by user
-- [ ] Infrastructure generated
-- [ ] Validated
-- [ ] Deployed
+- [ ] Deployed to Azure
