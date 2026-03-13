@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Automation - Documentation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 600px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #e0e0e0;
+            line-height: 1.6;
+            padding: 24px;
+        }
+        h1 { color: #4CAF50; font-size: 24px; margin-bottom: 8px; }
+        h2 { color: #fff; font-size: 18px; margin: 24px 0 12px; border-bottom: 1px solid #3d3d3d; padding-bottom: 8px; }
+        h3 { color: #4CAF50; font-size: 14px; margin: 16px 0 8px; }
+        p { margin-bottom: 12px; color: #b0b0b0; }
+        a { color: #4CAF50; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header .back { font-size: 13px; color: #888; }
+        .section { background: #252525; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .section-title { color: #4CAF50; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        ul { margin-left: 20px; color: #b0b0b0; }
+        li { margin-bottom: 6px; }
+        code { background: #333; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: #ff6b6b; }
+        .nav { display: flex; gap: 16px; margin-bottom: 24px; }
+        .nav a { padding: 8px 16px; background: #333; border-radius: 4px; font-size: 13px; }
+        .nav a.active { background: #4CAF50; color: #fff; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .status-badge.enabled { background: #4CAF50; color: #fff; }
+        .status-badge.disabled { background: #666; color: #fff; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #3d3d3d; font-size: 13px; }
+        th { color: #4CAF50; font-weight: 600; }
+        .warning { background: rgba(255, 152, 0, 0.1); border: 1px solid #ff9800; border-radius: 4px; padding: 12px; margin: 16px 0; color: #ff9800; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ATS Automation Documentation</h1>
+        <a href="popup.html" class="back">← Back to App</a>
+    </div>
+
+    <div class="nav">
+        <a href="docs.html" class="active">Getting Started</a>
+        <a href="docs-automations.html">Automations</a>
+        <a href="docs-config.html">Configuration</a>
+        <a href="support.html">Support</a>
+    </div>
+
+    <div class="section">
+        <div class="section-title">What is ATS Automation?</div>
+        <p>ATS Automation is a browser extension that automates repetitive tasks for BPO agents working with multiple client systems. It works by monitoring web pages and automatically performing actions based on triggers.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Quick Start</div>
+        <ol>
+            <li><strong>Install the extension</strong> - Load the unpacked extension in Chrome</li>
+            <li><strong>Select your client</strong> - Choose which client profile to use (Flyland, Legacy, TBT, etc.)</li>
+            <li><strong>Log into your systems</strong> - The automation works on your existing logged-in sessions</li>
+            <li><strong>Enable automations</strong> - Turn on the specific automations you need</li>
+        </ol>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Supported Clients</div>
+        <table>
+            <tr>
+                <th>Client</th>
+                <th>Industry</th>
+                <th>Systems</th>
+                <th>Status</th>
+            </tr>
+            <tr>
+                <td>Flyland Recovery</td>
+                <td>Addiction Counseling</td>
+                <td>CTM, Salesforce, ZOHO</td>
+                <td><span class="status-badge enabled">Ready</span></td>
+            </tr>
+            <tr>
+                <td>Legacy</td>
+                <td>BPO Services</td>
+                <td>CTM, Salesforce, ZOHO</td>
+                <td><span class="status-badge enabled">Ready</span></td>
+            </tr>
+            <tr>
+                <td>TBT</td>
+                <td>BPO Services</td>
+                <td>Salesforce Lightning</td>
+                <td><span class="status-badge enabled">Ready</span></td>
+            </tr>
+            <tr>
+                <td>Banyan</td>
+                <td>Addiction Counseling</td>
+                <td>CTM, Salesforce, Google Forms</td>
+                <td><span class="status-badge enabled">Ready</span></td>
+            </tr>
+            <tr>
+                <td>Takahami</td>
+                <td>Medical Billing</td>
+                <td>RingCentral, KIPU, CollaborateMD</td>
+                <td><span class="status-badge enabled">Ready</span></td>
+            </tr>
+            <tr>
+                <td>Element Medical</td>
+                <td>Medical Billing</td>
+                <td>TurboScribe, Availity, VerifyTx</td>
+                <td><span class="status-badge enabled">Ready</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">How It Works</div>
+        <h3>1. DOM Monitoring</h3>
+        <p>The extension monitors web pages for specific elements and events. For example, when a call comes via CTM, it detects the caller information from the page.</p>
+        
+        <h3>2. Automation Triggers</h3>
+        <p>When specific events occur (incoming call, form submission, etc.), automations are triggered to perform actions.</p>
+        
+        <h3>3. Multi-System Integration</h3>
+        <p>Automations can interact with multiple systems simultaneously - for example, looking up a customer in Salesforce while they're on a CTM call.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Security & Privacy</div>
+        <ul>
+            <li><strong>No API credentials required</strong> - Works on existing logged-in sessions</li>
+            <li><strong>All data stays local</strong> - NLP processing happens on your machine</li>
+            <li><strong>No external data transmission</strong> - Your data never leaves your computer</li>
+            <li><strong>Transparent operation</strong> - You see everything the automation does</li>
+        </ul>
+    </div>
+
+    <div class="warning">
+        <strong>Important:</strong> Always ensure you are logged into your systems before the automation runs. The automation uses your existing browser session and does not store credentials.
+    </div>
+
+    <div class="section">
+        <div class="section-title">Keyboard Shortcuts</div>
+        <table>
+            <tr>
+                <th>Shortcut</th>
+                <th>Action</th>
+            </tr>
+            <tr>
+                <td><code>Ctrl+Shift+A</code></td>
+                <td>Toggle automation on/off</td>
+            </tr>
+            <tr>
+                <td><code>Ctrl+Shift+O</code></td>
+                <td>Open overlay panel</td>
+            </tr>
+            <tr>
+                <td><code>Ctrl+Shift+L</code></td>
+                <td>Open client selector</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Version History</div>
+        <table>
+            <tr>
+                <th>Version</th>
+                <th>Date</th>
+                <th>Changes</th>
+            </tr>
+            <tr>
+                <td>2.1.0</td>
+                <td>March 2026</td>
+                <td>Added knowledge base, qualification scoring</td>
+            </tr>
+            <tr>
+                <td>2.0.0</td>
+                <td>March 2026</td>
+                <td>Major update - 6 client support</td>
+            </tr>
+            <tr>
+                <td>1.0.0</td>
+                <td>February 2026</td>
+                <td>Initial release</td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

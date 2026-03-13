@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Automation - Support</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 600px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #e0e0e0;
+            line-height: 1.6;
+            padding: 24px;
+        }
+        h1 { color: #4CAF50; font-size: 24px; margin-bottom: 8px; }
+        h2 { color: #fff; font-size: 18px; margin: 24px 0 12px; border-bottom: 1px solid #3d3d3d; padding-bottom: 8px; }
+        h3 { color: #4CAF50; font-size: 14px; margin: 16px 0 8px; }
+        p { margin-bottom: 12px; color: #b0b0b0; }
+        a { color: #4CAF50; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header .back { font-size: 13px; color: #888; }
+        .section { background: #252525; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .section-title { color: #4CAF50; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        ul { margin-left: 20px; color: #b0b0b0; }
+        li { margin-bottom: 6px; }
+        code { background: #333; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: #ff6b6b; }
+        .nav { display: flex; gap: 16px; margin-bottom: 24px; }
+        .nav a { padding: 8px 16px; background: #333; border-radius: 4px; font-size: 13px; }
+        .nav a.active { background: #4CAF50; color: #fff; }
+        .faq-item { margin-bottom: 16px; }
+        .faq-question { color: #fff; font-weight: 600; margin-bottom: 6px; }
+        .faq-answer { color: #b0b0b0; font-size: 13px; }
+        .error-code { 
+            display: inline-block; 
+            background: #333; 
+            padding: 2px 8px; 
+            border-radius: 4px; 
+            font-family: monospace; 
+            color: #ff6b6b;
+            font-size: 12px;
+        }
+        .contact-box {
+            background: linear-gradient(135deg, #1a3a1a 0%, #252525 100%);
+            border: 1px solid #4CAF50;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 24px;
+        }
+        .contact-box h3 { color: #4CAF50; margin-bottom: 12px; }
+        .contact-box p { font-size: 14px; }
+        .btn {
+            display: inline-block;
+            background: #4CAF50;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            text-decoration: none;
+            margin-top: 12px;
+            font-weight: 500;
+        }
+        .btn:hover { background: #45a049; }
+        .warning { background: rgba(255, 152, 0, 0.1); border: 1px solid #ff9800; border-radius: 4px; padding: 12px; margin: 16px 0; color: #ff9800; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ATS Automation Support</h1>
+        <a href="popup.html" class="back">← Back to App</a>
+    </div>
+
+    <div class="nav">
+        <a href="docs.html">Getting Started</a>
+        <a href="docs-automations.html">Automations</a>
+        <a href="docs-config.html">Configuration</a>
+        <a href="support.html" class="active">Support</a>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Frequently Asked Questions</div>
+        
+        <div class="faq-item">
+            <div class="faq-question">Q: Why isn't the automation detecting my calls?</div>
+            <div class="faq-answer">
+                Make sure you're logged into CTM and the extension is enabled. Check that the correct client is selected in the popup. If using Salesforce, ensure you're on the correct instance (flyland.my.salesforce.com for Flyland).
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: The extension shows "Not connected" - what do I do?</div>
+            <div class="faq-answer">
+                This means the local server isn't running. Start the server with <code>python main.py server</code> or check your connection settings in Config.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: Can I use this with multiple clients?</div>
+            <div class="faq-answer">
+                Yes! Use the client selector in the popup to switch between clients. Each client has its own configuration, automations, and knowledge base.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: Is my data secure?</div>
+            <div class="faq-answer">
+                Yes. The automation works on your existing logged-in sessions - no credentials are stored. All NLP processing happens locally on your machine. No data is transmitted to external servers.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: The Salesforce lookup isn't working - what should I check?</div>
+            <div class="faq-answer">
+                1) Verify you're logged into Salesforce in the same browser<br>
+                2) Check that your Salesforce URL matches the client config<br>
+                3) For Flyland/TBT - ensure you're using the correct instance (shared SF)<br>
+                4) Try refreshing the Salesforce page
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Q: How do I customize automations for my workflow?</div>
+            <div class="faq-answer">
+                Open Config from the popup menu. You can adjust automation triggers, timeouts, and enable/disable specific features per client.
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Troubleshooting</div>
+        
+        <h3>Common Error Codes</h3>
+        <ul>
+            <li><span class="error-code">ERR_CTM_001</span> - CTM page not detected. Make sure you're on calltrackingmetrics.co</li>
+            <li><span class="error-code">ERR_SF_001</span> - Salesforce session expired. Re-login to Salesforce</li>
+            <li><span class="error-code">ERR_SF_002</span> - No records found for the phone number</li>
+            <li><span class="error-code">ERR_DOM_001</span> - Page elements not found. Page may have updated</li>
+            <li><span class="error-code">ERR_TIMEOUT</span> - Operation timed out. Try again or increase timeout in Config</li>
+            <li><span class="error-code">ERR_NLP_001</span> - NLP model failed to load. Check installation</li>
+        </ul>
+
+        <div class="warning">
+            <strong>Tip:</strong> Many issues can be resolved by refreshing the page and ensuring you're logged into all required systems.
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Logs & Diagnostics</div>
+        <p>To help troubleshoot issues, check the logs:</p>
+        <ul>
+            <li><strong>Extension logs:</strong> Right-click extension → Popup → Check console</li>
+            <li><strong>Python logs:</strong> Check the <code>logs/</code> folder in the project directory</li>
+            <li><strong>Server logs:</strong> Check terminal output when server is running</li>
+        </ul>
+        <p>When reporting an issue, please include:</p>
+        <ul>
+            <li>Error code (if any)</li>
+            <li>Client name</li>
+            <li>Browser version</li>
+            <li>Steps to reproduce</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <div class="section-title">System Requirements</div>
+        <ul>
+            <li><strong>Browser:</strong> Chrome 90+ or Edge 90+</li>
+            <li><strong>OS:</strong> Windows 10/11 or macOS</li>
+            <li><strong>Python:</strong> 3.10+</li>
+            <li><strong>RAM:</strong> 8GB minimum (16GB recommended for NLP)</li>
+            <li><strong>Network:</strong> Access to client portals (CTM, SF, etc.)</li>
+        </ul>
+    </div>
+
+    <div class="contact-box">
+        <h3>Still Need Help?</h3>
+        <p>If you can't find the answer you're looking for, please reach out.</p>
+        <p><strong>Email:</strong> support@ats-automation.local</p>
+        <p><strong>Documentation:</strong> <a href="docs.html">docs.ats-automation.local</a></p>
+        <a href="mailto:support@ats-automation.local" class="btn">Contact Support</a>
+    </div>
+</body>
+</html>

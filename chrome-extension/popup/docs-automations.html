@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Automation - Automations</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 600px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #e0e0e0;
+            line-height: 1.6;
+            padding: 24px;
+        }
+        h1 { color: #4CAF50; font-size: 24px; margin-bottom: 8px; }
+        h2 { color: #fff; font-size: 18px; margin: 24px 0 12px; border-bottom: 1px solid #3d3d3d; padding-bottom: 8px; }
+        h3 { color: #4CAF50; font-size: 14px; margin: 16px 0 8px; }
+        p { margin-bottom: 12px; color: #b0b0b0; }
+        a { color: #4CAF50; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header .back { font-size: 13px; color: #888; }
+        .section { background: #252525; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .section-title { color: #4CAF50; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        ul { margin-left: 20px; color: #b0b0b0; }
+        li { margin-bottom: 6px; }
+        code { background: #333; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: #ff6b6b; }
+        .nav { display: flex; gap: 16px; margin-bottom: 24px; }
+        .nav a { padding: 8px 16px; background: #333; border-radius: 4px; font-size: 13px; }
+        .nav a.active { background: #4CAF50; color: #fff; }
+        .priority { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .priority.high { background: #f44336; color: #fff; }
+        .priority.medium { background: #ff9800; color: #fff; }
+        .priority.low { background: #2196F3; color: #fff; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #3d3d3d; font-size: 13px; }
+        th { color: #4CAF50; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Automations Reference</h1>
+        <a href="popup.html" class="back">← Back to App</a>
+    </div>
+
+    <div class="nav">
+        <a href="docs.html">Getting Started</a>
+        <a href="docs-automations.html" class="active">Automations</a>
+        <a href="docs-config.html">Configuration</a>
+        <a href="support.html">Support</a>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Available Automations</div>
+        <p>This document describes all automations available in the ATS system. Automations are organized by client and priority.</p>
+    </div>
+
+    <h2>Flyland Recovery</h2>
+
+    <div class="section">
+        <div class="section-title">1. CTM-SF Auto Access <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Automatically opens Salesforce account when a call comes via CTM.</p>
+        <ul>
+            <li><strong>Trigger:</strong> Incoming call detected in CTM</li>
+            <li><strong>Action:</strong> Opens Salesforce search with caller's phone number</li>
+            <li><strong>Time Saved:</strong> 1-3 minutes per call</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <div class="section-title">2. Auto Note Generator <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Automatically generates notes for unqualified or duplicate calls.</p>
+        <ul>
+            <li><strong>Trigger:</strong> Disposition set to "unqualified" or "duplicate"</li>
+            <li><strong>Action:</strong> Generates pre-formatted note based on disposition</li>
+            <li><strong>Time Saved:</strong> 1-2 minutes per call</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <div class="section-title">3. Chat Reply Suggester <span class="priority medium">MEDIUM</span></div>
+        <p><strong>Description:</strong> Suggests replies for chat conversations based on context.</p>
+        <ul>
+            <li><strong>Trigger:</strong> Customer message in ZOHO chat</li>
+            <li><strong>Action:</strong> Shows 2-3 suggested replies in overlay</li>
+            <li><strong>Time Saved:</strong> 1-3 minutes per chat</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <div class="section-title">4. Wrap-Up Sync <span class="priority medium">MEDIUM</span></div>
+        <p><strong>Description:</strong> Auto-syncs disposition data to all relevant systems.</p>
+        <ul>
+            <li><strong>Trigger:</strong> Call wrap-up completed</li>
+            <li><strong>Action:</strong> Updates CTM, Salesforce, and tracker simultaneously</li>
+            <li><strong>Time Saved:</strong> Eliminates duplicate entry</li>
+        </ul>
+    </div>
+
+    <h2>Legacy</h2>
+
+    <div class="section">
+        <div class="section-title">1. Wrap-Up Auto-Sync <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Post-call, auto-sync disposition data to all relevant systems.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">2. Customer History Auto-Pull <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Auto-load caller history and remind agent of missed details.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">3. Form-Filler & AI Queue Prioritizer <span class="priority medium">MEDIUM</span></div>
+        <p><strong>Description:</strong> DOM-based form automation with AI prioritization.</p>
+    </div>
+
+    <h2>TBT (We The Best)</h2>
+
+    <div class="section">
+        <div class="section-title">1. Auto-Lead Pruning <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Automatically remove unresponsive leads from the queue.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">2. Auto-Lead Pull & Inbound Routing <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Auto-detect and route incoming leads from Salesforce queue.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">3. Text Reply Suggester <span class="priority medium">MEDIUM</span></div>
+        <p><strong>Description:</strong> Template-based responses for outbound SMS/text.</p>
+    </div>
+
+    <h2>Banyan</h2>
+
+    <div class="section">
+        <div class="section-title">1. CTM-SF Auto-Account Pop-Up <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Auto-populate Salesforce data when call arrives via CTM.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">2. Auto-Call Tracking & Form/Note Auto-Fill <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> After call, auto-update Google Form tracker AND Salesforce.</p>
+    </div>
+
+    <h2>Takahami</h2>
+
+    <div class="section">
+        <div class="section-title">1. Auto-Fax for Appeals <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Auto-submit fax appeals for claims.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">2. Claim-Type-Based Appeal Router <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Auto-determine appeal destination based on claim type.</p>
+    </div>
+
+    <h2>Element Medical Billing</h2>
+
+    <div class="section">
+        <div class="section-title">1. PDF Auto-Filler <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Auto-fill PDF forms with patient data from open portal.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">2. Insurance Portal Auto-Lookup <span class="priority high">HIGH</span></div>
+        <p><strong>Description:</strong> Automatically check claim status in insurance portals.</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Automation - Configuration</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 600px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #e0e0e0;
+            line-height: 1.6;
+            padding: 24px;
+        }
+        h1 { color: #4CAF50; font-size: 24px; margin-bottom: 8px; }
+        h2 { color: #fff; font-size: 18px; margin: 24px 0 12px; border-bottom: 1px solid #3d3d3d; padding-bottom: 8px; }
+        h3 { color: #4CAF50; font-size: 14px; margin: 16px 0 8px; }
+        p { margin-bottom: 12px; color: #b0b0b0; }
+        a { color: #4CAF50; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header .back { font-size: 13px; color: #888; }
+        .section { background: #252525; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .section-title { color: #4CAF50; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        ul { margin-left: 20px; color: #b0b0b0; }
+        li { margin-bottom: 6px; }
+        code { background: #333; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: #ff6b6b; }
+        .nav { display: flex; gap: 16px; margin-bottom: 24px; }
+        .nav a { padding: 8px 16px; background: #333; border-radius: 4px; font-size: 13px; }
+        .nav a.active { background: #4CAF50; color: #fff; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #3d3d3d; font-size: 13px; }
+        th { color: #4CAF50; font-weight: 600; }
+        .warning { background: rgba(255, 152, 0, 0.1); border: 1px solid #ff9800; border-radius: 4px; padding: 12px; margin: 16px 0; color: #ff9800; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Configuration Guide</h1>
+        <a href="popup.html" class="back">← Back to App</a>
+    </div>
+
+    <div class="nav">
+        <a href="docs.html">Getting Started</a>
+        <a href="docs-automations.html">Automations</a>
+        <a href="docs-config.html" class="active">Configuration</a>
+        <a href="support.html">Support</a>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Client Configuration</div>
+        <p>Each client has its own configuration file located in <code>clients/[client_name]/config.json</code>.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Configuration Structure</div>
+        <pre><code>{
+  "client_name": "flyland",
+  "display_name": "Flyland Recovery",
+  "systems": {
+    "ctm": { "enabled": true },
+    "salesforce": { "enabled": true }
+  },
+  "automations": {
+    "automation_name": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1,
+      "delay_ms": 500,
+      "timeout_ms": 5000
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "save_to_file": true
+  },
+  "nlp": {
+    "enabled": true,
+    "confidence_threshold": 0.7
+  }
+}</code></pre>
+    </div>
+
+    <div class="section">
+        <div class="section-title">System Configuration</div>
+        <table>
+            <tr>
+                <th>Setting</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>enabled</td>
+                <td>boolean</td>
+                <td>Enable/disable the system</td>
+            </tr>
+            <tr>
+                <td>url_pattern</td>
+                <td>string</td>
+                <td>URL pattern to match (e.g., *.calltrackingmetrics.co)</td>
+            </tr>
+            <tr>
+                <td>filters</td>
+                <td>object</td>
+                <td>Additional filters (e.g., record_type, owner)</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Automation Settings</div>
+        <table>
+            <tr>
+                <th>Setting</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>enabled</td>
+                <td>boolean</td>
+                <td>Enable/disable this automation</td>
+            </tr>
+            <tr>
+                <td>priority</td>
+                <td>string</td>
+                <td>HIGH, MEDIUM, or LOW</td>
+            </tr>
+            <tr>
+                <td>phase</td>
+                <td>number</td>
+                <td>Implementation phase (1, 2, or 3)</td>
+            </tr>
+            <tr>
+                <td>delay_ms</td>
+                <td>number</td>
+                <td>Delay before triggering (milliseconds)</td>
+            </tr>
+            <tr>
+                <td>timeout_ms</td>
+                <td>number</td>
+                <td>Timeout for operation (milliseconds)</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">DOM Profiles</div>
+        <p>DOM profiles define how to interact with different web pages. Located in <code>clients/[client]/dom_profiles/[system].json</code>.</p>
+        
+        <h3>Profile Structure</h3>
+        <pre><code>{
+  "system": "ctm",
+  "selectors": {
+    "call_notification": ".caller-id, .call-info",
+    "phone_number": "#phone-field, .phone-input"
+  },
+  "event_selectors": {
+    "incoming_call": ".incoming-call",
+    "call_ended": ".call-ended"
+  }
+}</code></pre>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Templates</div>
+        <p>Reply and note templates are stored in <code>clients/[client]/templates/</code>.</p>
+        
+        <h3>Reply Templates</h3>
+        <pre><code>{
+  "templates": {
+    "general_inquiry": [
+      "Thank you for reaching out..."
+    ],
+    "callback_request": [
+      "We'll call you shortly..."
+    ]
+  }
+}</code></pre>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Knowledge Base</div>
+        <p>Qualification criteria and routing rules in <code>clients/[client]/knowledge-base/</code>.</p>
+        
+        <h3>Qualification Criteria</h3>
+        <ul>
+            <li><strong>hot_lead</strong> - Score 70+, immediate transfer to intake</li>
+            <li><strong>warm_lead</strong> - Score 40-69, nurture with info</li>
+            <li><strong>cold_lead</strong> - Score 0-39, add to follow-up queue</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Server Configuration</div>
+        <p>For multi-agent deployments, configure the server in <code>.env</code>:</p>
+        <pre><code>ATS_SERVER_URL=http://localhost:8000
+ATS_API_KEY=your-api-key-here</code></pre>
+    </div>
+
+    <div class="warning">
+        <strong>Note:</strong> For local single-user mode, no server configuration is needed. The extension runs standalone.
+    </div>
+
+    <div class="section">
+        <div class="section-title">Field Mappings</div>
+        <p>Configure field mappings for PDF auto-filling and form automation in <code>config/field-mappings/[client].json</code>.</p>
+    </div>
+</body>
+</html>
