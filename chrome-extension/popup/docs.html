@@ -5,38 +5,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ATS Automation - Documentation</title>
     <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg-white: #ffffff;
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             width: 600px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1e1e1e;
-            color: #e0e0e0;
+            background: var(--bg-white);
+            color: var(--text-dark);
             line-height: 1.6;
             padding: 24px;
         }
-        h1 { color: #4CAF50; font-size: 24px; margin-bottom: 8px; }
-        h2 { color: #fff; font-size: 18px; margin: 24px 0 12px; border-bottom: 1px solid #3d3d3d; padding-bottom: 8px; }
-        h3 { color: #4CAF50; font-size: 14px; margin: 16px 0 8px; }
-        p { margin-bottom: 12px; color: #b0b0b0; }
-        a { color: #4CAF50; text-decoration: none; }
+        h1 { color: var(--primary); font-size: 24px; margin-bottom: 8px; }
+        h2 { color: var(--text-dark); font-size: 18px; margin: 24px 0 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        h3 { color: var(--primary); font-size: 14px; margin: 16px 0 8px; }
+        p { margin-bottom: 12px; color: var(--text-muted); }
+        a { color: var(--primary); text-decoration: none; }
         a:hover { text-decoration: underline; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .header .back { font-size: 13px; color: #888; }
-        .section { background: #252525; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-        .section-title { color: #4CAF50; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
-        ul { margin-left: 20px; color: #b0b0b0; }
+        .header .back { font-size: 13px; color: var(--text-muted); }
+        .section { background: var(--bg-white); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .section-title { color: var(--primary); font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        ul { margin-left: 20px; color: var(--text-muted); }
         li { margin-bottom: 6px; }
-        code { background: #333; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: #ff6b6b; }
+        code { background: #f1f5f9; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: var(--primary); }
         .nav { display: flex; gap: 16px; margin-bottom: 24px; }
-        .nav a { padding: 8px 16px; background: #333; border-radius: 4px; font-size: 13px; }
-        .nav a.active { background: #4CAF50; color: #fff; }
+        .nav a { padding: 8px 16px; background: #f1f5f9; border-radius: 4px; font-size: 13px; color: var(--text-muted); }
+        .nav a.active { background: var(--primary); color: #fff; }
         .status-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .status-badge.enabled { background: #4CAF50; color: #fff; }
-        .status-badge.disabled { background: #666; color: #fff; }
+        .status-badge.enabled { background: var(--primary); color: #fff; }
+        .status-badge.disabled { background: var(--text-muted); color: #fff; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #3d3d3d; font-size: 13px; }
-        th { color: #4CAF50; font-weight: 600; }
-        .warning { background: rgba(255, 152, 0, 0.1); border: 1px solid #ff9800; border-radius: 4px; padding: 12px; margin: 16px 0; color: #ff9800; font-size: 13px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 13px; }
+        th { color: var(--primary); font-weight: 600; }
+        .warning { background: #fff7ed; border: 1px solid #f97316; border-radius: 4px; padding: 12px; margin: 16px 0; color: #c2410c; font-size: 13px; }
     </style>
 </head>
 <body>
