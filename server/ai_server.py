@@ -1,6 +1,6 @@
 """
 ATS AI Server - Transcription Analysis
-Processes call transcriptions and provides AI-powered insights
+Processes call transcriptions and provides AI-powered insights using OpenRouter
 """
 
 from fastapi import FastAPI, HTTPException
@@ -10,7 +10,7 @@ import uvicorn
 from loguru import logger
 import re
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 import os
 from dotenv import load_dotenv
@@ -24,6 +24,12 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 class TranscriptionRequest(BaseModel):
     transcription: str
+    phone: Optional[str] = None
+    client: Optional[str] = "flyland"
+
+class DetermineActionRequest(BaseModel):
+    transcription: str
+    analysis: dict
     phone: Optional[str] = None
     client: Optional[str] = "flyland"
 
@@ -50,11 +56,11 @@ KEYWORDS = {
 
 @app.get("/")
 async def root():
-    return {"status": " ATS AI Server running", "version": "1.0.0"}
+    return {"status": " ATS AI Server running", "version": "1.1.0"}
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "ai_enabled": bool(API_KEY)}
+    return {"status": "healthy", "ai_enabled": bool(API_KEY), "provider": "openrouter"}
 
 async def analyze_with_openai(transcription: str, phone: Optional[str] = None, client: str = "flyland") -> dict:
     """Analyze transcription using OpenRouter AI"""
@@ -117,94 +123,231 @@ Respond ONLY with valid JSON."""
         logger.error(f"AI analysis error: {e}")
         return {"error": str(e)}
 
+async def determine_action_with_openai(transcription: str, analysis: dict, phone: Optional[str] = None, client: str = "flyland") -> dict:
+    """Determine Salesforce action (Log a Call vs New Task) using OpenRouter AI"""
+    
+    tags = analysis.get('tags', [])
+    sentiment = analysis.get('sentiment', 'neutral')
+    follow_up = analysis.get('follow_up_required', False)
+    summary = analysis.get('summary', '')
+    
+    system_prompt = """You are a Salesforce automation expert. Based on the call analysis, determine the best Salesforce action.
+
+Return a JSON object with:
+- action: "log_call" or "new_task"
+- reason: Brief explanation for the decision
+- task_subject: Suggested task subject (if new_task)
+- task_due_date: Suggested due date in YYYY-MM-DD format (if new_task)
+- call_subject: Suggested call subject (if log_call)
+- call_notes: Structured notes for the Salesforce record
+
+Decision rules:
+- If caller wants to schedule, needs follow-up, or requests callback → new_task
+- If caller has complaint, is unqualified, or just informational → log_call
+- If hot-lead with follow-up needed → new_task
+
+Respond ONLY with valid JSON."""
+
+    user_message = f"""Analyze this call and determine the best Salesforce action:
+
+Call Analysis:
+- Tags: {', '.join(tags)}
+- Sentiment: {sentiment}
+- Follow-up required: {follow_up}
+- Summary: {summary}
+- Phone: {phone or 'Unknown'}
+
+Transcription (first 500 chars): {transcription[:500]}"""
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://ats-automation.local",
+            "X-Title": "ATS Automation"
+        }
+        
+        payload = {
+            "model": "anthropic/claude-3-haiku",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            "max_tokens": 800,
+            "temperature": 0.2
+        }
+        
+        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"]
+            
+            try:
+                content = content.strip()
+                if content.startswith('```'):
+                    content = content.split('```')[1]
+                    if content.startswith('json'):
+                        content = content[4:]
+                action_data = json.loads(content.strip())
+                return action_data
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse action response: {e}")
+                return get_fallback_action(analysis)
+        else:
+            logger.error(f"OpenRouter API error: {response.status_code}")
+            return get_fallback_action(analysis)
+            
+    except Exception as e:
+        logger.error(f"Action determination error: {e}")
+        return get_fallback_action(analysis)
+
+def get_fallback_action(analysis: dict) -> dict:
+    """Fallback logic when AI fails"""
+    tags = [t.lower() for t in analysis.get('tags', [])]
+    follow_up = analysis.get('follow_up_required', False)
+    
+    if 'follow-up' in tags or 'scheduling' in tags:
+        action = 'new_task'
+        reason = 'Follow-up or scheduling required'
+    elif 'hot-lead' in tags and follow_up:
+        action = 'new_task'
+        reason = 'Hot lead with follow-up needed'
+    elif 'complaint' in tags or 'unqualified' in tags:
+        action = 'log_call'
+        reason = 'Call logged for record'
+    else:
+        action = 'log_call'
+        reason = 'General call notes'
+    
+    # Generate task subject
+    if 'scheduling' in tags or 'pricing' in tags:
+        task_subject = f"Follow up: {analysis.get('summary', 'Inquiry call')}"
+    elif 'hot-lead' in tags:
+        task_subject = f"Hot Lead Follow-up: {analysis.get('summary', 'Interested caller')}"
+    elif 'follow-up' in tags:
+        task_subject = f"Call Back: {analysis.get('summary', 'Follow-up required')}"
+    else:
+        task_subject = f"Call Note: {analysis.get('summary', 'General call')}"
+    
+    # Generate due date
+    today = datetime.now()
+    if 'hot-lead' in tags:
+        days = 1
+    elif 'scheduling' in tags:
+        days = 3
+    else:
+        days = 7
+    due_date = (today + timedelta(days=days)).strftime('%Y-%m-%d')
+    
+    return {
+        "action": action,
+        "reason": reason,
+        "task_subject": task_subject,
+        "task_due_date": due_date,
+        "call_subject": f"Inbound Call - {analysis.get('suggested_disposition', 'New')}",
+        "call_notes": analysis.get('suggested_notes', 'Call recorded via ATS Automation')
+    }
+
 @app.post("/api/analyze")
 async def analyze_transcription(request: TranscriptionRequest):
-    """Analyze transcription and return insights"""
+    """Analyze transcription and return insights using OpenRouter"""
     try:
-        # Use OpenRouter AI if API key is available
-        if API_KEY:
-            ai_result = await analyze_with_openai(
-                request.transcription, 
-                request.phone, 
-                request.client or "flyland"
-            )
-            
-            if "error" not in ai_result:
-                return {
-                    "phone": request.phone,
-                    "tags": ai_result.get("tags", []),
-                    "sentiment": ai_result.get("sentiment", "neutral"),
-                    "summary": ai_result.get("summary", ""),
-                    "suggested_disposition": ai_result.get("suggested_disposition", "New"),
-                    "suggested_notes": ai_result.get("suggested_notes", ""),
-                    "follow_up_required": ai_result.get("follow_up_required", False),
-                    "timestamp": datetime.now().isoformat(),
-                    "ai_analyzed": True
-                }
-            else:
-                logger.warning(f"AI analysis failed, falling back to keyword analysis: {ai_result.get('error')}")
+        if not API_KEY:
+            return {"error": "OpenRouter API key not configured", "status": "fallback"}
         
-        # Fallback to keyword-based analysis
-        text = request.transcription.lower() if request.transcription else ""
+        ai_result = await analyze_with_openai(
+            request.transcription, 
+            request.phone, 
+            request.client or "flyland"
+        )
         
-        tags = []
-        sentiment = "neutral"
-        summary_parts = []
-        follow_up_required = False
-        suggested_disposition = "New"
-        suggested_notes = ""
+        if "error" not in ai_result:
+            return {
+                "phone": request.phone,
+                "tags": ai_result.get("tags", []),
+                "sentiment": ai_result.get("sentiment", "neutral"),
+                "summary": ai_result.get("summary", ""),
+                "suggested_disposition": ai_result.get("suggested_disposition", "New"),
+                "suggested_notes": ai_result.get("suggested_notes", ""),
+                "follow_up_required": ai_result.get("follow_up_required", False),
+                "timestamp": datetime.now().isoformat(),
+                "ai_analyzed": True,
+                "provider": "openrouter"
+            }
+        else:
+            logger.warning(f"AI analysis failed: {ai_result.get('error')}")
+            raise HTTPException(status_code=500, detail=ai_result.get('error'))
 
-        for tag, keywords in KEYWORDS.items():
-            for keyword in keywords:
-                if keyword in text:
-                    tags.append(tag.replace("_", "-"))
-                    break
-
-        if "hot-lead" in tags:
-            sentiment = "positive"
-            suggested_disposition = "Qualified"
-            summary_parts.append("Caller appears interested")
-        elif "unqualified" in tags:
-            sentiment = "negative"
-            suggested_disposition = "Unqualified"
-            summary_parts.append("Caller not interested")
-        
-        if "follow-up" in tags:
-            follow_up_required = True
-            summary_parts.append("Follow-up required")
-
-        if "pricing" in tags:
-            summary_parts.append("Inquiry about pricing")
-        
-        if "scheduling" in tags:
-            summary_parts.append("Wants to schedule appointment")
-        
-        if "complaint" in tags:
-            sentiment = "negative"
-            summary_parts.append("Customer has concerns")
-
-        word_count = len(text.split())
-        if word_count > 300:
-            tags.append("long-call")
-            summary_parts.append(f"Extended call ({word_count} words)")
-
-        summary = ". ".join(summary_parts) if summary_parts else "Call recorded"
-        
-        suggested_notes = generate_notes(text, tags, request.phone)
-
-        return {
-            "phone": request.phone,
-            "tags": list(set(tags)),
-            "sentiment": sentiment,
-            "summary": summary,
-            "suggested_disposition": suggested_disposition,
-            "suggested_notes": suggested_notes,
-            "follow_up_required": follow_up_required,
-            "timestamp": datetime.now().isoformat()
-        }
-
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/determine-action")
+async def determine_action(request: DetermineActionRequest):
+    """Determine Salesforce action using OpenRouter AI"""
+    try:
+        if not API_KEY:
+            return get_fallback_action(request.analysis)
+        
+        result = await determine_action_with_openai(
+            request.transcription,
+            request.analysis,
+            request.phone,
+            request.client or "flyland"
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Action determination error: {e}")
+        return get_fallback_action(request.analysis)
+
+@app.post("/api/analyze-full")
+async def analyze_full(request: TranscriptionRequest):
+    """Full analysis including action determination (single call to AI)"""
+    try:
+        if not API_KEY:
+            return {"error": "OpenRouter API key not configured"}
+        
+        # First get analysis
+        analysis = await analyze_with_openai(
+            request.transcription,
+            request.phone,
+            request.client or "flyland"
+        )
+        
+        if "error" in analysis:
+            raise HTTPException(status_code=500, detail=analysis.get('error'))
+        
+        # Then get action
+        action = await determine_action_with_openai(
+            request.transcription,
+            analysis,
+            request.phone,
+            request.client or "flyland"
+        )
+        
+        return {
+            "phone": request.phone,
+            "tags": analysis.get("tags", []),
+            "sentiment": analysis.get("sentiment", "neutral"),
+            "summary": analysis.get("summary", ""),
+            "suggested_disposition": analysis.get("suggested_disposition", "New"),
+            "suggested_notes": analysis.get("suggested_notes", ""),
+            "follow_up_required": analysis.get("follow_up_required", False),
+            "timestamp": datetime.now().isoformat(),
+            "ai_analyzed": True,
+            "provider": "openrouter",
+            **action
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Full analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 def generate_notes(text: str, tags: List[str], phone: Optional[str]) -> str:
