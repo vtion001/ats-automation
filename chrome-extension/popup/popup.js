@@ -785,9 +785,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Helper function to get configured AI server URL
     async function getAIServerUrl() {
+        console.log('[Popup] Getting AI Server URL...');
         const result = await new Promise(resolve => {
             chrome.storage.local.get('aiServerUrl', resolve);
         });
+        console.log('[Popup] AI Server URL from storage:', result.aiServerUrl);
         return result.aiServerUrl || 'http://localhost:8000';
     }
     
@@ -837,12 +839,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     async function checkServerConnection() {
+        console.log('[Popup] Checking server connection...');
         try {
             const serverUrl = await getAIServerUrl();
+            console.log('[Popup] Using server URL:', serverUrl);
             const response = await fetch(`${serverUrl}/health`, { 
                 method: 'GET', 
                 signal: AbortSignal.timeout(3000) 
             });
+            console.log('[Popup] Server response:', response.ok, response.status);
             if (response.ok) {
                 updateMainStatus(true);
                 updateServiceStatus('aiServer', true);
@@ -853,6 +858,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 serverStatus.textContent = 'Connection failed';
             }
         } catch (error) {
+            console.error('[Popup] Server connection error:', error);
             updateMainStatus(false);
             updateServiceStatus('aiServer', false);
             serverStatus.textContent = 'Not connected';
