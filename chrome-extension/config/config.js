@@ -64,7 +64,7 @@ function setupEventListeners() {
     document.getElementById('resetBtn').addEventListener('click', async () => {
         await chrome.storage.local.set(DEFAULT_CONFIG);
         await loadConfig();
-        showStatus('Configuration reset to defaults');
+        showStatus('Configuration reset to defaults', 'info');
     });
 
     // Clear button
@@ -81,5 +81,13 @@ function showStatus(message, type = 'success') {
     const status = document.getElementById('status');
     status.textContent = message;
     status.className = 'status ' + type;
-    setTimeout(() => status.className = 'status', 3000);
+    
+    requestAnimationFrame(() => {
+        status.classList.add('visible');
+    });
+    
+    if (window._statusTimeout) clearTimeout(window._statusTimeout);
+    window._statusTimeout = setTimeout(() => {
+        status.classList.remove('visible');
+    }, 3000);
 }
