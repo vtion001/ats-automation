@@ -10,6 +10,7 @@
     "scripting"
   ],
   "host_permissions": [
+    "*://20.125.46.59/*",
     "*://*.calltrackingmetrics.com/*",
     "*://*.my.salesforce.com/*",
     "*://*.lightning.force.com/*",
