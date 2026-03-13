@@ -51,8 +51,13 @@ function setupEventListeners() {
             apiKey: document.getElementById('apiKey').value
         };
 
-        await chrome.storage.local.set(config);
-        showStatus('Configuration saved successfully!');
+        try {
+            await chrome.storage.local.set(config);
+            showStatus('Configuration saved successfully!', 'success');
+        } catch (e) {
+            console.error('Save error:', e);
+            showStatus('Error saving configuration', 'error');
+        }
     });
 
     // Reset button
