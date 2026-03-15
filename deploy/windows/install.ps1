@@ -17,6 +17,11 @@ $EXTENSION_DIR = "$INSTALL_DIR\chrome-extension"
 $CHROME_PATH = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 $LOG_FILE = "$INSTALL_DIR\install.log"
 
+# Create installation directory first
+if (-not (Test-Path $INSTALL_DIR)) {
+    New-Item -ItemType Directory -Path $INSTALL_DIR -Force | Out-Null
+}
+
 # Colors
 function Write-Color($Message, $Color = "White") {
     $colors = @{
