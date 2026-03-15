@@ -5,7 +5,7 @@
 const StatusService = {
     async getAIServerUrl() {
         const result = await StorageService.get('aiServerUrl');
-        const url = result.aiServerUrl || 'http://20.125.46.59:8000';
+        const url = result.aiServerUrl || 'http://4.157.143.70:8000';
         console.log('[StatusService] AI Server URL:', url);
         return url;
     },

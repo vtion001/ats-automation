@@ -11,7 +11,7 @@ const AGS_CONFIG = {
     transcriptionEnabled: true,
     aiAnalysisEnabled: true,
     saveMarkdown: true,
-    aiServerUrl: 'http://20.125.46.59:8000',
+    aiServerUrl: 'http://4.157.143.70:8000',
     salesforceUrl: 'https://flyland.my.salesforce.com'
 };
 
@@ -48,7 +48,7 @@ async function loadConfig() {
         
         // Initialize storage with defaults if not set
         if (!stored.aiServerUrl) {
-            await chrome.storage.local.set({ aiServerUrl: 'http://20.125.46.59:8000' });
+            await chrome.storage.local.set({ aiServerUrl: 'http://4.157.143.70:8000' });
         }
         if (!stored.salesforceUrl) {
             await chrome.storage.local.set({ salesforceUrl: 'https://flyland.my.salesforce.com' });

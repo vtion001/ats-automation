@@ -11,7 +11,7 @@
     "windows"
   ],
   "host_permissions": [
-    "*://20.125.46.59/*",
+    "*://4.157.143.70/*",
     "*://*.calltrackingmetrics.com/*",
     "*://*.my.salesforce.com/*",
     "*://*.lightning.force.com/*",
