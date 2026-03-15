@@ -53,10 +53,50 @@ const StatusService = {
 
     async testCTM() {
         try {
-            const result = await StorageService.get('ctmSelectors');
-            return !!result.ctmSelectors;
+            // Check if CTM tab is open
+            const tabs = await new Promise(resolve => {
+                chrome.tabs.query({ url: '*://*.calltrackingmetrics.com/*' }, resolve);
+            });
+            
+            if (tabs.length === 0) {
+                console.log('[StatusService] CTM: No tab open, creating...');
+                // Open CTM tab automatically
+                const newTab = await new Promise((resolve, reject) => {
+                    chrome.tabs.create({ 
+                        url: 'https://www.calltrackingmetrics.com',
+                        active: false
+                    }, (tab) => {
+                        if (chrome.runtime.lastError) {
+                            reject(chrome.runtime.lastError);
+                        } else {
+                            resolve(tab);
+                        }
+                    });
+                });
+                console.log('[StatusService] CTM: Opening tab:', newTab.id);
+                return { status: 'opening', connected: false, tabId: newTab.id };
+            }
+            
+            // Tab exists, check if content script is loaded
+            try {
+                await new Promise((resolve, reject) => {
+                    chrome.tabs.sendMessage(tabs[0].id, { action: 'PING' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            reject(chrome.runtime.lastError);
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                console.log('[StatusService] CTM: Connected');
+                return { status: 'connected', connected: true, tabId: tabs[0].id };
+            } catch(e) {
+                console.log('[StatusService] CTM: Tab open, content script not ready');
+                return { status: 'tab_open', connected: false, tabId: tabs[0].id };
+            }
         } catch(e) {
-            return false;
+            console.log('[StatusService] CTM test error:', e.message);
+            return { status: 'error', connected: false };
         }
     },
 
@@ -66,17 +106,31 @@ const StatusService = {
             aiServer: false,
             salesforce: false,
             background: false,
-            ctmMonitor: false
+            ctmMonitor: false,
+            ctmStatus: null
         };
 
         results.storage = await StorageService.testStorage();
         results.aiServer = await this.testAIServer();
         results.salesforce = await this.testSalesforce();
         results.background = await this.testBackground();
-        results.ctmMonitor = await this.testCTM();
+        
+        const ctmResult = await this.testCTM();
+        results.ctmMonitor = ctmResult.connected;
+        results.ctmStatus = ctmResult.status;
 
         return results;
-    }
+    },
+    
+    getCTMStatusText(status) {
+        switch(status) {
+            case 'connected': return 'Connected';
+            case 'opening': return 'Opening CTM...';
+            case 'tab_open': return 'Tab open';
+            case 'error': return 'Error';
+            default: return 'Not connected';
+        }
+    },
 };
 
 window.StatusService = StatusService;

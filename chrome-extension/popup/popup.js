@@ -301,8 +301,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showStatus('All services online!', true);
                 updateMainStatus(true);
             } else {
-                const failed = Object.entries(results).filter(([k,v]) => !v).map(([k]) => k).join(', ');
-                showStatus('Issues: ' + failed, false);
+                // Build detailed status message
+                const issues = [];
+                if (!results.storage) issues.push('Storage');
+                if (!results.aiServer) issues.push('AI Server');
+                if (!results.salesforce) issues.push('Salesforce');
+                if (!results.background) issues.push('Background');
+                
+                // CTM gets special message
+                if (!results.ctmMonitor) {
+                    const ctmStatus = StatusService.getCTMStatusText(results.ctmStatus);
+                    issues.push(`CTM (${ctmStatus})`);
+                } else {
+                    issues.push('CTM');
+                }
+                
+                showStatus('Checking: ' + issues.join(', '), false);
                 updateMainStatus(false);
             }
             
@@ -543,6 +557,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             showTestStatus('Error: ' + error.message, 'error');
         }
     });
+    }
+    
+    // Quick Test button - runs analysis with sample data
+    const quickTestBtn = document.getElementById('quickTestBtn');
+    if (quickTestBtn) {
+        quickTestBtn.addEventListener('click', async () => {
+            // Sample test data for quick testing
+            const SAMPLE_DATA = {
+                'new-lead': {
+                    transcription: "Hello, I'm calling from California. I have Blue Cross insurance and I've been sober for 30 days. I'm interested in your addiction treatment program. I need help with substance abuse.",
+                    phone: '+15551234567'
+                },
+                'existing': {
+                    transcription: "Hi, this is John Doe calling from Florida. I have Aetna insurance. I've been clean for 60 days and would like to schedule a follow-up appointment. Please call me back.",
+                    phone: '+15559876543'
+                }
+            };
+            
+            const sample = SAMPLE_DATA[currentTestType] || SAMPLE_DATA['new-lead'];
+            
+            // Fill in the form with sample data
+            if (transcriptionInput) transcriptionInput.value = sample.transcription;
+            if (testPhoneInput) testPhoneInput.value = sample.phone;
+            if (testClientSelect) testClientSelect.value = 'flyland';
+            if (audioFileInput) audioFileInput.value = '';
+            
+            showTestStatus('Running quick test with sample data...', 'loading');
+            
+            // Trigger the analysis
+            if (runAnalysisBtn) {
+                runAnalysisBtn.click();
+            }
+        });
     }
     
     function showTestStatus(message, status) {

@@ -79,7 +79,7 @@ chrome.action.onClicked.addListener(async (tab) => {
                 await chrome.windows.create({
                     url: chrome.runtime.getURL('popup/popup.html'),
                     type: 'popup',
-                    width: 420,
+                    width: 400,
                     height: 700,
                     focused: true
                 });
@@ -90,7 +90,7 @@ chrome.action.onClicked.addListener(async (tab) => {
             await chrome.windows.create({
                 url: chrome.runtime.getURL('popup/popup.html'),
                 type: 'popup',
-                width: 420,
+                width: 400,
                 height: 700,
                 focused: true
             });

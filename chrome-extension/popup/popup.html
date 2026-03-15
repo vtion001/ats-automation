@@ -31,9 +31,18 @@
             box-sizing: border-box;
         }
         body {
-            width: 360px;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            width: 100%;
+            max-width: 400px;
+            min-height: 100vh;
+            margin: 0 auto;
             background: var(--bg-white);
+        }
+        .popup-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            background: var(--bg-white);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             color: var(--text-primary);
             font-size: 14px;
             line-height: 1.5;
@@ -398,7 +407,8 @@
             font-size: 11px;
             color: #ffffff;
             background: var(--primary);
-            border-radius: 0 0 8px 8px;
+            border-radius: 0;
+            margin: 0 -16px -16px -16px;
         }
         .footer a {
             color: #ffffff;
@@ -813,7 +823,8 @@
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
     
-    <div class="header">
+    <div class="popup-container">
+        <div class="header">
         <div class="header-controls">
             <button class="header-btn" id="pinBtn" title="Pin as floating window">
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
@@ -970,6 +981,9 @@
             <button class="btn" id="runAnalysisBtn" style="width:100%; margin-top:12px;">
                 ▶ Run Analysis
             </button>
+            <button class="btn secondary" id="quickTestBtn" style="width:100%; margin-top:8px;">
+                ⚡ Quick Test (Sample Data)
+            </button>
         </div>
         <div class="test-status" id="testStatus" style="display:none;">
             <span class="test-status-text"></span>
@@ -1026,6 +1040,7 @@
 
     <div class="footer">
         <a href="docs.html" id="docsLink">Documentation</a> · <a href="support.html" id="supportLink">Support</a>
+    </div>
     </div>
 
     <script src="../src/lib/config-constants.js"></script>
