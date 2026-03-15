@@ -49,7 +49,7 @@ async function loadConfig() {
         
         // Initialize storage with defaults if not set
         if (!stored.aiServerUrl) {
-            await chrome.storage.local.set({ aiServerUrl: 'http://4.157.143.70:8000' });
+            await chrome.storage.local.set({ aiServerUrl: 'http://ags-ai-server.eastus.azurecontainer.io:8000' });
         }
         if (!stored.salesforceUrl) {
             await chrome.storage.local.set({ salesforceUrl: 'https://flyland.my.salesforce.com' });

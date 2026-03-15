@@ -12,7 +12,6 @@
   ],
   "host_permissions": [
     "*://ags-ai-server.eastus.azurecontainer.io/*",
-    "*://4.157.143.70/*",
     "*://*.calltrackingmetrics.com/*",
     "*://*.my.salesforce.com/*",
     "*://*.lightning.force.com/*",

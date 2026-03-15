@@ -440,7 +440,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let phone = testPhoneInput.value.trim();
         
         const serverUrl = await StatusService.getAIServerUrl();
-        const actualUrl = serverUrl.includes('localhost') ? 'http://4.157.143.70:8000' : serverUrl;
+        const actualUrl = serverUrl.includes('localhost') ? 'http://ags-ai-server.eastus.azurecontainer.io:8000' : serverUrl;
         
         console.log('[Test Analysis] Server URL:', actualUrl);
         
@@ -510,7 +510,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             // Get AI Server URL - use Azure as default
             const serverUrl = await StatusService.getAIServerUrl();
-            const actualUrl = serverUrl.includes('localhost') ? 'http://4.157.143.70:8000' : serverUrl;
+            const actualUrl = serverUrl.includes('localhost') ? 'http://ags-ai-server.eastus.azurecontainer.io:8000' : serverUrl;
             console.log('[Test Analysis] Using URL:', actualUrl);
             
             // Send to AI server for analysis
