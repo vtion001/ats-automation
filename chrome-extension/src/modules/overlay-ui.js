@@ -82,7 +82,7 @@ class OverlayUI {
                 line-height: 1;
             }
             .ats-close-btn:hover { color: #fff; }
-            .ats-overlay-content { padding: 18px; max-height: 420px; overflow-y: auto; }
+            .ats-overlay-content { padding: 18px; max-height: 600px; overflow-y: auto; }
             .ats-field { margin-bottom: 14px; }
             .ats-field-label { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
             .ats-field-value { color: #1e293b; font-size: 14px; word-break: break-word; }
@@ -201,6 +201,53 @@ class OverlayUI {
             .ats-phone-icon { font-size: 20px; }
             .ats-phone-number { font-size: 18px; font-weight: 700; color: #1e293b; }
             .ats-status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+            
+            /* Full Transcription Box */
+            .ats-transcription-box {
+                max-height: 200px;
+                overflow-y: auto;
+                background: #f8fafc;
+                padding: 12px;
+                border-radius: 6px;
+                font-size: 12px;
+                line-height: 1.6;
+                color: #475569;
+                border: 1px solid #e2e8f0;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+            
+            /* Salesforce Notes */
+            .ats-salesforce-notes {
+                background: #f0fdf4;
+                border: 1px solid #22c55e;
+                border-radius: 6px;
+                padding: 12px;
+                font-size: 11px;
+                line-height: 1.5;
+                color: #166534;
+                max-height: 200px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+            }
+            
+            /* Copy Notes Button */
+            .ats-copy-notes-btn {
+                background: #22c55e;
+                color: #fff;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: 500;
+                margin-top: 8px;
+                width: 100%;
+                transition: all 0.2s;
+            }
+            .ats-copy-notes-btn:hover {
+                background: #16a34a;
+            }
         `;
     }
 
@@ -375,6 +422,49 @@ class OverlayUI {
             html += `</div>`;
         }
 
+        // Key Details Section
+        const mentionedNames = analysis?.mentionedNames || [];
+        const mentionedLocations = analysis?.mentionedLocations || [];
+        const mentionedPhones = analysis?.mentionedPhones || [];
+        const otherInfo = analysis?.otherCustomerInfo || '';
+        
+        if (mentionedNames.length > 0 || mentionedLocations.length > 0 || mentionedPhones.length > 0 || otherInfo) {
+            html += `<div class="ats-divider"></div>`;
+            html += `<div class="ats-field"><div class="ats-field-label">📝 Key Details</div></div>`;
+            html += `<div class="ats-info-list">`;
+            
+            if (mentionedNames.length > 0) {
+                html += `<div class="ats-info-item"><span class="ats-info-label">Names:</span><span class="ats-info-value">${mentionedNames.join(', ')}</span></div>`;
+            }
+            if (mentionedLocations.length > 0) {
+                html += `<div class="ats-info-item"><span class="ats-info-label">Locations:</span><span class="ats-info-value">${mentionedLocations.join(', ')}</span></div>`;
+            }
+            if (mentionedPhones.length > 0) {
+                html += `<div class="ats-info-item"><span class="ats-info-label">Phones:</span><span class="ats-info-value">${mentionedPhones.join(', ')}</span></div>`;
+            }
+            if (otherInfo) {
+                html += `<div class="ats-info-item"><span class="ats-info-label">Other:</span><span class="ats-info-value">${otherInfo}</span></div>`;
+            }
+            html += `</div>`;
+        }
+
+        // Full Transcription Section
+        const fullTranscription = analysis?.fullTranscription || '';
+        if (fullTranscription) {
+            html += `<div class="ats-divider"></div>`;
+            html += `<div class="ats-field"><div class="ats-field-label">📄 Full Transcription</div></div>`;
+            html += `<div class="ats-transcription-box">${fullTranscription}</div>`;
+        }
+
+        // Salesforce Notes Section
+        const salesforceNotes = analysis?.salesforceNotes || '';
+        if (salesforceNotes) {
+            html += `<div class="ats-divider"></div>`;
+            html += `<div class="ats-field"><div class="ats-field-label">💾 Salesforce Notes</div></div>`;
+            html += `<div class="ats-salesforce-notes">${salesforceNotes}</div>`;
+            html += `<button class="ats-copy-notes-btn" id="ats-copy-notes">📋 Copy Notes</button>`;
+        }
+
         // Recommendation
         const recommendation = analysis?.recommended_department || 'Transfer to appropriate department';
         html += `<div class="ats-recommendation">🎯 Recommendation: ${recommendation}</div>`;
@@ -386,6 +476,19 @@ class OverlayUI {
         html += `</div>`;
 
         content.innerHTML = html;
+
+        // Add copy notes handler
+        const copyBtn = content.querySelector('#ats-copy-notes');
+        if (copyBtn && salesforceNotes) {
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(salesforceNotes).then(() => {
+                    copyBtn.textContent = '✅ Copied!';
+                    setTimeout(() => {
+                        copyBtn.textContent = '📋 Copy Notes';
+                    }, 2000);
+                });
+            });
+        }
 
         // Add action handlers
         content.querySelectorAll('[data-action]').forEach(btn => {

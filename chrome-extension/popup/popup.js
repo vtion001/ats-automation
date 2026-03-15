@@ -619,7 +619,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     qualificationScore: analysis.qualification_score || 0,
                     recommended_department: action.transfer_department || analysis.recommended_department,
                     action: action.action,
-                    callNotes: action.call_notes
+                    callNotes: action.call_notes,
+                    // NEW: Full transcription and key details
+                    fullTranscription: analysis.full_transcription || '',
+                    mentionedNames: analysis.mentioned_names || [],
+                    mentionedLocations: analysis.mentioned_locations || [],
+                    mentionedPhones: analysis.mentioned_phones || [],
+                    otherCustomerInfo: analysis.other_customer_info || '',
+                    salesforceNotes: analysis.salesforce_notes || ''
                 }, phone);
             }
             

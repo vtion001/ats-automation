@@ -232,6 +232,8 @@ async def analyze_with_openai(
     system_prompt = f"""You are an expert sales call analyzer for {client.upper() if client else "BPO"} clients. 
 
 Analyze the transcription and return a JSON object with these fields:
+
+**Core Fields:**
 - tags: Array of relevant tags from the knowledge base
 - sentiment: "positive", "neutral", or "negative"
 - summary: Brief 1-2 sentence summary of the call
@@ -239,21 +241,42 @@ Analyze the transcription and return a JSON object with these fields:
 - suggested_notes: Key points and action items
 - follow_up_required: true or false
 - qualification_score: 0-100 score based on KB criteria
-- detected_state: US state if mentioned (confidence 0.0-1.0)
-- detected_insurance: Type of insurance if mentioned (confidence 0.0-1.0)
-- detected_sober_days: Days sober if mentioned (confidence 0.0-1.0)
-- caller_name: Caller name if mentioned (confidence 0.0-1.0)
 - recommended_department: Which department to transfer to
 - call_type: One of: treatment, meeting, family, facility, competitor, talkline
 
-Return confidence scores for each extracted field (0.0 = not confident, 1.0 = very confident).
-If a field is not mentioned in the transcription, set it to null with confidence 0.
+**Qualification Fields (extract if mentioned):**
+- detected_state: US state if mentioned
+- detected_insurance: Insurance type if mentioned
+- detected_sober_days: Days sober if mentioned
+- caller_name: ONLY full name if completely provided (e.g., "John Smith"), NOT partial names or relationships
 
-IMPORTANT: Use the knowledge base provided to determine:
-1. Qualification based on sober time and insurance
-2. Proper department transfer
-3. Salesforce notes format
-4. Disqualification reasons
+**IMPORTANT - Full Transcription:**
+- full_transcription: Return the ENTIRE transcription text exactly as provided. Do not summarize or modify it.
+
+**IMPORTANT - Key Details for Notes:**
+Extract ALL mentioned details for Salesforce notes:
+- mentioned_names: Array of ANY names mentioned (even partial like "Trent", "Reese's uncle", "my brother")
+- mentioned_locations: Array of ANY locations/addresses mentioned (street, city, state)
+- mentioned_phones: Array of ANY phone numbers found in the conversation
+- other_customer_info: Any other relevant customer information mentioned
+
+**Salesforce Notes:**
+- salesforce_notes: Create structured notes ready for Salesforce including:
+  * Caller phone
+  * State
+  * Insurance 
+  * Sober days
+  * Summary
+  * Any other key details extracted
+
+Return confidence scores for each extracted field (0.0 = not confident, 1.0 = very confident).
+If a field is not mentioned in the transcription, set it to null or empty array.
+
+IMPORTANT: 
+1. Always include the full_transcription field with the complete text
+2. Extract ALL names mentioned, even if partial or relationships
+3. Extract ALL locations, addresses mentioned
+4. Create comprehensive salesforce_notes
 
 {kb_context}
 
@@ -501,6 +524,13 @@ async def analyze_transcription(request: TranscriptionRequest):
                 "ai_analyzed": True,
                 "provider": "openrouter",
                 "kb_client": client if client in KNOWLEDGE_BASES else None,
+                # NEW: Full transcription and key details
+                "full_transcription": ai_result.get("full_transcription", request.transcription),
+                "mentioned_names": ai_result.get("mentioned_names", []),
+                "mentioned_locations": ai_result.get("mentioned_locations", []),
+                "mentioned_phones": ai_result.get("mentioned_phones", []),
+                "other_customer_info": ai_result.get("other_customer_info", ""),
+                "salesforce_notes": ai_result.get("salesforce_notes", ""),
             }
 
             # Add Flyland-specific fields
