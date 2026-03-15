@@ -506,17 +506,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (phone) {
                     callerInfoDisplay.push({
                         label: 'Phone',
-                        value: phone,
+                        value: String(phone),
                         confidence: 1.0,
                         source: 'ctm',
                         isHighConfidence: true
                     });
                 }
                 
+                // Helper to safely extract string values from AI response
+                const getStringValue = (value) => {
+                    if (typeof value === 'string') return value;
+                    if (typeof value === 'object' && value !== null) {
+                        // Handle nested objects like { text: "value" } or { name: "value" }
+                        return value.text || value.name || value.value || String(value);
+                    }
+                    return String(value || '');
+                };
+                
                 if (analysis.detected_state) {
+                    const stateValue = getStringValue(analysis.detected_state);
                     callerInfoDisplay.push({
                         label: 'State',
-                        value: analysis.detected_state,
+                        value: stateValue,
                         confidence: analysis.state_confidence || 0.7,
                         source: 'ai',
                         isHighConfidence: (analysis.state_confidence || 0.7) >= 0.8
@@ -524,9 +535,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 
                 if (analysis.detected_insurance) {
+                    const insuranceValue = getStringValue(analysis.detected_insurance);
                     callerInfoDisplay.push({
                         label: 'Insurance',
-                        value: analysis.detected_insurance,
+                        value: insuranceValue,
                         confidence: analysis.insurance_confidence || 0.6,
                         source: 'ai',
                         isHighConfidence: (analysis.insurance_confidence || 0.6) >= 0.7
@@ -534,9 +546,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 
                 if (analysis.detected_sober_days) {
+                    const soberValue = typeof analysis.detected_sober_days === 'object' 
+                        ? getStringValue(analysis.detected_sober_days)
+                        : String(analysis.detected_sober_days);
                     callerInfoDisplay.push({
                         label: 'Sober',
-                        value: `${analysis.detected_sober_days} days`,
+                        value: `${soberValue} days`,
                         confidence: analysis.sober_confidence || 0.7,
                         source: 'ai',
                         isHighConfidence: (analysis.sober_confidence || 0.7) >= 0.7
@@ -559,37 +574,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     }
     
-    // Quick Test button - runs analysis with sample data
+    // Quick Test button - runs analysis with sample data (DISABLED - using real data only)
+    // NOTE: Quick Test disabled per user request - use "Run Analysis" with real transcription or MP3 file
     const quickTestBtn = document.getElementById('quickTestBtn');
     if (quickTestBtn) {
-        quickTestBtn.addEventListener('click', async () => {
-            // Sample test data for quick testing
-            const SAMPLE_DATA = {
-                'new-lead': {
-                    transcription: "Hello, I'm calling from California. I have Blue Cross insurance and I've been sober for 30 days. I'm interested in your addiction treatment program. I need help with substance abuse.",
-                    phone: '+15551234567'
-                },
-                'existing': {
-                    transcription: "Hi, this is John Doe calling from Florida. I have Aetna insurance. I've been clean for 60 days and would like to schedule a follow-up appointment. Please call me back.",
-                    phone: '+15559876543'
-                }
-            };
-            
-            const sample = SAMPLE_DATA[currentTestType] || SAMPLE_DATA['new-lead'];
-            
-            // Fill in the form with sample data
-            if (transcriptionInput) transcriptionInput.value = sample.transcription;
-            if (testPhoneInput) testPhoneInput.value = sample.phone;
-            if (testClientSelect) testClientSelect.value = 'flyland';
-            if (audioFileInput) audioFileInput.value = '';
-            
-            showTestStatus('Running quick test with sample data...', 'loading');
-            
-            // Trigger the analysis
-            if (runAnalysisBtn) {
-                runAnalysisBtn.click();
-            }
-        });
+        quickTestBtn.style.display = 'none'; // Hide for now
     }
     
     function showTestStatus(message, status) {
