@@ -7,6 +7,12 @@
 
 // Toast Notification System
 const ToastManager = {
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    },
+    
     show(message, type = 'info', duration = 3000) {
         const container = document.getElementById('toastContainer');
         if (!container) return;
@@ -23,7 +29,7 @@ const ToastManager = {
         
         toast.innerHTML = `
             ${icons[type] || icons.info}
-            <span class="toast-message">${message}</span>
+            <span class="toast-message">${this.escapeHtml(message)}</span>
         `;
         
         container.appendChild(toast);
@@ -122,15 +128,54 @@ function updateMainStatus(isOnline) {
 
 function updateStats() {
     StorageService.getStats().then(stats => {
-        document.getElementById('callsCount').textContent = stats.calls || 0;
-        document.getElementById('searchesCount').textContent = stats.searches || 0;
-        document.getElementById('analysisCount').textContent = stats.analysis || 0;
+        const callsEl = document.getElementById('callsCount');
+        const searchesEl = document.getElementById('searchesCount');
+        const analysisEl = document.getElementById('analysisCount');
+        
+        if (callsEl) callsEl.textContent = stats.calls || 0;
+        if (searchesEl) searchesEl.textContent = stats.searches || 0;
+        if (analysisEl) analysisEl.textContent = stats.analysis || 0;
     });
 }
 
 // Main initialization
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[Popup] Loading...');
+    
+    try {
+        // Initialize collapsible sections
+        document.querySelectorAll('.section.collapsible .section-header').forEach(header => {
+            header.addEventListener('click', function() {
+                const section = this.closest('.collapsible');
+                section.classList.toggle('collapsed');
+                
+                // Save state to storage
+                const sectionId = section.id;
+                if (sectionId) {
+                    StorageService.set({ ['collapsed_' + sectionId]: section.classList.contains('collapsed') });
+                }
+            });
+        });
+        
+        // Restore collapsed states from storage
+        const collapsibleSections = document.querySelectorAll('.section.collapsible');
+        const collapsedKeys = {};
+        collapsibleSections.forEach(s => {
+            collapsedKeys['collapsed_' + s.id] = null;
+        });
+        const collapsedStates = await StorageService.get(collapsedKeys);
+        Object.entries(collapsedStates).forEach(([key, value]) => {
+            if (value === true) {
+                const sectionId = key.replace('collapsed_', '');
+                const section = document.getElementById(sectionId);
+                if (section) {
+                    section.classList.add('collapsed');
+                }
+            }
+        });
+    } catch(e) {
+        console.error('[Popup] Error initializing collapsible sections:', e);
+    }
     
     // Get elements
     const clientSelect = document.getElementById('clientSelect');
@@ -145,12 +190,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const overlayUI = new OverlayUI();
     
     // Load settings
-    const config = await StorageService.getConfig();
-    
-    if (config.activeClient) clientSelect.value = config.activeClient;
-    if (config.callMonitorEnabled !== undefined) callMonitorToggle.checked = config.callMonitorEnabled;
-    if (config.sfSyncEnabled !== undefined) sfSyncToggle.checked = config.sfSyncEnabled;
-    if (config.aiEnabled !== undefined) aiToggle.checked = config.aiEnabled;
+    try {
+        const config = await StorageService.getConfig();
+        
+        if (config.activeClient && clientSelect) clientSelect.value = config.activeClient;
+        if (config.callMonitorEnabled !== undefined && callMonitorToggle) callMonitorToggle.checked = config.callMonitorEnabled;
+        if (config.sfSyncEnabled !== undefined && sfSyncToggle) sfSyncToggle.checked = config.sfSyncEnabled;
+        if (config.aiEnabled !== undefined && aiToggle) aiToggle.checked = config.aiEnabled;
+    } catch(e) {
+        console.error('[Popup] Error loading config:', e);
+    }
     
     // Check server connection
     checkServerConnection();
@@ -161,9 +210,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateServiceStatus('ctm', true);
     
     // Initialize Notes and Qualification
-    const currentClient = clientSelect?.value || 'flyland';
-    await NotesManager.load(currentClient);
-    await QualificationManager.loadKnowledgeBase(currentClient);
+    try {
+        const currentClient = clientSelect?.value || 'flyland';
+        await NotesManager.load(currentClient);
+        await QualificationManager.loadKnowledgeBase(currentClient);
+    } catch(e) {
+        console.error('[Popup] Error loading notes/qualification:', e);
+    }
     
     // Event delegation for note actions
     const notesContainer = document.getElementById('notesContainer');
@@ -263,14 +316,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 chrome.windows.create({
                     url: chrome.runtime.getURL('popup/popup.html'),
                     type: 'popup',
-                    width: 420,
+                    width: 400,
                     height: 700,
                     focused: true
                 }).then((window) => {
-                    showStatus('Opening as floating window...', true);
-                    window.close();
+                    showStatus('Floating window opened', true);
                 }).catch((err) => {
                     console.error('Failed to create window:', err);
+                    ToastManager.error('Failed to open floating window');
                 });
             }
         });
@@ -286,41 +339,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (testBtn) {
         testBtn.addEventListener('click', async () => {
             updateAllServiceStatus('checking');
+            ToastManager.info('Testing all services...');
             
-            const results = await StatusService.runAllTests();
-            
-            updateServiceStatus('storage', results.storage);
-            updateServiceStatus('aiServer', results.aiServer);
-            updateServiceStatus('salesforce', results.salesforce);
-            updateServiceStatus('background', results.background);
-            updateServiceStatus('ctm', results.ctmMonitor);
-            
-            const allPassed = results.storage && results.aiServer && results.salesforce && results.background && results.ctmMonitor;
-            
-            if (allPassed) {
-                showStatus('All services online!', true);
-                updateMainStatus(true);
-            } else {
-                // Build detailed status message
-                const issues = [];
-                if (!results.storage) issues.push('Storage');
-                if (!results.aiServer) issues.push('AI Server');
-                if (!results.salesforce) issues.push('Salesforce');
-                if (!results.background) issues.push('Background');
+            try {
+                const results = await StatusService.runAllTests();
                 
-                // CTM gets special message
-                if (!results.ctmMonitor) {
-                    const ctmStatus = StatusService.getCTMStatusText(results.ctmStatus);
-                    issues.push(`CTM (${ctmStatus})`);
+                updateServiceStatus('storage', results.storage);
+                updateServiceStatus('aiServer', results.aiServer);
+                updateServiceStatus('salesforce', results.salesforce);
+                updateServiceStatus('background', results.background);
+                updateServiceStatus('ctm', results.ctmMonitor);
+                
+                const allPassed = results.storage && results.aiServer && results.salesforce && results.background && results.ctmMonitor;
+                
+                if (allPassed) {
+                    showStatus('All services online!', true);
+                    updateMainStatus(true);
                 } else {
-                    issues.push('CTM');
+                    // Build detailed status message
+                    const issues = [];
+                    if (!results.storage) issues.push('Storage');
+                    if (!results.aiServer) issues.push('AI Server');
+                    if (!results.salesforce) issues.push('Salesforce');
+                    if (!results.background) issues.push('Background');
+                    
+                    // CTM gets special message
+                    const ctmStatusText = StatusService.getCTMStatusText(results.ctmStatus);
+                    if (!results.ctmMonitor) {
+                        issues.push('CTM (' + ctmStatusText + ')');
+                    }
+                    
+                    showStatus('Issues: ' + issues.join(', '), false);
+                    updateMainStatus(false);
                 }
                 
-                showStatus('Checking: ' + issues.join(', '), false);
-                updateMainStatus(false);
+                updateStats();
+            } catch(e) {
+                console.error('[Popup] Test error:', e);
+                ToastManager.error('Test failed: ' + e.message);
             }
-            
-            updateStats();
         });
     }
     
@@ -582,9 +639,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     function showTestStatus(message, status) {
+        if (!testStatus) return;
+        
         testStatus.style.display = 'block';
         testStatus.className = 'test-status ' + status;
-        testStatus.querySelector('.test-status-text')?.remove();
+        
+        const existingText = testStatus.querySelector('.test-status-text');
+        if (existingText) existingText.remove();
         
         const span = document.createElement('span');
         span.className = 'test-status-text';
@@ -594,6 +655,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Make overlayUI globally accessible
     window.overlayUI = overlayUI;
+    window.StatusService = StatusService;
+    window.NotesManager = NotesManager;
+    window.QualificationManager = QualificationManager;
     
     // Check server connection
     async function checkServerConnection() {
@@ -618,6 +682,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             serverStatus.textContent = 'Not connected';
         }
     }
+    
+    // Run initial test after a short delay
+    setTimeout(() => {
+        checkServerConnection();
+    }, 500);
     
     console.log('[Popup] Ready');
 });

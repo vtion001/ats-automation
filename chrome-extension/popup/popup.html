@@ -17,6 +17,7 @@
             --bg-light: #f8fafc;
             --bg-card: #ffffff;
             --bg-hover: #f1f5f9;
+            --bg-input: #f8fafc;
             --text-primary: #1e293b;
             --text-secondary: #64748b;
             --text-muted: #94a3b8;
@@ -194,37 +195,18 @@
             to { transform: translateY(-10px) scale(0.95); opacity: 0; }
         }
         
-        /* Enhanced Status Animations */
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--success);
-            position: relative;
-        }
-        .status-dot::after {
-            content: '';
-            position: absolute;
-            top: -2px;
-            left: -2px;
-            right: -2px;
-            bottom: -2px;
-            border-radius: 50%;
-            background: var(--success);
-            opacity: 0;
-            animation: statusPulse 2s infinite;
-        }
-        .status-dot.inactive::after {
-            animation: none;
-        }
-        .status-dot.inactive {
-            background: var(--text-muted);
-        }
-        @keyframes statusPulse {
-            0% { transform: scale(1); opacity: 0.6; }
-            100% { transform: scale(2.2); opacity: 0; }
+        
+        /* Notes Section */
+        .note-count {
+            background: var(--primary);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
         }
         
+        /* Status Text */
         .status-text {
             font-size: 12px;
             color: var(--text-secondary);
@@ -232,10 +214,48 @@
         .status-text.active {
             color: var(--success);
         }
+        
+        /* Section Styles */
         .section {
             padding: 16px;
             border-bottom: 1px solid var(--border-light);
         }
+        .section.collapsible .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            margin-bottom: 12px;
+        }
+        .section.collapsible .section-title {
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+        .section.collapsible .section-toggle {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            transition: transform 0.3s ease;
+        }
+        .section.collapsible.collapsed .section-toggle {
+            transform: rotate(-90deg);
+        }
+        .section.collapsible .section-content {
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+        }
+        .section.collapsible.collapsed .section-content {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+        }
+        
+        /* Section Title */
         .section-title {
             font-size: 11px;
             font-weight: 600;
@@ -243,9 +263,13 @@
             letter-spacing: 0.5px;
             color: var(--text-muted);
             margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
+        
+        /* Client Select */
         .client-select {
-            width: 100%;
             padding: 12px 14px;
             background: var(--bg-white);
             border: 1px solid var(--border);
@@ -466,12 +490,7 @@
             animation: pulse 1s infinite;
         }
         
-        /* Notes Section */
-        .section-title {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        /* Note Count Badge */
         .note-count {
             background: var(--primary);
             color: white;
@@ -489,10 +508,14 @@
             background: var(--bg-light);
         }
         .notes-empty {
-            padding: 16px;
+            padding: 24px 16px;
             text-align: center;
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         .note-item {
             padding: 10px 12px;
@@ -825,16 +848,17 @@
     
     <div class="popup-container">
         <div class="header">
-        <div class="header-controls">
-            <button class="header-btn" id="pinBtn" title="Pin as floating window">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
-            </button>
+            <div class="header-controls">
+                <button class="header-btn" id="pinBtn" title="Pin as floating window">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                </button>
+            </div>
+            <div class="logo">
+                <img src="https://res.cloudinary.com/dbviya1rj/image/upload/v1773384037/gpnkwelbdcwfjmw5axtx.webp" alt="AGS Logo">
+            </div>
+            <h1>AGS Automation Tool</h1>
+            <div class="tagline">BPO Workflow Automation</div>
         </div>
-        <div class="logo">
-            <img src="https://res.cloudinary.com/dbviya1rj/image/upload/v1773384037/gpnkwelbdcwfjmw5axtx.webp" alt="AGS Logo">
-        </div>
-        <h1>AGS Automation Tool</h1>
-        <div class="tagline">BPO Workflow Automation</div>
     </div>
 
     <div class="status-bar">
@@ -842,8 +866,14 @@
         <span class="status-text active" id="statusText">Ready</span>
     </div>
 
-    <div class="section" id="servicesSection">
-        <div class="section-title">Service Status</div>
+    <div class="section collapsible collapsed" id="servicesSection">
+        <div class="section-header">
+            <div class="section-title">Service Status</div>
+            <div class="section-toggle">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+        </div>
+        <div class="section-content">
         <div class="service-row">
             <span class="service-name">Storage</span>
             <span class="service-status" id="storageStatus"><span class="status-indicator"></span></span>
@@ -863,6 +893,7 @@
         <div class="service-row">
             <span class="service-name">CTM Monitor</span>
             <span class="service-status" id="ctmStatus"><span class="status-indicator"></span></span>
+        </div>
         </div>
     </div>
 
@@ -944,8 +975,14 @@
         </div>
     </div>
 
-    <div class="section" id="testAnalysisSection">
-        <div class="section-title">🎤 Test Analysis</div>
+    <div class="section collapsible collapsed" id="testAnalysisSection">
+        <div class="section-header">
+            <div class="section-title">🎤 Test Analysis</div>
+            <div class="section-toggle">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+        </div>
+        <div class="section-content">
         <div class="test-buttons">
             <button class="btn test-btn new-lead" id="testNewLeadBtn">
                 🎯 Test New Lead
@@ -987,6 +1024,7 @@
         <div class="test-status" id="testStatus" style="display:none;">
             <span class="test-status-text"></span>
         </div>
+        </div>
     </div>
 
     <div class="section" id="notesSection">
@@ -995,7 +1033,11 @@
             <span class="note-count" id="noteCount">0</span>
         </div>
         <div class="notes-container" id="notesContainer">
-            <div class="notes-empty" id="notesEmpty">No notes yet. Notes will appear automatically during calls.</div>
+            <div class="notes-empty" id="notesEmpty">
+                <div style="font-size: 24px; margin-bottom: 8px;">📝</div>
+                <div>No notes yet</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Notes appear automatically during calls, or add one below</div>
+            </div>
         </div>
         <div class="note-input-row">
             <textarea class="note-input" id="noteInput" placeholder="Add a quick note..." rows="2"></textarea>
@@ -1007,7 +1049,7 @@
         <div class="section-title">AI Caller Qualification</div>
         <div class="qualification-status" id="qualStatus">
             <div class="qual-indicator"></div>
-            <span>Waiting for call...</span>
+            <span>Ready - Waiting for call...</span>
         </div>
         <div class="qual-result" id="qualResult" style="display: none;">
             <div class="qual-badge" id="qualBadge">New Lead</div>
