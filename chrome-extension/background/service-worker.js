@@ -3,7 +3,7 @@
  * Handles messaging between content scripts and native automation
  */
 
-// Default configuration
+// Default configuration - Pre-configured for Flyland
 const AGS_CONFIG = {
     activeClient: 'flyland',
     automationEnabled: true,
@@ -12,7 +12,8 @@ const AGS_CONFIG = {
     aiAnalysisEnabled: true,
     saveMarkdown: true,
     aiServerUrl: 'http://4.157.143.70:8000',
-    salesforceUrl: 'https://flyland.my.salesforce.com'
+    salesforceUrl: 'https://flyland.my.salesforce.com',
+    ctmUrl: 'https://app.calltrackingmetrics.com'
 };
 
 let callLog = [];

@@ -1,5 +1,5 @@
 /**
- * ATS Configuration Page Script
+ * AGS Configuration Page Script
  * Uses shared StorageService and config constants
  */
 
@@ -21,8 +21,8 @@ async function loadConfig() {
     document.getElementById('saveMarkdown').checked = result.saveMarkdown !== false;
     document.getElementById('salesforceUrl').value = result.salesforceUrl || defaults.salesforceUrl;
     document.getElementById('aiServerUrl').value = result.aiServerUrl || defaults.aiServerUrl;
-    document.getElementById('ctmSelectors').value = result.ctmSelectors || defaults.ctmSelectors;
-    document.getElementById('apiKey').value = result.apiKey || '';
+    document.getElementById('ctmUrl').value = result.ctmUrl || defaults.ctmUrl;
+    document.getElementById('ctmSelectors').value = result.ctmSelectors || defaults.ctmSelectors || '.call-status, .incoming-call, .phone-number';
 }
 
 function setupEventListeners() {
@@ -38,8 +38,8 @@ function setupEventListeners() {
             saveMarkdown: document.getElementById('saveMarkdown').checked,
             salesforceUrl: document.getElementById('salesforceUrl').value,
             aiServerUrl: document.getElementById('aiServerUrl').value,
-            ctmSelectors: document.getElementById('ctmSelectors').value,
-            apiKey: document.getElementById('apiKey').value
+            ctmUrl: document.getElementById('ctmUrl').value,
+            ctmSelectors: document.getElementById('ctmSelectors').value
         };
 
         try {
