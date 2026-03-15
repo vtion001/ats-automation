@@ -4,7 +4,53 @@
  */
 
 // UI Helper functions
+
+// Toast Notification System
+const ToastManager = {
+    show(message, type = 'info', duration = 3000) {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+        
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const icons = {
+            success: '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>',
+            error: '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>',
+            warning: '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>',
+            info: '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+        };
+        
+        toast.innerHTML = `
+            ${icons[type] || icons.info}
+            <span class="toast-message">${message}</span>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Auto remove
+        setTimeout(() => {
+            toast.classList.add('hiding');
+            setTimeout(() => toast.remove(), 250);
+        }, duration);
+    },
+    
+    success(message) { this.show(message, 'success'); },
+    error(message) { this.show(message, 'error'); },
+    warning(message) { this.show(message, 'warning'); },
+    info(message) { this.show(message, 'info'); }
+};
+
 function showStatus(message, success) {
+    // Also show toast notification for better UX
+    if (success === true) {
+        ToastManager.success(message);
+    } else if (success === false) {
+        ToastManager.error(message);
+    } else {
+        ToastManager.info(message);
+    }
+    
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
     if (!statusDot || !statusText) return;
@@ -148,6 +194,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (text) {
                 await NotesManager.addNote(text, 'manual');
                 noteInput.value = '';
+                ToastManager.success('Note added');
+            }
+        });
+        
+        // Keyboard shortcut: Enter to add note (Shift+Enter for new line)
+        noteInput.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                const text = noteInput.value.trim();
+                if (text) {
+                    await NotesManager.addNote(text, 'manual');
+                    noteInput.value = '';
+                    ToastManager.success('Note added');
+                }
+            }
+            if (e.key === 'Escape') {
+                noteInput.blur();
             }
         });
     }
