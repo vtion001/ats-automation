@@ -1,0 +1,32 @@
+{
+    "version": "1.0.0",
+    "aiServerUrl": "http://4.157.143.70:8000",
+    "salesforceUrl": "",
+    "activeClient": "flyland",
+    "automationEnabled": true,
+    "autoSearchSF": true,
+    "transcriptionEnabled": true,
+    "aiAnalysisEnabled": true,
+    "saveMarkdown": true,
+    "clients": {
+        "flyland": {
+            "name": "Flyland Recovery",
+            "salesforceUrl": "",
+            "ctmUrl": "https://app.calltrackingmetrics.co"
+        },
+        "legacy": {
+            "name": "Legacy Services",
+            "salesforceUrl": "",
+            "ctmUrl": "https://app.calltrackingmetrics.co"
+        },
+        "tbt": {
+            "name": "TBT Communications",
+            "salesforceUrl": "",
+            "ctmUrl": "https://app.calltrackingmetrics.co"
+        }
+    },
+    "installation": {
+        "date": "",
+        "workstation": ""
+    }
+}
