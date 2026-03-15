@@ -11,7 +11,7 @@ const AGS_CONFIG = {
     transcriptionEnabled: true,
     aiAnalysisEnabled: true,
     saveMarkdown: true,
-    aiServerUrl: 'http://4.157.143.70:8000',
+    aiServerUrl: 'http://ags-ai-server.eastus.azurecontainer.io:8000',
     salesforceUrl: 'https://flyland.my.salesforce.com',
     ctmUrl: 'https://app.calltrackingmetrics.com'
 };
