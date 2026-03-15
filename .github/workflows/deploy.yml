@@ -1,0 +1,62 @@
+name: Deploy AI Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'requirements-server.txt'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build and push to ACR
+        run: |
+          az acr build \
+            --registry agscontainerreg \
+            --image ags-ai-server:${{ github.sha }} \
+            --image ags-ai-server:latest \
+            --file Dockerfile .
+
+      - name: Deploy to Azure Container Instance
+        run: |
+          # Get ACR password
+          ACR_PASSWORD=$(az acr credential show --name agscontainerreg --query "passwords[0].value" -o tsv)
+          
+          # Delete old container if exists
+          az container delete --name ags-ai-server --resource-group ags-rg --yes 2>/dev/null || true
+          
+          # Create new container
+          az container create \
+            --name ags-ai-server \
+            --resource-group ags-rg \
+            --location eastus \
+            --os-type Linux \
+            --image agscontainerreg.azurecr.io/ags-ai-server:latest \
+            --registry-login-server agscontainerreg.azurecr.io \
+            --registry-username agscontainerreg \
+            --registry-password "$ACR_PASSWORD" \
+            --cpu 0.5 --memory 1 \
+            --port 8000 \
+            --protocol TCP \
+            --dns-name-label ags-ai-server \
+            --environment-variables ATS_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
+            --output table
+
+      - name: Get Deployment URL
+        run: |
+          echo "Container IP:"
+          az container show --name ags-ai-server --resource-group ags-rg --query "ipAddress.ip" -o tsv
+          echo ""
+          echo "Deployment complete!"
