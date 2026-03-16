@@ -68,6 +68,11 @@ def load_knowledge_bases():
 # Load KBs on startup
 load_knowledge_bases()
 
+# Response cache - simple in-memory cache for analyzed calls
+# Key: phone number, Value: (timestamp, response)
+ANALYSIS_CACHE = {}
+CACHE_TTL_SECONDS = 300  # 5 minutes cache
+
 
 class TranscriptionRequest(BaseModel):
     transcription: str
@@ -188,36 +193,36 @@ async def get_knowledge_base(client: str):
 
 
 async def get_kb_context(client: str) -> str:
-    """Get knowledge base context for the AI prompt"""
+    """Get knowledge base context for the AI prompt - OPTIMIZED for speed"""
     if client not in KNOWLEDGE_BASES:
         return ""
 
     kb = KNOWLEDGE_BASES[client]
-    context = f"\n\n=== {kb.get('name', client.upper())} KNOWLEDGE BASE ===\n"
+    context = f"\n\n=== {kb.get('name', client.upper())} (Quick Reference) ===\n"
 
     if client == "flyland":
-        # Add Flyland-specific context
+        # Simplified context - only key qualification info
         context += "QUALIFICATION CRITERIA:\n"
         for criteria, data in kb.get("qualification_criteria", {}).items():
-            context += f"- {criteria}: keywords={data.get('keywords', [])}, weight={data.get('score_weight', 0)}\n"
+            context += f"- {criteria}: {data.get('keywords', [])}\n"
 
-        context += "\nSTATES WITH EXTENDED SOBER WINDOW (60 days):\n"
-        context += f"  {kb.get('states', {}).get('states_with_extension', [])}\n"
+        # Only essential states
+        states_ext = kb.get("states", {}).get("states_with_extension", [])
+        if states_ext:
+            context += f"\nStates with 60-day sober window: {', '.join(states_ext[:5])}\n"
 
-        context += "\nDEPARTMENTS:\n"
-        for dept, data in kb.get("departments", {}).items():
-            context += f"- {dept}: {data.get('name', '')} -> {data.get('salesforce_action', '')}\n"
+        # Only top departments
+        context += "\nDepartments: "
+        depts = list(kb.get("departments", {}).keys())[:3]
+        context += ", ".join(depts) + "\n"
 
-        context += "\nINSURANCE INFO:\n"
+        # Only accepted insurance (first 5)
         kb_ins = kb.get("knowledge_topics", {}).get("insurance_info", {})
-        context += f"  Accepted: {kb_ins.get('accepted', [])}\n"
-        context += f"  Not Accepted: {kb_ins.get('not_accepted', [])}\n"
+        accepted = kb_ins.get("accepted", [])[:5]
+        if accepted:
+            context += f"Accepted insurance: {', '.join(accepted)}\n"
 
-        context += "\nSCRIPTS:\n"
-        for script_name, script_text in kb.get("scripts", {}).items():
-            context += f"  {script_name}: {script_text}\n"
-
-    context += "\n=== END KNOWLEDGE BASE ===\n"
+    context += "\n=== END ===\n"
     return context
 
 
@@ -226,7 +231,15 @@ async def analyze_with_openai(
 ) -> dict:
     """Analyze transcription using OpenRouter AI with client knowledge base"""
 
-    # Get KB context for this client
+    # Check cache first - use phone as key if available
+    if phone and phone in ANALYSIS_CACHE:
+        cached_time, cached_response = ANALYSIS_CACHE[phone]
+        if (datetime.now() - cached_time).total_seconds() < CACHE_TTL_SECONDS:
+            logger.info(f"Returning cached analysis for {phone}")
+            cached_response["from_cache"] = True
+            return cached_response
+
+    # Get KB context for this client (simplified for faster processing)
     kb_context = await get_kb_context(client)
 
     system_prompt = f"""You are an expert sales call analyzer for {client.upper() if client else "BPO"} clients. 
@@ -306,12 +319,12 @@ Respond ONLY with valid JSON."""
         }
 
         payload = {
-            "model": "anthropic/claude-3-haiku",
+            "model": "google/gemma-2-9b-it",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            "max_tokens": 1000,
+            "max_tokens": 500,
             "temperature": 0.3,
         }
 
@@ -331,6 +344,12 @@ Respond ONLY with valid JSON."""
                     if content.startswith("json"):
                         content = content[4:]
                 analysis = json.loads(content.strip())
+
+                # Cache the result if phone is available
+                if phone:
+                    ANALYSIS_CACHE[phone] = (datetime.now(), analysis)
+                    logger.info(f"Cached analysis for {phone}")
+
                 return analysis
             except json.JSONDecodeError as e:
                 logger.warning(f"Failed to parse AI response as JSON: {e}")
