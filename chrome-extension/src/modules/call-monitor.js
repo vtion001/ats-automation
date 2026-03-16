@@ -19,6 +19,41 @@ class CallMonitor {
         this.currentCall = null;
         this.currentAnalysis = null;
         this.isMonitoring = false;
+        this.callStartTime = null;
+    }
+
+    // Set extension icon badge color
+    setBadge(color, text) {
+        try {
+            if (typeof chrome !== 'undefined' && chrome.action) {
+                chrome.action.setBadgeBackgroundColor({ color: color });
+                chrome.action.setBadgeText({ text: text || '' });
+            }
+        } catch (e) {
+            console.log('[Badge] Could not set badge:', e.message);
+        }
+    }
+
+    // Show status notification to user
+    showStatus(message, type = 'info') {
+        const colors = {
+            'recording': '#22c55e',  // green
+            'waiting': '#eab308',     // yellow
+            'success': '#22c55e',     // green
+            'error': '#ef4444',       // red
+            'info': '#3b82f6'         // blue
+        };
+        
+        // Set badge color
+        this.setBadge(colors[type] || colors['info'], message);
+        
+        // Also send to overlay for display
+        ATS.sendMessage({
+            type: ATS.Messages.SHOW_NOTIFICATION,
+            payload: { message: message, type: type }
+        });
+        
+        ATS.logger.info('[Status:' + type + '] ' + message);
     }
 
     // Initialize all services
@@ -110,7 +145,8 @@ class CallMonitor {
                 clearInterval(self.webhookPollInterval);
                 self.webhookPollInterval = null;
                 
-                ATS.logger.info('[Webhook] Result received!');
+                self.showStatus('ANALYSIS', 'success');
+                ATS.logger.info('[Webhook] ★ Result received!');
                 
                 self.currentAnalysis = result.analysis;
                 self.callerInfoService.updateFromAI(result.analysis);
@@ -128,7 +164,8 @@ class CallMonitor {
             } else if (attempts >= maxAttempts) {
                 clearInterval(self.webhookPollInterval);
                 self.webhookPollInterval = null;
-                ATS.logger.warn('[Webhook] Polling timeout - no webhook result');
+                self.showStatus('NO-WEBHOOK', 'error');
+                ATS.logger.warn('[Webhook] ★ Polling timeout - no webhook result');
             }
         }, 2000);
     }
@@ -166,6 +203,9 @@ class CallMonitor {
         // Debug: Log config values
         ATS.logger.info('★ Config - autoSearchSF:', ATS.config.autoSearchSF, 'transcriptionEnabled:', ATS.config.transcriptionEnabled);
         
+        // Set badge to show call in progress
+        this.showStatus('CALL', 'recording');
+        
         // Initialize caller info from CTM
         await this.callerInfoService.initFromCTM(this.currentCall);
         
@@ -184,12 +224,28 @@ class CallMonitor {
             ATS.logger.warn('★ Salesforce search skipped - autoSearchSF:', ATS.config.autoSearchSF, 'phoneNumber:', this.currentCall.phoneNumber);
         }
         
-        // Start transcription
+        // Start transcription (Web Speech API)
         if (ATS.config.transcriptionEnabled) {
-            ATS.logger.info('★ Starting transcription...');
+            ATS.logger.info('★ Starting transcription (Web Speech)...');
             this.transcriptionService.start();
-        } else {
-            ATS.logger.warn('★ Transcription disabled - config.transcriptionEnabled:', ATS.config.transcriptionEnabled);
+        }
+        
+        // Start CTM audio recording (Desktop Capture)
+        ATS.logger.info('[Audio] Starting CTM audio capture...');
+        this.showStatus('CAPTURE', 'waiting');
+        
+        try {
+            const audioStarted = await this.audioCaptureService.startRecording(this.currentCall.phoneNumber);
+            if (audioStarted) {
+                this.showStatus('REC', 'recording');
+                ATS.logger.info('[Audio] ★ CTM audio capture started - recording');
+            } else {
+                this.showStatus('NO-AUDIO', 'error');
+                ATS.logger.warn('[Audio] ★ CTM audio capture failed to start');
+            }
+        } catch (e) {
+            this.showStatus('NO-AUDIO', 'error');
+            ATS.logger.error('[Audio] ★ CTM audio capture error:', e.message);
         }
     }
 
@@ -208,8 +264,23 @@ class CallMonitor {
             endTime: this.currentCall.endTime 
         });
         
+        // Clear the call badge
+        this.setBadge(null, '');
+        
         // Stop transcription
         this.transcriptionService.stop();
+        
+        // Stop CTM audio recording
+        ATS.logger.info('[Audio] Stopping CTM audio recording...');
+        const audioBlob = await this.audioCaptureService.stopRecording();
+        
+        if (audioBlob) {
+            ATS.logger.info('[Audio] ★ Audio captured, size:', audioBlob.size);
+            this.showStatus('AUDIO OK', 'success');
+        } else {
+            ATS.logger.warn('[Audio] ★ No audio captured');
+            this.showStatus('NO-AUDIO', 'error');
+        }
         
         // Get transcript before saving
         const transcript = this.transcriptionService.getTranscript();
@@ -232,6 +303,7 @@ class CallMonitor {
         // CTM will send webhook with transcript, we'll poll for results
         if (ATS.config.aiAnalysisEnabled && this.currentCall.phoneNumber) {
             ATS.logger.info('[Webhook] Starting webhook polling for:', this.currentCall.phoneNumber);
+            this.showStatus('WEBHOOK', 'waiting');
             this.startWebhookPolling(this.currentCall.phoneNumber);
         }
 

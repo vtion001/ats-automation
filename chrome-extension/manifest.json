@@ -13,7 +13,7 @@
     "tabCapture"
   ],
   "host_permissions": [
-    "*://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/*",
+    "*://ags-ai-server.azurewebsites.net/*",
     "*://*.calltrackingmetrics.com/*",
     "*://*.my.salesforce.com/*",
     "*://*.lightning.force.com/*",

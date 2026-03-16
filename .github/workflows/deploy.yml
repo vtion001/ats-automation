@@ -36,47 +36,88 @@ jobs:
           docker push agscontainerreg.azurecr.io/ags-ai-server:latest
           docker push agscontainerreg.azurecr.io/ags-ai-server:v$(date +%Y%m%d%H%M%S)
 
-      - name: Deploy to Azure Container Apps
+      - name: Deploy to Azure App Service
         run: |
-          # Check if environment exists, create if not
-          az containerapp env show --name ags-env --resource-group ags-rg 2>/dev/null || \
-            az containerapp env create --name ags-env --resource-group ags-rg --location eastus
-
           # Get ACR password
           ACR_PASSWORD=$(az acr credential show --name agscontainerreg --query "passwords[0].value" -o tsv)
 
-          # Deploy or update container app with force restart
-          az containerapp update \
+          # Create App Service Plan if not exists
+          az appservice plan create \
+            --name asp-ags \
+            --resource-group ags-rg \
+            --location eastus \
+            --sku B1 \
+            --is-linux \
+            2>/dev/null || true
+
+          # Create Web App if not exists
+          az webapp create \
             --name ags-ai-server \
             --resource-group ags-rg \
-            --image agscontainerreg.azurecr.io/ags-ai-server:latest \
-            --registry-server agscontainerreg.azurecr.io \
-            --registry-username agscontainerreg \
-            --registry-password "$ACR_PASSWORD" \
-            --cpu 0.5 --memory 1 \
-            --min-replicas 0 --max-replicas 1 \
-            --env-vars "ATS_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" \
-            --force-restart \
-            2>/dev/null || \
-          az containerapp create \
+            --plan asp-ags \
+            --deployment-container-image-name agscontainerreg.azurecr.io/ags-ai-server:latest \
+            --docker-registry-server-user agscontainerreg \
+            --docker-registry-server-password "$ACR_PASSWORD" \
+            --docker-registry-server-url https://agscontainerreg.azurecr.io \
+            2>/dev/null || true
+
+          # Configure Web App settings
+          az webapp config appsettings set \
             --name ags-ai-server \
             --resource-group ags-rg \
-            --environment ags-env \
-            --image agscontainerreg.azurecr.io/ags-ai-server:latest \
-            --registry-server agscontainerreg.azurecr.io \
-            --registry-username agscontainerreg \
-            --registry-password "$ACR_PASSWORD" \
-            --cpu 0.5 --memory 1 \
-            --ingress external \
-            --target-port 8000 \
-            --transport http \
-            --min-replicas 0 --max-replicas 1 \
-            --env-vars "ATS_API_KEY=${{ secrets.OPENROUTER_API_KEY }}"
+            --settings \
+              PORT=8000 \
+              PYTHONUNBUFFERED=1 \
+              WEBSITES_ENABLE_APP_SERVICE_STORAGE=false \
+              DOCKER_REGISTRY_SERVER_URL=https://agscontainerreg.azurecr.io \
+              DOCKER_REGISTRY_SERVER_USERNAME=agscontainerreg \
+              DOCKER_REGISTRY_SERVER_PASSWORD="$ACR_PASSWORD" \
+              ATS_API_KEY=${{ secrets.OPENROUTER_API_KEY }} \
+              WEBSITES_ENABLE_APP_SERVICE_STORAGE=false \
+            2>/dev/null || true
+
+          # Enable always on
+          az webapp config set \
+            --name ags-ai-server \
+            --resource-group ags-rg \
+            --always-on true \
+            --http20-enabled true \
+            2>/dev/null || true
+
+          # Update container image
+          az webapp deployment container config \
+            --name ags-ai-server \
+            --resource-group ags-rg \
+            --enable-cd true \
+            2>/dev/null || true
+
+          # Trigger deployment
+          az webapp deployment slot create \
+            --name ags-ai-server \
+            --resource-group ags-rg \
+            --slot staging \
+            2>/dev/null || true
+
+          # Update staging slot with new image
+          az webapp deployment container update \
+            --name ags-ai-server \
+            --resource-group ags-rg \
+            --slot staging \
+            --container-image-name agscontainerreg.azurecr.io/ags-ai-server:latest \
+            2>/dev/null || true
+
+          # Swap slots to promote staging to production
+          az webapp deployment slot swap \
+            --name ags-ai-server \
+            --resource-group ags-rg \
+            --slot staging \
+            --target-slot production \
+            2>/dev/null || true
 
       - name: Show Deployment Info
         run: |
           echo "====================================="
           echo "Deployment Complete!"
           echo "====================================="
-          echo "Server URL: https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io"
-          echo "Health: https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/health"
+          echo "Server URL: https://ags-ai-server.azurewebsites.net"
+          echo "Health: https://ags-ai-server.azurewebsites.net/health"
