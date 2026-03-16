@@ -4,6 +4,8 @@
  */
 
 const StorageService = {
+    initialized: false,
+    
     async get(keys) {
         return new Promise((resolve) => {
             chrome.storage.local.get(keys, resolve);
@@ -16,9 +18,36 @@ const StorageService = {
         });
     },
 
+    // Initialize storage with defaults if empty
+    async init() {
+        if (this.initialized) return;
+        
+        try {
+            const result = await this.get(ATS_STORAGE_KEYS.CONFIG);
+            const config = result[ATS_STORAGE_KEYS.CONFIG];
+            
+            if (!config || Object.keys(config).length === 0) {
+                console.log('[StorageService] Initializing with defaults...');
+                await this.set({ [ATS_STORAGE_KEYS.CONFIG]: ATS_CONFIG_DEFAULTS });
+                console.log('[StorageService] Defaults loaded:', ATS_CONFIG_DEFAULTS);
+            }
+            this.initialized = true;
+        } catch (error) {
+            console.error('[StorageService] Init error:', error);
+        }
+    },
+
     async getConfig() {
+        // Ensure initialized before getting config
+        await this.init();
         const result = await this.get(ATS_STORAGE_KEYS.CONFIG);
-        return result[ATS_STORAGE_KEYS.CONFIG] || {};
+        const config = result[ATS_STORAGE_KEYS.CONFIG];
+        
+        // Merge with defaults if partial config
+        if (config && Object.keys(config).length > 0) {
+            return { ...ATS_CONFIG_DEFAULTS, ...config };
+        }
+        return ATS_CONFIG_DEFAULTS;
     },
 
     async saveConfig(updates) {

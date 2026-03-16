@@ -143,6 +143,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('[Popup] Loading...');
     
     try {
+        // Initialize storage with defaults if empty
+        await StorageService.init();
+        
         // Initialize collapsible sections
         document.querySelectorAll('.section.collapsible .section-header').forEach(header => {
             header.addEventListener('click', function() {
