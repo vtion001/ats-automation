@@ -62,24 +62,13 @@ class WhisperService {
 
     // Alternative: Use Web Speech API for transcription
     // This works for live microphone but not for audio files
-    // For file-based transcription, we'll use a mock for now
+    // For file-based transcription, we use manual transcription input or audio file upload
     async transcribeWithWebSpeech(audioFile) {
         // Since Web Speech API doesn't support file input directly,
-        // we'll return a placeholder for now
-        // In production, you'd use a proper Whisper implementation
+        // users should upload audio files or enter manual transcription
         
-        console.log('[Whisper] Note: For file transcription, please use the manual transcription input');
+        console.log('[Whisper] Note: For file transcription, please use the manual transcription input or upload audio file');
         return null;
-    }
-
-    // Get mock transcription for testing (since we can't do file-based whisper in browser easily)
-    getMockTranscription(testType) {
-        if (testType === 'new-lead') {
-            return `Hello, I'm calling because I'm looking for help. I've been struggling with addiction and I really need to get into a program. I have about 3 days clean now. I have Blue Cross insurance through my employer. I'm located in Florida. I want to know what options I have for treatment. My name is John Smith. I'm really ready to get help.`;
-        } else if (testType === 'existing') {
-            return `Hi, this is Sarah Johnson. I've been a patient with you guys before. I completed the program last year. I'm calling because I need to schedule a follow-up appointment. I have some questions about my insurance coverage. Also, I've been feeling some cravings lately and I wanted to talk to someone. Can you help me?`;
-        }
-        return '';
     }
 
     // Clean up

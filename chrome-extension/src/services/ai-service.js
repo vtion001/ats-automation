@@ -10,8 +10,8 @@ class AIService {
 
     // Initialize with config
     async init() {
-        const config = await ATS.storage.get('aiServerUrl');
-        this.serverUrl = config.aiServerUrl || ATS.config.aiServerUrl;
+        const aiServerUrl = await ATS.storage.get('aiServerUrl');
+        this.serverUrl = aiServerUrl || ATS.config.aiServerUrl;
         ATS.logger.info('AI Service initialized with server:', this.serverUrl);
     }
 

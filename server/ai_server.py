@@ -438,13 +438,10 @@ Extract ALL mentioned details for Salesforce notes:
 - other_customer_info: Any other relevant customer information mentioned
 
 **Salesforce Notes:**
-- salesforce_notes: Create structured notes ready for Salesforce including:
-  * Caller phone
-  * State
-  * Insurance 
-  * Sober days
-  * Summary
-  * Any other key details extracted
+- salesforce_notes: Create a PLAIN TEXT STRING (NOT an object/JSON) ready for Salesforce. Include all key details in this format:
+  "Caller Phone: [phone] | State: [state] | Insurance: [insurance] | Sober Days: [days] | Summary: [summary] | [Other details...]"
+
+IMPORTANT: Return salesforce_notes as a plain string, NOT as an object or JSON.
 
 **IMPORTANT - Lead Scoring Breakdown:**
 You MUST provide a detailed scoring breakdown explaining HOW the qualification_score was calculated:
@@ -613,9 +610,12 @@ Transcription (first 800 chars): {transcription[:800]}"""
 
 
 def get_fallback_action(analysis: dict) -> dict:
-    """Fallback logic when AI fails"""
+    """Fallback logic when AI fails - use available analysis data or mark as AI unavailable"""
     tags = [t.lower() for t in analysis.get("tags", [])]
     follow_up = analysis.get("follow_up_required", False)
+    summary = analysis.get("summary", "")
+    detected_state = analysis.get("detected_state", "")
+    detected_insurance = analysis.get("detected_insurance", "")
 
     if "follow-up" in tags or "scheduling" in tags:
         action = "new_task"
@@ -630,15 +630,30 @@ def get_fallback_action(analysis: dict) -> dict:
         action = "log_call"
         reason = "General call notes"
 
+    # Build dynamic call notes from available analysis data
+    call_notes_parts = []
+    if summary:
+        call_notes_parts.append(f"Summary: {summary}")
+    if detected_state:
+        call_notes_parts.append(f"State: {detected_state}")
+    if detected_insurance:
+        call_notes_parts.append(f"Insurance: {detected_insurance}")
+    
+    # If no analysis data available, mark as AI unavailable
+    if not call_notes_parts:
+        call_notes = "AI analysis unavailable - manual review required"
+    else:
+        call_notes = " | ".join(call_notes_parts) + " | [AI analysis failed - verify details manually]"
+
     # Generate task subject
     if "scheduling" in tags or "pricing" in tags:
-        task_subject = f"Follow up: {analysis.get('summary', 'Inquiry call')}"
+        task_subject = f"Follow up: {summary or 'Inquiry call'}"
     elif "hot-lead" in tags:
-        task_subject = f"Hot Lead Follow-up: {analysis.get('summary', 'Interested caller')}"
+        task_subject = f"Hot Lead Follow-up: {summary or 'Interested caller'}"
     elif "follow-up" in tags:
-        task_subject = f"Call Back: {analysis.get('summary', 'Follow-up required')}"
+        task_subject = f"Call Back: {summary or 'Follow-up required'}"
     else:
-        task_subject = f"Call Note: {analysis.get('summary', 'General call')}"
+        task_subject = f"Call Note: {summary or 'General call'}"
 
     # Generate due date
     today = datetime.now()
@@ -656,7 +671,7 @@ def get_fallback_action(analysis: dict) -> dict:
         "task_subject": task_subject,
         "task_due_date": due_date,
         "call_subject": f"Inbound Call - {analysis.get('suggested_disposition', 'New')}",
-        "call_notes": analysis.get("suggested_notes", "Call recorded via ATS Automation"),
+        "call_notes": call_notes,
     }
 
 

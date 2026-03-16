@@ -10,8 +10,8 @@ class SalesforceContactService {
 
     // Initialize with config
     async init() {
-        const config = await ATS.storage.get('salesforceUrl');
-        this.baseUrl = config.salesforceUrl || ATS.config.salesforceUrl;
+        const salesforceUrl = await ATS.storage.get('salesforceUrl');
+        this.baseUrl = salesforceUrl || ATS.config.salesforceUrl;
         ATS.logger.info('Salesforce Contact Service initialized', this.baseUrl);
     }
 

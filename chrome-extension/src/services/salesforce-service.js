@@ -10,8 +10,8 @@ class SalesforceService {
 
     // Initialize with config
     async init() {
-        const config = await ATS.storage.get('salesforceUrl');
-        this.baseUrl = config.salesforceUrl || ATS.config.salesforceUrl;
+        const salesforceUrl = await ATS.storage.get('salesforceUrl');
+        this.baseUrl = salesforceUrl || ATS.config.salesforceUrl;
     }
 
     // Build search URL
