@@ -38,6 +38,13 @@ const ATS = {
     }
   },
 
+  logger: {
+    info: function(msg, data) { ATS.log(msg, data); },
+    debug: function(msg, data) { ATS.log(msg, data); },
+    warn: function(msg, data) { ATS.log('WARN: ' + msg, data); },
+    error: function(msg, data) { ATS.error(msg, data); }
+  },
+
   async getConfig() {
     return new Promise((resolve) => {
       chrome.storage.local.get(this.config.storageKey, (result) => {
@@ -109,6 +116,26 @@ const ATS = {
 
   formatDate(date) {
     return new Date(date).toLocaleString();
+  },
+
+  onMessage(callback) {
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+      chrome.runtime.onMessage.addListener(callback);
+    }
+  },
+
+  sendMessage(message) {
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage(message);
+    }
+  },
+
+  Messages: {
+    CTM_CALL_EVENT: 'CTM_CALL_EVENT',
+    SHOW_NOTIFICATION: 'SHOW_NOTIFICATION',
+    SHOW_OVERLAY: 'SHOW_OVERLAY',
+    SHOW_CALL_SUMMARY: 'SHOW_CALL_SUMMARY',
+    AI_ANALYSIS_RESULT: 'AI_ANALYSIS_RESULT'
   }
 };
 

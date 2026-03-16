@@ -615,6 +615,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return String(value || '');
                 };
                 
+                // Helper to format salesforceNotes (handle object → string conversion)
+                const formatSalesforceNotes = (notes) => {
+                    if (typeof notes === 'string') return notes;
+                    if (typeof notes === 'object' && notes !== null) {
+                        const parts = [];
+                        if (notes.phone) parts.push(`Phone: ${notes.phone}`);
+                        if (notes.state) parts.push(`State: ${notes.state}`);
+                        if (notes.insurance) parts.push(`Insurance: ${notes.insurance}`);
+                        if (notes.sober_days) parts.push(`Sober Days: ${notes.sober_days}`);
+                        if (notes.summary) parts.push(`Summary: ${notes.summary}`);
+                        // Include any other properties
+                        for (const [key, value] of Object.entries(notes)) {
+                            if (!['phone', 'state', 'insurance', 'sober_days', 'summary'].includes(key) && value) {
+                                parts.push(`${key}: ${value}`);
+                            }
+                        }
+                        return parts.join(' | ') || String(notes);
+                    }
+                    return String(notes || '');
+                };
+                
                 if (analysis.detected_state) {
                     const stateValue = getStringValue(analysis.detected_state);
                     callerInfoDisplay.push({
@@ -661,7 +682,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     mentionedLocations: analysis.mentioned_locations || [],
                     mentionedPhones: analysis.mentioned_phones || [],
                     otherCustomerInfo: analysis.other_customer_info || '',
-                    salesforceNotes: analysis.salesforce_notes || '',
+                    salesforceNotes: formatSalesforceNotes(analysis.salesforce_notes),
                     // NEW: Scoring breakdown
                     scoringBreakdown: analysis.scoring_breakdown || {},
                     scoringExplanation: analysis.scoring_explanation || ''
