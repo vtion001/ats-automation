@@ -269,6 +269,18 @@ Extract ALL mentioned details for Salesforce notes:
   * Summary
   * Any other key details extracted
 
+**IMPORTANT - Lead Scoring Breakdown:**
+You MUST provide a detailed scoring breakdown explaining HOW the qualification_score was calculated:
+- scoring_breakdown: Object containing:
+  - sober_days: {{"value": <days>, "meets_criteria": true/false, "points_awarded": <points>, "max_points": <max>}}
+  - insurance: {{"value": "<insurance>", "meets_criteria": true/false, "points_awarded": <points>, "max_points": <max>}}
+  - call_type: {{"value": "<type>", "meets_criteria": true/false, "points_awarded": <points>, "max_points": <max>}}
+  - keywords_found: Array of relevant keywords found in the call
+  - keywords_points: Points awarded for keywords found
+  - total_possible: Total possible points (100)
+  - disqualifiers: Array of reasons if lead was disqualified
+  - explanation: Plain text explanation of why lead qualified or disqualified
+
 Return confidence scores for each extracted field (0.0 = not confident, 1.0 = very confident).
 If a field is not mentioned in the transcription, set it to null or empty array.
 
@@ -277,6 +289,7 @@ IMPORTANT:
 2. Extract ALL names mentioned, even if partial or relationships
 3. Extract ALL locations, addresses mentioned
 4. Create comprehensive salesforce_notes
+5. ALWAYS include the scoring_breakdown with detailed explanation
 
 {kb_context}
 
@@ -543,6 +556,11 @@ async def analyze_transcription(request: TranscriptionRequest):
                     "recommended_department", ""
                 )
                 response_data["call_type"] = ai_result.get("call_type", "treatment")
+                # Add scoring breakdown
+                response_data["scoring_breakdown"] = ai_result.get("scoring_breakdown", {})
+                response_data["scoring_explanation"] = ai_result.get("scoring_breakdown", {}).get(
+                    "explanation", ""
+                )
 
             return response_data
         else:
@@ -621,6 +639,11 @@ async def analyze_full(request: TranscriptionRequest):
             response_data["is_qualified"] = action.get("is_qualified", False)
             response_data["transfer_department"] = action.get("transfer_department", "")
             response_data["referral_provided"] = action.get("referral_provided", "")
+            # Add scoring breakdown
+            response_data["scoring_breakdown"] = analysis.get("scoring_breakdown", {})
+            response_data["scoring_explanation"] = analysis.get("scoring_breakdown", {}).get(
+                "explanation", ""
+            )
 
         return response_data
 

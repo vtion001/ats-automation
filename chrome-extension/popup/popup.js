@@ -626,7 +626,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     mentionedLocations: analysis.mentioned_locations || [],
                     mentionedPhones: analysis.mentioned_phones || [],
                     otherCustomerInfo: analysis.other_customer_info || '',
-                    salesforceNotes: analysis.salesforce_notes || ''
+                    salesforceNotes: analysis.salesforce_notes || '',
+                    // NEW: Scoring breakdown
+                    scoringBreakdown: analysis.scoring_breakdown || {},
+                    scoringExplanation: analysis.scoring_explanation || ''
                 }, phone);
             }
             
