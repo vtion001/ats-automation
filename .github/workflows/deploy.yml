@@ -30,9 +30,10 @@ jobs:
 
       - name: Build and push image
         run: |
-          docker build --platform linux/amd64 -t agscontainerreg.azurecr.io/ags-ai-server:${{ github.sha }} -t agscontainerreg.azurecr.io/ags-ai-server:latest .
+          docker build --platform linux/amd64 -t agscontainerreg.azurecr.io/ags-ai-server:${{ github.sha }} -t agscontainerreg.azurecr.io/ags-ai-server:latest -t agscontainerreg.azurecr.io/ags-ai-server:v$(date +%Y%m%d%H%M%S) .
           docker push agscontainerreg.azurecr.io/ags-ai-server:${{ github.sha }}
           docker push agscontainerreg.azurecr.io/ags-ai-server:latest
+          docker push agscontainerreg.azurecr.io/ags-ai-server:v$(date +%Y%m%d%H%M%S)
 
       - name: Deploy to Azure Container Apps
         run: |
@@ -43,7 +44,7 @@ jobs:
           # Get ACR password
           ACR_PASSWORD=$(az acr credential show --name agscontainerreg --query "passwords[0].value" -o tsv)
 
-          # Deploy or update container app
+          # Deploy or update container app with force restart
           az containerapp update \
             --name ags-ai-server \
             --resource-group ags-rg \
@@ -54,6 +55,7 @@ jobs:
             --cpu 0.5 --memory 1 \
             --min-replicas 0 --max-replicas 1 \
             --env-vars "ATS_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" \
+            --force-restart \
             2>/dev/null || \
           az containerapp create \
             --name ags-ai-server \
