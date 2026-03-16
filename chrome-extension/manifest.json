@@ -8,7 +8,8 @@
     "activeTab",
     "storage",
     "scripting",
-    "windows"
+    "windows",
+    "microphone"
   ],
   "host_permissions": [
     "*://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/*",
