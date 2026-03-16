@@ -5,7 +5,7 @@
 const StatusService = {
     async getAIServerUrl() {
         const result = await StorageService.get('aiServerUrl');
-        const url = result.aiServerUrl || 'http://ags-ai-server.eastus.azurecontainer.io:8000';
+        const url = result.aiServerUrl || 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
         console.log('[StatusService] AI Server URL:', url);
         return url;
     },

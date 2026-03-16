@@ -34,33 +34,46 @@ jobs:
           docker push agscontainerreg.azurecr.io/ags-ai-server:${{ github.sha }}
           docker push agscontainerreg.azurecr.io/ags-ai-server:latest
 
-      - name: Deploy to Azure Container Instance
+      - name: Deploy to Azure Container Apps
         run: |
+          # Check if environment exists, create if not
+          az containerapp env show --name ags-env --resource-group ags-rg 2>/dev/null || \
+            az containerapp env create --name ags-env --resource-group ags-rg --location eastus
+
+          # Get ACR password
           ACR_PASSWORD=$(az acr credential show --name agscontainerreg --query "passwords[0].value" -o tsv)
-          
-          az container delete --name ags-ai-server --resource-group ags-rg --yes 2>/dev/null || true
-          
-          az container create \
+
+          # Deploy or update container app
+          az containerapp update \
             --name ags-ai-server \
             --resource-group ags-rg \
-            --location eastus \
-            --os-type Linux \
             --image agscontainerreg.azurecr.io/ags-ai-server:latest \
-            --registry-login-server agscontainerreg.azurecr.io \
+            --registry-server agscontainerreg.azurecr.io \
             --registry-username agscontainerreg \
             --registry-password "$ACR_PASSWORD" \
             --cpu 0.5 --memory 1 \
-            --port 8000 \
-            --protocol TCP \
-            --dns-name-label ags-ai-server \
-            --environment-variables ATS_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
-            --output table
+            --min-replicas 0 --max-replicas 1 \
+            --env-vars "ATS_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" \
+            2>/dev/null || \
+          az containerapp create \
+            --name ags-ai-server \
+            --resource-group ags-rg \
+            --environment ags-env \
+            --image agscontainerreg.azurecr.io/ags-ai-server:latest \
+            --registry-server agscontainerreg.azurecr.io \
+            --registry-username agscontainerreg \
+            --registry-password "$ACR_PASSWORD" \
+            --cpu 0.5 --memory 1 \
+            --ingress external \
+            --target-port 8000 \
+            --transport http \
+            --min-replicas 0 --max-replicas 1 \
+            --env-vars "ATS_API_KEY=${{ secrets.OPENROUTER_API_KEY }}"
 
       - name: Show Deployment Info
         run: |
           echo "====================================="
           echo "Deployment Complete!"
           echo "====================================="
-          IP=$(az container show --name ags-ai-server --resource-group ags-rg --query "ipAddress.ip" -o tsv)
-          echo "Server URL: http://$IP:8000"
-          echo "Health: http://$IP:8000/health"
+          echo "Server URL: https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io"
+          echo "Health: https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/health"

@@ -11,7 +11,7 @@
     "windows"
   ],
   "host_permissions": [
-    "*://ags-ai-server.eastus.azurecontainer.io/*",
+    "*://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/*",
     "*://*.calltrackingmetrics.com/*",
     "*://*.my.salesforce.com/*",
     "*://*.lightning.force.com/*",

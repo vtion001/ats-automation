@@ -11,7 +11,7 @@ const AGS_CONFIG = {
     transcriptionEnabled: true,
     aiAnalysisEnabled: true,
     saveMarkdown: true,
-    aiServerUrl: 'http://ags-ai-server.eastus.azurecontainer.io:8000',
+    aiServerUrl: 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io',
     salesforceUrl: 'https://flyland.my.salesforce.com',
     ctmUrl: 'https://app.calltrackingmetrics.com'
 };
@@ -49,7 +49,7 @@ async function loadConfig() {
         
         // Initialize storage with defaults if not set
         if (!stored.aiServerUrl) {
-            await chrome.storage.local.set({ aiServerUrl: 'http://ags-ai-server.eastus.azurecontainer.io:8000' });
+            await chrome.storage.local.set({ aiServerUrl: 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io' });
         }
         if (!stored.salesforceUrl) {
             await chrome.storage.local.set({ salesforceUrl: 'https://flyland.my.salesforce.com' });

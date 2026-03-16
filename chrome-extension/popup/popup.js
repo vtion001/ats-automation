@@ -195,6 +195,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (config.activeClient && clientSelect) clientSelect.value = config.activeClient;
         if (config.callMonitorEnabled !== undefined && callMonitorToggle) callMonitorToggle.checked = config.callMonitorEnabled;
+        if (config.autoAnalyzeEnabled !== undefined && autoAnalyzeToggle) autoAnalyzeToggle.checked = config.autoAnalyzeEnabled;
         if (config.sfSyncEnabled !== undefined && sfSyncToggle) sfSyncToggle.checked = config.sfSyncEnabled;
         if (config.aiEnabled !== undefined && aiToggle) aiToggle.checked = config.aiEnabled;
     } catch(e) {
@@ -282,6 +283,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         callMonitorToggle.addEventListener('change', async (e) => {
             await StorageService.saveConfig({ callMonitorEnabled: e.target.checked });
             showStatus(e.target.checked ? 'Call monitoring enabled' : 'Call monitoring disabled', e.target.checked);
+        });
+    }
+    
+    // Auto-Analyze toggle
+    const autoAnalyzeToggle = document.getElementById('autoAnalyzeToggle');
+    if (autoAnalyzeToggle) {
+        autoAnalyzeToggle.addEventListener('change', async (e) => {
+            await StorageService.saveConfig({ autoAnalyzeEnabled: e.target.checked });
+            showStatus(e.target.checked ? 'Auto-analyze enabled - calls will be analyzed automatically' : 'Auto-analyze disabled', e.target.checked);
         });
     }
     
@@ -440,7 +450,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let phone = testPhoneInput.value.trim();
         
         const serverUrl = await StatusService.getAIServerUrl();
-        const actualUrl = serverUrl.includes('localhost') ? 'http://ags-ai-server.eastus.azurecontainer.io:8000' : serverUrl;
+        const actualUrl = serverUrl.includes('localhost') ? 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io' : serverUrl;
         
         console.log('[Test Analysis] Server URL:', actualUrl);
         
@@ -510,7 +520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             // Get AI Server URL - use Azure as default
             const serverUrl = await StatusService.getAIServerUrl();
-            const actualUrl = serverUrl.includes('localhost') ? 'http://ags-ai-server.eastus.azurecontainer.io:8000' : serverUrl;
+            const actualUrl = serverUrl.includes('localhost') ? 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io' : serverUrl;
             console.log('[Test Analysis] Using URL:', actualUrl);
             
             // Send to AI server for analysis
