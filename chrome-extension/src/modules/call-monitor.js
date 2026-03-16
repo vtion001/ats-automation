@@ -76,6 +76,8 @@ class CallMonitor {
             await this.handleCallStart(event);
         } else if (event.type === 'call_ended') {
             await this.handleCallEnd();
+        } else {
+            ATS.logger.warn('Unknown call event type:', event.type);
         }
     }
 
@@ -86,7 +88,10 @@ class CallMonitor {
             startTime: new Date().toISOString()
         };
         
-        ATS.logger.info('Call started:', this.currentCall);
+        ATS.logger.info('★ Call started:', this.currentCall);
+        
+        // Debug: Log config values
+        ATS.logger.info('★ Config - autoSearchSF:', ATS.config.autoSearchSF, 'transcriptionEnabled:', ATS.config.transcriptionEnabled);
         
         // Initialize caller info from CTM
         await this.callerInfoService.initFromCTM(this.currentCall);
@@ -99,30 +104,49 @@ class CallMonitor {
         
         // Auto-search Salesforce
         if (ATS.config.autoSearchSF && this.currentCall.phoneNumber) {
+            ATS.logger.info('★ Starting Salesforce search for:', this.currentCall.phoneNumber);
             await this.salesforceService.search(this.currentCall.phoneNumber);
+            ATS.logger.info('★ Salesforce search completed');
+        } else {
+            ATS.logger.warn('★ Salesforce search skipped - autoSearchSF:', ATS.config.autoSearchSF, 'phoneNumber:', this.currentCall.phoneNumber);
         }
         
         // Start transcription
         if (ATS.config.transcriptionEnabled) {
+            ATS.logger.info('★ Starting transcription...');
             this.transcriptionService.start();
+        } else {
+            ATS.logger.warn('★ Transcription disabled - config.transcriptionEnabled:', ATS.config.transcriptionEnabled);
         }
     }
 
     // Handle call end - BUTTON TRIGGER FLOW (not auto-run)
     async handleCallEnd() {
-        if (!this.currentCall) return;
+        if (!this.currentCall) {
+            ATS.logger.warn('★ handleCallEnd called but no currentCall');
+            return;
+        }
         
         this.currentCall.endTime = new Date().toISOString();
         
-        ATS.logger.info('Call ended:', this.currentCall);
+        ATS.logger.info('★ Call ended:', { 
+            phoneNumber: this.currentCall.phoneNumber,
+            startTime: this.currentCall.startTime,
+            endTime: this.currentCall.endTime 
+        });
         
         // Stop transcription
         this.transcriptionService.stop();
+        
+        // Get transcript before saving
+        const transcript = this.transcriptionService.getTranscript();
+        ATS.logger.info('★ Transcript length:', transcript ? transcript.length : 0, 'chars');
         
         // Save transcription
         let markdown = '';
         if (ATS.config.saveMarkdown) {
             markdown = this.transcriptionService.saveToMarkdown(this.currentCall);
+            ATS.logger.info('★ Markdown saved, length:', markdown.length);
         }
         
         // Notify background
@@ -133,12 +157,15 @@ class CallMonitor {
 
         // Analyze with AI
         if (ATS.config.aiAnalysisEnabled) {
-            const transcript = this.transcriptionService.getTranscript();
+            ATS.logger.info('★ Starting AI analysis...');
+            
             const analysis = await this.aiService.analyze(
                 transcript,
                 this.currentCall.phoneNumber,
                 ATS.config.activeClient
             );
+            
+            ATS.logger.info('★ AI Analysis complete:', analysis ? 'Success' : 'Failed');
             
             // Store analysis
             this.currentAnalysis = analysis;

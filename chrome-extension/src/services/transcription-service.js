@@ -39,19 +39,20 @@ class TranscriptionService {
                 
                 if (event.results[i].isFinal) {
                     this.transcript += transcript + ' ';
-                    ATS.logger.debug('Final transcript:', transcript);
+                    ATS.logger.info('★ Final transcript received:', transcript.substring(0, 50));
                     
                     if (this.onTranscriptUpdate) {
                         this.onTranscriptUpdate(this.transcript, true);
                     }
                 } else {
                     interimTranscript += transcript;
+                    ATS.logger.debug('Interim transcript:', transcript);
                 }
             }
         };
 
         this.recognition.onerror = (event) => {
-            ATS.logger.error('Speech recognition error:', event.error);
+            ATS.logger.error('★ Speech recognition error:', event.error, event);
             if (this.onError) {
                 this.onError(event.error);
             }
@@ -59,7 +60,11 @@ class TranscriptionService {
 
         this.recognition.onend = () => {
             this.isRecording = false;
-            ATS.logger.info('Speech recognition ended');
+            ATS.logger.info('★ Speech recognition ended, transcript length:', this.transcript.length);
+        };
+
+        this.recognition.onstart = () => {
+            ATS.logger.info('★ Speech recognition started successfully');
         };
 
         ATS.logger.info('Transcription service initialized');
@@ -68,7 +73,10 @@ class TranscriptionService {
 
     // Start recording
     start() {
+        ATS.logger.info('★ Transcription start() called');
+        
         if (!this.recognition) {
+            ATS.logger.info('★ Recognition not initialized, initializing now...');
             this.init();
         }
         
@@ -81,10 +89,10 @@ class TranscriptionService {
             this.transcript = '';
             this.recognition.start();
             this.isRecording = true;
-            ATS.logger.info('Transcription started');
+            ATS.logger.info('★ Transcription start() successful');
             return true;
         } catch (e) {
-            ATS.logger.error('Error starting transcription:', e);
+            ATS.logger.error('★ Error starting transcription:', e.message, e);
             return false;
         }
     }

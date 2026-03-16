@@ -35,26 +35,38 @@ class AIService {
 
     // Analyze with remote AI server (OpenRouter)
     async analyzeWithServer(transcription, phone, client) {
-        const response = await fetch(`${this.serverUrl}/api/analyze`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                transcription,
-                phone,
-                client
-            })
+        ATS.logger.info('★ AI analyzeWithServer called:', { 
+            transcriptLength: transcription ? transcription.length : 0,
+            phone: phone,
+            client: client,
+            serverUrl: this.serverUrl
         });
-
-        if (!response.ok) {
-            const error = `Server error: ${response.status}`;
-            ATS.logger.error('AI analysis failed:', error);
-            throw new Error(error);
-        }
-
-        const result = await response.json();
-        ATS.logger.info('AI Analysis completed:', result.tags || []);
         
-        return result;
+        try {
+            const response = await fetch(`${this.serverUrl}/api/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    transcription: transcription || 'No transcription available',
+                    phone: phone,
+                    client: client
+                })
+            });
+
+            if (!response.ok) {
+                const error = `Server error: ${response.status}`;
+                ATS.logger.error('★ AI analysis HTTP error:', error, response.statusText);
+                throw new Error(error);
+            }
+
+            const result = await response.json();
+            ATS.logger.info('★ AI Analysis completed successfully:', result.tags || []);
+            
+            return result;
+        } catch (e) {
+            ATS.logger.error('★ AI analysis exception:', e.message, e);
+            throw e;
+        }
     }
 
     // Determine Salesforce action using OpenRouter AI
