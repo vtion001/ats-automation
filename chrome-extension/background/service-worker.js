@@ -146,6 +146,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'PING':
             sendResponse({ pong: true, status: 'ok' });
             break;
+        case 'GET_DESKTOP_SOURCES':
+            handleGetDesktopSources(message.payload).then(sources => {
+                sendResponse({ success: true, sources: sources });
+            }).catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
+            return true;
+        case 'START_AUDIO_CAPTURE':
+            // Forward to content script for actual capture (requires user gesture context)
+            handleStartAudioCapture(message.payload, sender.tab?.id).then(result => {
+                sendResponse(result);
+            }).catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
+            return true;
+    }
+
+    return true;
+});
+            return true; // async response
     }
 
     return true;
@@ -282,6 +302,54 @@ async function showOverlayNotification(message) {
     } catch (error) {
         console.error('[AGS] Error showing notification:', error);
     }
+}
+
+async function handleGetDesktopSources(payload) {
+    return new Promise((resolve, reject) => {
+        if (!chrome.desktopCapture) {
+            reject(new Error('Desktop capture not available'));
+            return;
+        }
+
+        chrome.desktopCapture.getSources({
+            types: payload?.types || ['tab', 'window'],
+            thumbnailSize: payload?.thumbnailSize || { width: 150, height: 150 }
+        }, (sources) => {
+            if (chrome.runtime.lastError) {
+                reject(chrome.runtime.lastError);
+                return;
+            }
+            // Return simplified source info
+            const simplifiedSources = sources.map(source => ({
+                id: source.id,
+                name: source.name,
+                thumbnail: source.thumbnail ? source.thumbnail.toDataURL() : null
+            }));
+            resolve(simplifiedSources);
+        });
+    });
+}
+
+async function handleStartAudioCapture(payload, tabId) {
+    console.log('[AGS] START_AUDIO_CAPTURE received, tabId:', tabId);
+    
+    // Forward to the content script to handle the actual capture
+    // The content script has the AudioCaptureService and user gesture context
+    if (tabId) {
+        try {
+            // Send to content script - it will handle the capture
+            await chrome.tabs.sendMessage(tabId, {
+                type: 'START_AUDIO_CAPTURE',
+                payload: payload
+            });
+            return { success: true, message: 'Capture initiated' };
+        } catch (error) {
+            console.error('[AGS] Error forwarding to content script:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    return { success: false, error: 'No tab ID available' };
 }
 
 async function handleSfRecordData(payload) {

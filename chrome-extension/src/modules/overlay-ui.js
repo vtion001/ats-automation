@@ -666,6 +666,64 @@ class OverlayUI {
         `;
     }
 
+    // Show call in progress with Start Recording button
+    showCallInProgress(phoneNumber, callerName) {
+        this.create();
+        const content = document.querySelector(`#${this.overlayId} .ats-overlay-content`);
+        
+        const displayPhone = phoneNumber || 'Unknown';
+        const displayName = callerName || 'Unknown Caller';
+        
+        content.innerHTML = `
+            <div class="ats-header-section" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
+                <div class="ats-header-info">
+                    <div class="ats-phone-icon" style="background: #f59e0b;">📞</div>
+                    <div>
+                        <div class="ats-phone-number">${this.escapeHtml(displayPhone)}</div>
+                        <div style="font-size: 12px; color: #92400e; margin-top: 2px;">${this.escapeHtml(displayName)}</div>
+                    </div>
+                </div>
+                <div class="ats-status-row">
+                    <span class="ats-score-badge" style="background: #fef3c7; color: #92400e;">CALL</span>
+                    <span class="ats-status-label" style="color: #92400e;">In Progress</span>
+                </div>
+            </div>
+            
+            <div class="ats-call-recording-section">
+                <div class="ats-recording-prompt">
+                    <div style="text-align: center; margin-bottom: 16px;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">🎙️</div>
+                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">Record this call?</div>
+                        <div style="font-size: 11px; color: #64748b;">Click below to start capturing audio</div>
+                    </div>
+                    <button class="ats-button-primary" id="ats-start-recording-btn" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
+                        🎙️ Start Recording
+                    </button>
+                </div>
+            </div>
+            
+            <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 11px; color: #64748b;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                    <span style="color: #22c55e;">●</span> Call detection active
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="color: #94a3b8;">○</span> Audio recording off
+                </div>
+            </div>
+        `;
+        
+        // Attach start recording handler
+        const startBtn = content.querySelector('#ats-start-recording-btn');
+        if (startBtn) {
+            startBtn.addEventListener('click', () => {
+                ATS.sendMessage({
+                    type: ATS.Messages.START_AUDIO_CAPTURE,
+                    payload: { phoneNumber, callerName }
+                });
+            });
+        }
+    }
+
     showNotification(message) {
         this.create();
         const content = document.querySelector(`#${this.overlayId} .ats-overlay-content`);

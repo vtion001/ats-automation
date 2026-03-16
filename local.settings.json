@@ -1,0 +1,15 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "PYTHON_VERSION": "3.11",
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE": "false"
+  },
+  "Host": {
+    "LocalHttpPort": 7071,
+    "CORS": "*",
+    "CORSCredentials": true
+  },
+  "ConnectionStrings": {}
+}

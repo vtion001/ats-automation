@@ -218,6 +218,15 @@ class CallMonitor {
         // Set badge to show call in progress
         this.showStatus('CALL', 'recording');
         
+        // Show call in progress UI with Start Recording button
+        ATS.sendMessage({
+            type: ATS.Messages.SHOW_CALL_IN_PROGRESS,
+            payload: {
+                phoneNumber: this.currentCall.phoneNumber,
+                callerName: this.currentCall.callerName
+            }
+        });
+        
         // Initialize caller info from CTM
         await this.callerInfoService.initFromCTM(this.currentCall);
         
@@ -242,23 +251,9 @@ class CallMonitor {
             this.transcriptionService.start();
         }
         
-        // Start CTM audio recording (Desktop Capture)
-        ATS.logger.info('[Audio] Starting CTM audio capture...');
-        this.showStatus('CAPTURE', 'waiting');
-        
-        try {
-            const audioStarted = await this.audioCaptureService.startRecording(this.currentCall.phoneNumber);
-            if (audioStarted) {
-                this.showStatus('REC', 'recording');
-                ATS.logger.info('[Audio] ★ CTM audio capture started - recording');
-            } else {
-                this.showStatus('NO-AUDIO', 'error');
-                ATS.logger.warn('[Audio] ★ CTM audio capture failed to start');
-            }
-        } catch (e) {
-            this.showStatus('NO-AUDIO', 'error');
-            ATS.logger.error('[Audio] ★ CTM audio capture error:', e.message);
-        }
+        // NOTE: Audio capture is now triggered by user clicking "Start Recording" button
+        // This is required because Chrome Desktop Capture API requires user gesture
+        ATS.logger.info('[Audio] Waiting for user to click Start Recording button');
     }
 
     // Handle call end - BUTTON TRIGGER FLOW (not auto-run)

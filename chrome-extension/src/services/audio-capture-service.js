@@ -13,23 +13,31 @@ class AudioCaptureService {
         this.capturedPhoneNumber = null;
     }
 
-    // Get available desktop capture sources
+    // Get available desktop capture sources via background script
     async getDesktopSources() {
         return new Promise((resolve, reject) => {
-            if (typeof chrome === 'undefined' || !chrome.desktopCapture) {
-                reject(new Error('Desktop capture not available'));
+            if (typeof chrome === 'undefined' || !chrome.runtime) {
+                reject(new Error('Chrome runtime not available'));
                 return;
             }
 
-            chrome.desktopCapture.getSources({
-                types: ['tab', 'window'],
-                thumbnailSize: { width: 150, height: 150 }
-            }, (sources) => {
+            chrome.runtime.sendMessage({
+                type: 'GET_DESKTOP_SOURCES',
+                payload: {
+                    types: ['tab', 'window'],
+                    thumbnailSize: { width: 150, height: 150 }
+                }
+            }, (response) => {
                 if (chrome.runtime.lastError) {
-                    reject(chrome.runtime.lastError);
+                    reject(new Error(chrome.runtime.lastError.message));
                     return;
                 }
-                resolve(sources);
+                
+                if (response && response.success) {
+                    resolve(response.sources);
+                } else {
+                    reject(new Error(response?.error || 'Failed to get desktop sources'));
+                }
             });
         });
     }
@@ -37,23 +45,25 @@ class AudioCaptureService {
     // Find CTM tab from available sources
     async findCTMTabSource() {
         const sources = await this.getDesktopSources();
+        ATS.logger.info('[Audio] Found sources:', sources.map(s => s.name));
         
         // Look for CTM tab
         const ctmSource = sources.find(source => 
             source.name.toLowerCase().includes('calltrackingmetrics') ||
             source.name.toLowerCase().includes('ctm') ||
-            source.name.toLowerCase().includes('call tracking')
+            source.name.toLowerCase().includes('call tracking') ||
+            source.name.toLowerCase().includes('app.calltrackingmetrics')
         );
 
         if (ctmSource) {
-            ATS.logger.info('Found CTM source:', ctmSource.name);
+            ATS.logger.info('[Audio] Found CTM source:', ctmSource.name);
             return ctmSource.id;
         }
 
         // Fallback: return first tab source
         const firstTab = sources.find(source => source.id.startsWith('tab:'));
         if (firstTab) {
-            ATS.logger.warn('CTM source not found, using first tab:', firstTab.name);
+            ATS.logger.warn('[Audio] CTM source not found, using first tab:', firstTab.name);
             return firstTab.id;
         }
 
@@ -63,7 +73,7 @@ class AudioCaptureService {
     // Start recording CTM audio
     async startRecording(phoneNumber = null) {
         try {
-            ATS.logger.info('★ Starting audio capture...');
+            ATS.logger.info('[Audio] ★ Starting audio capture...');
             
             this.capturedPhoneNumber = phoneNumber;
             this.audioChunks = [];
@@ -71,6 +81,7 @@ class AudioCaptureService {
 
             // Get CTM tab source
             const sourceId = await this.findCTMTabSource();
+            ATS.logger.info('[Audio] Using source ID:', sourceId);
             
             // Get audio stream from the tab
             this.stream = await navigator.mediaDevices.getUserMedia({
@@ -82,6 +93,8 @@ class AudioCaptureService {
                 },
                 video: false
             });
+
+            ATS.logger.info('[Audio] ★ Got audio stream, tracks:', this.stream.getAudioTracks().length);
 
             // Create MediaRecorder for MP3-like format (WebM with Opus codec)
             const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
@@ -96,22 +109,22 @@ class AudioCaptureService {
             this.mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
                     this.audioChunks.push(event.data);
-                    ATS.logger.debug('Audio chunk received:', event.data.size);
+                    ATS.logger.debug('[Audio] Audio chunk received:', event.data.size);
                 }
             };
 
             this.mediaRecorder.onstart = () => {
                 this.isRecording = true;
-                ATS.logger.info('★ Audio recording started');
+                ATS.logger.info('[Audio] ★ Audio recording started');
             };
 
             this.mediaRecorder.onstop = () => {
                 this.isRecording = false;
-                ATS.logger.info('★ Audio recording stopped, chunks:', this.audioChunks.length);
+                ATS.logger.info('[Audio] ★ Audio recording stopped, chunks:', this.audioChunks.length);
             };
 
             this.mediaRecorder.onerror = (event) => {
-                ATS.logger.error('★ MediaRecorder error:', event);
+                ATS.logger.error('[Audio] ★ MediaRecorder error:', event);
             };
 
             // Start recording with small interval to get data frequently
@@ -119,7 +132,8 @@ class AudioCaptureService {
             
             return true;
         } catch (error) {
-            ATS.logger.error('★ Failed to start audio capture:', error.message);
+            ATS.logger.error('[Audio] ★ Failed to start audio capture:', error.message);
+            ATS.logger.error('[Audio] ★ Error details:', error.stack);
             return false;
         }
     }
@@ -128,21 +142,21 @@ class AudioCaptureService {
     async stopRecording() {
         return new Promise((resolve) => {
             if (!this.mediaRecorder || !this.isRecording) {
-                ATS.logger.warn('No recording in progress');
+                ATS.logger.warn('[Audio] No recording in progress');
                 resolve(null);
                 return;
             }
 
-            ATS.logger.info('★ Stopping audio recording...');
+            ATS.logger.info('[Audio] ★ Stopping audio recording...');
 
             this.mediaRecorder.onstop = () => {
                 // Create blob from chunks
                 if (this.audioChunks.length > 0) {
                     this.audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-                    ATS.logger.info('★ Audio blob created, size:', this.audioBlob.size);
+                    ATS.logger.info('[Audio] ★ Audio blob created, size:', this.audioBlob.size);
                 } else {
                     this.audioBlob = null;
-                    ATS.logger.warn('No audio chunks recorded');
+                    ATS.logger.warn('[Audio] No audio chunks recorded');
                 }
 
                 // Stop all tracks
@@ -181,7 +195,7 @@ class AudioCaptureService {
                 resolve(base64);
             };
             reader.onerror = () => {
-                ATS.logger.error('Failed to convert audio to base64');
+                ATS.logger.error('[Audio] Failed to convert audio to base64');
                 resolve(null);
             };
             reader.readAsDataURL(this.audioBlob);
@@ -196,7 +210,7 @@ class AudioCaptureService {
             throw new Error('No audio recorded');
         }
 
-        ATS.logger.info('★ Sending audio to AI server for transcription...');
+        ATS.logger.info('[Audio] ★ Sending audio to AI server for transcription...');
 
         const response = await fetch(`${serverUrl}/api/transcribe`, {
             method: 'POST',
@@ -214,7 +228,7 @@ class AudioCaptureService {
         }
 
         const result = await response.json();
-        ATS.logger.info('★ Transcription complete:', result);
+        ATS.logger.info('[Audio] ★ Transcription complete:', result);
         
         return result;
     }

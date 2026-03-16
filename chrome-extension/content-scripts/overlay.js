@@ -229,6 +229,114 @@
         setTimeout(() => notif.remove(), 5000);
     }
 
+    function showCallInProgress(phoneNumber, callerName) {
+        createOverlay();
+        const content = document.querySelector(`#${OVERLAY_ID} .ats-overlay-content`);
+        
+        const displayPhone = phoneNumber || 'Unknown';
+        const displayName = callerName || 'Unknown Caller';
+        
+        content.innerHTML = `
+            <div class="ats-call-in-progress">
+                <div class="ats-call-header">
+                    <div class="ats-call-icon">📞</div>
+                    <div class="ats-call-info">
+                        <div class="ats-call-phone">${displayPhone}</div>
+                        <div class="ats-call-name">${displayName}</div>
+                    </div>
+                    <div class="ats-call-status">CALLING</div>
+                </div>
+                <div class="ats-recording-prompt">
+                    <div style="text-align: center; margin-bottom: 12px;">
+                        <div style="font-size: 24px; margin-bottom: 6px;">🎙️</div>
+                        <div style="font-weight: 600; margin-bottom: 2px;">Record this call?</div>
+                        <div style="font-size: 11px; color: #888;">Click below to capture audio</div>
+                    </div>
+                    <button class="ats-start-recording-btn" id="ats-start-recording">
+                        🎙️ Start Recording
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        const startBtn = content.querySelector('#ats-start-recording');
+        if (startBtn) {
+            startBtn.addEventListener('click', () => {
+                chrome.runtime.sendMessage({
+                    type: 'START_AUDIO_CAPTURE',
+                    payload: { phoneNumber, callerName }
+                });
+            });
+        }
+        
+        // Add styles for call in progress
+        const style = document.createElement('style');
+        style.textContent = `
+            .ats-call-in-progress {
+                padding: 0;
+            }
+            .ats-call-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 16px;
+                background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+                border-bottom: 1px solid #3d3d3d;
+            }
+            .ats-call-icon {
+                width: 44px;
+                height: 44px;
+                background: #f59e0b;
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 20px;
+            }
+            .ats-call-info {
+                flex: 1;
+            }
+            .ats-call-phone {
+                font-size: 18px;
+                font-weight: 700;
+                color: #fff;
+            }
+            .ats-call-name {
+                font-size: 12px;
+                color: #888;
+            }
+            .ats-call-status {
+                background: #f59e0b;
+                color: #000;
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-size: 10px;
+                font-weight: 700;
+            }
+            .ats-recording-prompt {
+                padding: 20px;
+                text-align: center;
+            }
+            .ats-start-recording-btn {
+                width: 100%;
+                background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+                color: #fff;
+                border: none;
+                padding: 14px 20px;
+                border-radius: 10px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .ats-start-recording-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 20px rgba(34, 197, 94, 0.4);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     function showData(data) {
         createOverlay();
         const content = document.querySelector(`#${OVERLAY_ID} .ats-overlay-content`);
@@ -327,6 +435,13 @@
                 break;
             case 'SHOW_CALL_SUMMARY':
                 showData(message.payload);
+                break;
+            case 'SHOW_CALL_IN_PROGRESS':
+                showCallInProgress(message.payload.phoneNumber, message.payload.callerName);
+                break;
+            case 'START_AUDIO_CAPTURE':
+                // Trigger audio capture via message to background or call monitor
+                console.log('[ATS] START_AUDIO_CAPTURE received in overlay.js');
                 break;
             case 'AI_ANALYSIS_RESULT':
                 showData(message.payload);

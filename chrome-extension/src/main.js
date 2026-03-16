@@ -46,6 +46,36 @@
                         overlay.showData(message.payload);
                     }
                     break;
+                
+                case 'SHOW_CALL_IN_PROGRESS':
+                    if (overlay && overlay.showCallInProgress) {
+                        overlay.showCallInProgress(
+                            message.payload.phoneNumber,
+                            message.payload.callerName
+                        );
+                    }
+                    break;
+                    
+                case 'START_AUDIO_CAPTURE':
+                    console.log('[ATS] START_AUDIO_CAPTURE received');
+                    // Trigger audio capture from call monitor
+                    if (callMonitor && callMonitor.audioCaptureService) {
+                        callMonitor.audioCaptureService.startRecording(message.payload.phoneNumber)
+                            .then(success => {
+                                if (success) {
+                                    if (overlay && overlay.showToast) {
+                                        overlay.showToast('Recording started!', 'success');
+                                    }
+                                }
+                            })
+                            .catch(err => {
+                                console.error('[ATS] Audio capture error:', err);
+                                if (overlay && overlay.showToast) {
+                                    overlay.showToast('Recording failed: ' + err.message, 'error');
+                                }
+                            });
+                    }
+                    break;
                     
                 default:
                     console.log('[ATS] Unknown message:', messageType);

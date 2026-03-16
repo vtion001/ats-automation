@@ -214,7 +214,7 @@ function Set-PreConfig {
         transcriptionEnabled = $true
         aiAnalysisEnabled = $true
         saveMarkdown = $true
-        aiServerUrl = "https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io"
+        aiServerUrl = "https://ags-ai-server.azurewebsites.net"
         salesforceUrl = "https://flyland.my.salesforce.com"
         ctmUrl = "https://app.calltrackingmetrics.com"
     }

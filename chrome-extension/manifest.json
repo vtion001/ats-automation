@@ -13,7 +13,7 @@
     "tabCapture"
   ],
   "host_permissions": [
-    "*://ags-ai-server.azurewebsites.net/*",
+    "*://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/*",
     "*://*.calltrackingmetrics.com/*",
     "*://*.my.salesforce.com/*",
     "*://*.lightning.force.com/*",
@@ -55,6 +55,11 @@
       ],
       "js": [
         "src/lib/core.js",
+        "src/shared/constants/index.js",
+        "src/shared/utils/index.js",
+        "src/core/di/container.js",
+        "src/core/messaging/message-bus.js",
+        "src/core/storage/storage-manager.js",
         "src/services/ctm-service.js",
         "src/services/salesforce-service.js",
         "src/services/salesforce-contact-service.js",
@@ -79,6 +84,11 @@
       ],
       "js": [
         "src/lib/core.js",
+        "src/shared/constants/index.js",
+        "src/shared/utils/index.js",
+        "src/core/di/container.js",
+        "src/core/messaging/message-bus.js",
+        "src/core/storage/storage-manager.js",
         "src/services/salesforce-service.js",
         "src/services/salesforce-contact-service.js",
         "src/services/salesforce-action-service.js",
@@ -95,7 +105,12 @@
         "*://*.zoho.com/*"
       ],
       "js": [
-        "src/lib/core.js"
+        "src/lib/core.js",
+        "src/shared/constants/index.js",
+        "src/shared/utils/index.js",
+        "src/core/di/container.js",
+        "src/core/messaging/message-bus.js",
+        "src/core/storage/storage-manager.js"
       ],
       "css": [
         "content-scripts/overlay.css"

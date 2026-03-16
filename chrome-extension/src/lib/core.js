@@ -1,7 +1,28 @@
 /**
  * ATS Core Library
  * Common utilities and helpers for the ATS Chrome Extension
+ * 
+ * This is the MAIN backward compatibility layer.
+ * New modules are available via window.ATSCore
  */
+
+// Legacy constants for backward compatibility
+const ATS_STORAGE_KEYS = {
+    CONFIG: 'ats_config',
+    STATS: 'ats_stats',
+    NOTES_PREFIX: 'ats_notes_',
+    QUALIFICATION: 'ats_qualification',
+    CACHE: 'ats_cache',
+    ACTIVE_CLIENT: 'activeClient',
+    AUTOMATION_ENABLED: 'automationEnabled',
+    AUTO_SEARCH_SF: 'autoSearchSF',
+    TRANSCRIPTION_ENABLED: 'transcriptionEnabled',
+    AI_ANALYSIS_ENABLED: 'aiAnalysisEnabled',
+    SAVE_MARKDOWN: 'saveMarkdown',
+    SALESFORCE_URL: 'salesforceUrl',
+    AI_SERVER_URL: 'aiServerUrl',
+    CTM_URL: 'ctmUrl'
+};
 
 const ATS = {
   config: {
@@ -163,6 +184,8 @@ const ATS = {
     SHOW_NOTIFICATION: 'SHOW_NOTIFICATION',
     SHOW_OVERLAY: 'SHOW_OVERLAY',
     SHOW_CALL_SUMMARY: 'SHOW_CALL_SUMMARY',
+    SHOW_CALL_IN_PROGRESS: 'SHOW_CALL_IN_PROGRESS',
+    START_AUDIO_CAPTURE: 'START_AUDIO_CAPTURE',
     AI_ANALYSIS_RESULT: 'AI_ANALYSIS_RESULT'
   }
 };
@@ -184,4 +207,19 @@ Object.defineProperty(ATS, 'logger', {
 
 if (typeof window !== 'undefined') {
   window.ATS = ATS;
+  window.ATS_STORAGE_KEYS = ATS_STORAGE_KEYS;
+  
+  // Expose new modular infrastructure
+  // These provide the same functionality but in a more maintainable way
+  if (window.ATSCore) {
+    // Already loaded - use it
+    window.ATS.constants = window.ATSCore.Constants;
+    window.ATS.utils = window.ATSCore.Utils;
+  } else {
+    // Not loaded yet - will be available after modules load
+    window.ATS._onCoreReady = (core) => {
+      window.ATS.constants = core.Constants;
+      window.ATS.utils = core.Utils;
+    };
+  }
 }

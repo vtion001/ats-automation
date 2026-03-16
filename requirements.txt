@@ -1,48 +1,22 @@
-# ATS Automation - Core Dependencies
+# ATS Automation - Azure Functions Dependencies
+# This file is used by Azure Functions runtime
 
-# Core
-requests>=2.32.0
-python-dotenv>=1.0.0
-pyyaml>=6.0.0
+# Azure Functions runtime
+azure-functions>=1.18.0
 
-# Browser Automation
-playwright>=1.50.0
-selenium>=4.20.0
-webdriver-manager>=4.0.0
-
-# Desktop Automation
-pyautogui>=0.9.54
-pygetwindow>=0.0.9
-pynput>=1.7.6
-
-# PDF Processing
-pdfplumber>=0.11.0
-pypdf>=5.0.0
-PyPDF2>=3.0.0
-
-# OCR
-pytesseract>=0.3.10
-Pillow>=11.0.0
-
-# NLP
-transformers>=4.40.0
-torch>=2.3.0
-spacy>=3.8.0
-numpy>=1.26.0
-
-# Utilities
-watchdog>=4.0.0
-python-dateutil>=2.8.0
-cryptography>=42.0.0
-
-# Server
+# FastAPI and server
 fastapi>=0.110.0
-uvicorn>=0.27.0
+uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
 
-# Logging
+# Logging and utilities
 loguru>=0.7.0
+python-dotenv>=1.0.0
 
-# Testing
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
+# HTTP and data
+requests>=2.31.0
+pydantic>=2.0.0
+
+# Note: faster-whisper is optional and will be auto-installed if available
+# Uncomment if you want transcription support:
+# faster-whisper>=1.0.0
