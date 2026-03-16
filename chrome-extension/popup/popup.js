@@ -449,6 +449,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         const client = testClientSelect.value;
         let phone = testPhoneInput.value.trim();
         
+        // Sanitize phone number: keep only digits and + symbol
+        if (phone) {
+            phone = phone.replace(/[^\d+]/g, '');
+            // Ensure + is at the start if present
+            if (phone.startsWith('+')) {
+                phone = '+' + phone.replace(/\D/g, '');
+            } else if (phone.length > 0) {
+                // If no + but has digits, strip any leading 1 (country code) if 11 digits
+                phone = phone.replace(/\D/g, '');
+            }
+        }
+        
         const serverUrl = await StatusService.getAIServerUrl();
         const actualUrl = serverUrl.includes('localhost') ? 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io' : serverUrl;
         

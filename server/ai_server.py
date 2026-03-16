@@ -2,6 +2,8 @@
 ATS AI Server - Transcription Analysis
 Processes call transcriptions and provides AI-powered insights using OpenRouter
 With Flyland-specific knowledge base integration
+
+Version: 1.3.0 - Added retry logic, improved JSON parsing, and reliable model
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
@@ -44,6 +46,10 @@ async def handle_options(full_path: str):
 
 API_KEY = os.getenv("ATS_API_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# Use more reliable model
+AI_MODEL = "openai/gpt-3.5-turbo"
+AI_MODEL_FALLBACK = "google/gemini-pro"
 
 # Knowledge base storage
 KNOWLEDGE_BASES = {}
@@ -130,7 +136,8 @@ class AnalysisResponse(BaseModel):
 async def root():
     return {
         "status": " ATS AI Server running",
-        "version": "1.2.0",
+        "version": "1.3.0",
+        "model": AI_MODEL,
         "clients": list(KNOWLEDGE_BASES.keys()),
     }
 
@@ -141,8 +148,45 @@ async def health():
         "status": "healthy",
         "ai_enabled": bool(API_KEY),
         "provider": "openrouter",
+        "model": AI_MODEL,
         "kb_loaded": list(KNOWLEDGE_BASES.keys()),
     }
+
+
+@app.get("/api/test")
+async def test_analysis():
+    """Test endpoint to verify AI analysis is working"""
+    test_transcription = "Hello, I'm calling to inquire about addiction treatment options. I have private insurance and I've been sober for 30 days. I'm from California."
+    test_phone = "5551234567"
+    test_client = "flyland"
+    
+    try:
+        result = await analyze_with_openai(test_transcription, test_phone, test_client)
+        
+        if "error" in result:
+            return {
+                "status": "error",
+                "message": result.get("error"),
+                "raw": result.get("raw", "N/A")
+            }
+        
+        return {
+            "status": "success",
+            "message": "AI analysis working correctly",
+            "transcription": test_transcription,
+            "result": {
+                "tags": result.get("tags", []),
+                "sentiment": result.get("sentiment"),
+                "summary": result.get("summary"),
+                "qualification_score": result.get("qualification_score", 0),
+                "follow_up_required": result.get("follow_up_required", False)
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 
 # Transcription endpoint - try faster-whisper, fallback to error
@@ -254,6 +298,98 @@ async def get_kb_context(client: str) -> str:
     return context
 
 
+def extract_json_from_response(content: str) -> Optional[dict]:
+    """Extract JSON from AI response with multiple fallback strategies"""
+    content = content.strip()
+    logger.info(f"Extracting JSON from response: {content[:200]}...")
+    
+    # Strategy 1: Try direct JSON parse
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+    
+    # Strategy 2: Handle markdown code blocks
+    if content.startswith("```"):
+        parts = content.split("```")
+        for part in parts[1:]:  # Skip first empty part
+            part = part.strip()
+            # Remove language identifier like "json"
+            if part.startswith("json"):
+                part = part[4:].strip()
+            try:
+                return json.loads(part)
+            except json.JSONDecodeError:
+                continue
+    
+    # Strategy 3: Find JSON object in content
+    json_start = content.find("{")
+    json_end = content.rfind("}")
+    if json_start >= 0 and json_end > json_start:
+        json_str = content[json_start:json_end + 1]
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON extraction failed: {e}")
+    
+    # Strategy 4: Try regex to find key-value patterns (fallback)
+    logger.warning("All JSON extraction strategies failed, using fallback")
+    return None
+
+
+async def call_openrouter_with_retry(
+    system_prompt: str,
+    user_message: str,
+    max_retries: int = 3
+) -> tuple:
+    """Call OpenRouter API with retry logic for JSON parsing failures"""
+    
+    models = [AI_MODEL, AI_MODEL_FALLBACK]
+    
+    for attempt in range(max_retries):
+        for model in models:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://ats-automation.local",
+                    "X-Title": "ATS Automation",
+                }
+                
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    "max_tokens": 800,
+                    "temperature": 0.3,
+                }
+                
+                response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result["choices"][0]["message"]["content"]
+                    
+                    # Try to extract JSON
+                    analysis = extract_json_from_response(content)
+                    if analysis:
+                        return analysis, None
+                    
+                    logger.warning(f"Model {model} returned non-JSON, trying next...")
+                else:
+                    logger.error(f"OpenRouter API error: {response.status_code}")
+                    
+            except Exception as e:
+                logger.warning(f"Attempt failed with {model}: {e}")
+                continue
+        
+        logger.info(f"Retry {attempt + 1}/{max_retries}...")
+    
+    return None, "Failed to get valid JSON response after all retries"
+
+
 async def analyze_with_openai(
     transcription: str, phone: Optional[str] = None, client: str = "flyland"
 ) -> dict:
@@ -338,69 +474,22 @@ Respond ONLY with valid JSON."""
 
     user_message = f"Analyze this call transcription{' for phone number ' + phone if phone else ''}:\n\n{transcription}"
 
-    try:
-        headers = {
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://ats-automation.local",
-            "X-Title": "ATS Automation",
-        }
-
-        payload = {
-            "model": "anthropic/claude-3-haiku",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            "max_tokens": 500,
-            "temperature": 0.3,
-        }
-
-        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=30)
-
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"]
-
-            # Parse JSON from response
-            try:
-                # Clean the content to extract valid JSON
-                content = content.strip()
-                logger.info(f"AI raw response: {content[:500]}")
-
-                # Handle potential markdown code blocks
-                if content.startswith("```"):
-                    parts = content.split("```")
-                    if len(parts) >= 2:
-                        content = parts[1]
-                        if content.startswith("json"):
-                            content = content[4:]
-
-                # Try to find JSON in the content
-                json_start = content.find("{")
-                json_end = content.rfind("}")
-                if json_start >= 0 and json_end > json_start:
-                    content = content[json_start : json_end + 1]
-
-                analysis = json.loads(content.strip())
-
-                # Cache the result if phone is available
-                if phone:
-                    ANALYSIS_CACHE[phone] = (datetime.now(), analysis)
-                    logger.info(f"Cached analysis for {phone}")
-
-                return analysis
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse AI response as JSON: {e}")
-                logger.warning(f"Raw content: {content[:500]}")
-                return {"error": "Failed to parse AI response", "raw": content[:200]}
-        else:
-            logger.error(f"OpenRouter API error: {response.status_code} - {response.text}")
-            return {"error": f"API error: {response.status_code}"}
-
-    except Exception as e:
-        logger.error(f"AI analysis error: {e}")
-        return {"error": str(e)}
+    # Use retry logic for reliable JSON parsing
+    analysis, error = await call_openrouter_with_retry(system_prompt, user_message, max_retries=3)
+    
+    if error:
+        logger.error(f"AI analysis failed: {error}")
+        return {"error": error}
+    
+    if analysis:
+        # Cache the result if phone is available
+        if phone:
+            ANALYSIS_CACHE[phone] = (datetime.now(), analysis)
+            logger.info(f"Cached analysis for {phone}")
+        
+        return analysis
+    
+    return {"error": "Failed to get valid analysis"}
 
 
 async def determine_action_with_openai(
