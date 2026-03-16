@@ -313,11 +313,25 @@ class CallMonitor {
 
         // Start webhook polling as alternative to audio capture
         // CTM will send webhook with transcript, we'll poll for results
+        // This is the PRIMARY path - webhook provides transcript + analysis
         if (ATS.config.aiAnalysisEnabled && this.currentCall.phoneNumber) {
             ATS.logger.info('[Webhook] Starting webhook polling for:', this.currentCall.phoneNumber);
             this.showStatus('WEBHOOK', 'waiting');
+            // Start webhook polling but DON'T run local analysis yet
+            // The webhook polling will handle showing the popup when results arrive
             this.startWebhookPolling(this.currentCall.phoneNumber);
+            
+            // NOTE: We don't run local AI analysis here because:
+            // 1. Webhook is the primary source for transcripts
+            // 2. Webhook polling handles showing the popup
+            // 3. If webhook times out, the polling will log a warning
+            
+            ATS.logger.info('[Webhook] Waiting for webhook results - skipping local analysis');
+            return; // Exit early - let webhook handle the popup
         }
+        
+        // Fallback: If no phone number, try local analysis (shouldn't happen normally)
+        // This is only for edge cases where phone number is missing
 
         // Also try local audio capture as fallback
         // (original audio capture code continues below)

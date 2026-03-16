@@ -398,9 +398,14 @@ async def ctm_webhook(request: CTMWebhookRequest):
             
             logger.info(f"CTM Webhook analysis complete: {analysis.get('qualification_score', 0)}")
             
-            # Store result for polling by extension
+            # Store result for polling by extension (file-based)
             if phone:
-                WEBHOOK_RESULTS[phone] = result
+                with WEBHOOK_RESULTS_LOCK:
+                    results = load_webhook_results()
+                    results[phone] = result
+                    results[phone]['timestamp'] = time.time()  # Add timestamp for TTL
+                    save_webhook_results(results)
+                logger.info(f"CTM Webhook result stored for phone: {phone}")
             
             return result
         else:
@@ -421,25 +426,50 @@ async def ctm_webhook(request: CTMWebhookRequest):
 
 
 
-# In-memory storage for webhook results (for polling by extension)
-WEBHOOK_RESULTS = {}
+# File-based storage for webhook results (persists across server restarts)
+import threading
+import time
+
+WEBHOOK_RESULTS_FILE = "/tmp/webhook_results.json"
+WEBHOOK_RESULTS_LOCK = threading.Lock()
+
+def load_webhook_results():
+    """Load webhook results from file"""
+    try:
+        if os.path.exists(WEBHOOK_RESULTS_FILE):
+            with open(WEBHOOK_RESULTS_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading webhook results: {e}")
+    return {}
+
+def save_webhook_results(results):
+    """Save webhook results to file"""
+    try:
+        with open(WEBHOOK_RESULTS_FILE, 'w') as f:
+            json.dump(results, f)
+    except Exception as e:
+        logger.error(f"Error saving webhook results: {e}")
 
 @app.get("/api/webhook-results")
 async def get_webhook_results(phone: str = None):
     """Get webhook analysis results for a phone number"""
-    global WEBHOOK_RESULTS
+    with WEBHOOK_RESULTS_LOCK:
+        results = load_webhook_results()
     
     if not phone:
-        return {"results": list(WEBHOOK_RESULTS.values())}
+        return {"results": list(results.values())}
     
     # Clean phone number
     phone = re.sub(r"[^\d+]", "", phone)
     
-    if phone in WEBHOOK_RESULTS:
-        result = WEBHOOK_RESULTS[phone]
-        # Remove after returning (one-time use)
-        del WEBHOOK_RESULTS[phone]
-        return result
+    with WEBHOOK_RESULTS_LOCK:
+        if phone in results:
+            result = results[phone]
+            # Remove after returning (one-time use)
+            del results[phone]
+            save_webhook_results(results)
+            return result
     
     return {"status": "no_results"}
 
