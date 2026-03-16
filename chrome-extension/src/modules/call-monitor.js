@@ -22,12 +22,21 @@ class CallMonitor {
         this.callStartTime = null;
     }
 
-    // Set extension icon badge color
+    // Set extension icon badge color (via background script)
     setBadge(color, text) {
+        // Send message to background to set badge
         try {
-            if (typeof chrome !== 'undefined' && chrome.action) {
-                chrome.action.setBadgeBackgroundColor({ color: color });
-                chrome.action.setBadgeText({ text: text || '' });
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                chrome.runtime.sendMessage({
+                    action: 'SET_BADGE',
+                    color: color,
+                    text: text || ''
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        // Background might not be available, try direct
+                        console.log('[Badge] Background not available');
+                    }
+                });
             }
         } catch (e) {
             console.log('[Badge] Could not set badge:', e.message);
@@ -46,6 +55,9 @@ class CallMonitor {
         
         // Set badge color
         this.setBadge(colors[type] || colors['info'], message);
+        
+        // Also log to console for debugging
+        console.log('[Status:' + type + '] ' + message);
         
         // Also send to overlay for display
         ATS.sendMessage({

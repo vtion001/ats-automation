@@ -7,7 +7,7 @@
 param environmentName string = 'ags'
 
 @description('Azure region for deployment')
-param location string = resourceGroup().location
+param location string = 'westus'
 
 @description('Docker image name')
 param imageName string = 'ags-ai-server'
@@ -36,7 +36,9 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-06-01-preview' = {
   sku: {
     name: 'Basic'
   }
-  adminEnabled: true
+  properties: {
+    adminUserEnabled: true
+  }
 }
 
 // Log Analytics Workspace
@@ -59,7 +61,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
     RetentionInDays: 30
     publicNetworkAccessForIngestion: 'Enabled'
     publicNetworkAccessForQuery: 'Enabled'
-    workspaceResourceId: logAnalytics.id
+    WorkspaceResourceId: logAnalytics.id
   }
 }
 
@@ -68,8 +70,8 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2022-09-01' = {
   name: appServicePlanName
   location: location
   sku: {
-    name: 'B1'
-    tier: 'Basic'
+    name: 'F1'
+    tier: 'Free'
     capacity: 1
   }
   kind: 'linux'
@@ -128,8 +130,6 @@ resource webApp 'Microsoft.Web/sites@2022-09-01' = {
         }
       ]
       healthCheckPath: '/health'
-      healthCheckEvictionTimeInMinutes: 10
-      minimumElasticInstanceCount: 0
     }
   }
 }
@@ -199,7 +199,6 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2022-09-01' = {
         }
       ]
       healthCheckPath: '/health'
-      healthCheckEvictionTimeInMinutes: 10
     }
   }
 }

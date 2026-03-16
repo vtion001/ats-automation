@@ -108,6 +108,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('[AGS Background] Received message:', message.type || message.action);
 
     switch (message.type || message.action) {
+        case 'SET_BADGE':
+            if (message.color) {
+                chrome.action.setBadgeBackgroundColor({ color: message.color });
+            }
+            if (message.text) {
+                chrome.action.setBadgeText({ text: message.text });
+            } else {
+                chrome.action.setBadgeText({ text: '' });
+            }
+            break;
         case 'CTM_CALL_EVENT':
         case 'CALL_EVENT':
             handleCallEvent(message.payload || message.data);
