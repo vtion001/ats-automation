@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir faster-whisper
 # Copy application
 COPY server/ai_server.py .
 
+# Copy clients folder for knowledge base
+COPY clients/ ./clients/
+
 # Set environment variables
 ENV PORT=8000
 ENV PYTHONUNBUFFERED=1

@@ -36,7 +36,24 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Knowledge base storage
 KNOWLEDGE_BASES = {}
-KB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "clients")
+
+
+def get_kb_dir():
+    """Get KB directory - supports both local and Docker"""
+    if "KB_DIR" in os.environ:
+        return os.environ["KB_DIR"]
+
+    local_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "clients")
+    if os.path.exists(local_path):
+        return local_path
+
+    if os.path.exists("/app/clients"):
+        return "/app/clients"
+
+    return local_path
+
+
+KB_DIR = get_kb_dir()
 
 
 def load_knowledge_bases():
@@ -319,7 +336,7 @@ Respond ONLY with valid JSON."""
         }
 
         payload = {
-            "model": "google/gemma-2-9b-it",
+            "model": "anthropic/claude-3-haiku",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
@@ -338,11 +355,22 @@ Respond ONLY with valid JSON."""
             try:
                 # Clean the content to extract valid JSON
                 content = content.strip()
+                logger.info(f"AI raw response: {content[:500]}")
+
                 # Handle potential markdown code blocks
                 if content.startswith("```"):
-                    content = content.split("```")[1]
-                    if content.startswith("json"):
-                        content = content[4:]
+                    parts = content.split("```")
+                    if len(parts) >= 2:
+                        content = parts[1]
+                        if content.startswith("json"):
+                            content = content[4:]
+
+                # Try to find JSON in the content
+                json_start = content.find("{")
+                json_end = content.rfind("}")
+                if json_start >= 0 and json_end > json_start:
+                    content = content[json_start : json_end + 1]
+
                 analysis = json.loads(content.strip())
 
                 # Cache the result if phone is available
@@ -353,7 +381,8 @@ Respond ONLY with valid JSON."""
                 return analysis
             except json.JSONDecodeError as e:
                 logger.warning(f"Failed to parse AI response as JSON: {e}")
-                return {"error": "Failed to parse AI response", "raw": content}
+                logger.warning(f"Raw content: {content[:500]}")
+                return {"error": "Failed to parse AI response", "raw": content[:200]}
         else:
             logger.error(f"OpenRouter API error: {response.status_code} - {response.text}")
             return {"error": f"API error: {response.status_code}"}
