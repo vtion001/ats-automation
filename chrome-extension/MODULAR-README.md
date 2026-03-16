@@ -2,86 +2,167 @@
 
 ## Overview
 
-This extension has been refactored to be more maintainable and scalable while maintaining **100% backward compatibility** with existing code.
+This extension has been fully refactored to be maintainable and scalable while maintaining **100% backward compatibility** with existing code.
 
 ## New Directory Structure
 
 ```
 src/
-├── shared/                    # Pure JavaScript - NO Chrome APIs
-│   ├── constants/           # All constants (storage keys, message types, endpoints)
+├── shared/                          # Pure JavaScript - NO Chrome APIs
+│   ├── constants/
+│   │   └── index.js               # All storage keys, message types, API endpoints
+│   └── utils/
+│       ├── index.js               # String, date, validation, array utils
+│       └── error-handler.js       # Centralized error handling
+│
+├── core/                           # Extension infrastructure
+│   ├── di/
+│   │   └── container.js           # Dependency injection container
+│   ├── messaging/
+│   │   └── message-bus.js         # Message bus abstraction
+│   ├── storage/
+│   │   └── storage-manager.js     # Storage abstraction with backward compat
+│   ├── clients/
+│   │   └── client-manager.js     # Client config/DOM profile loader
+│   ├── bootstrap.js               # Service registration
+│   └── index.js                   # Core module exports
+│
+├── services/                       # Business logic
+│   ├── index.js                   # Service registry
+│   ├── ctm-service.js
+│   ├── salesforce-service.js
+│   ├── transcription-service.js
+│   ├── ai-service.js
+│   └── caller-info-service.js
+│
+├── modules/                        # Feature modules
+│   ├── call-monitor.js
+│   └── overlay-ui.js
+│
+├── content-scripts/
+│   └── common/
+│       └── base-monitor.js        # Base class for content script monitors
+│
+├── popup/
+│   ├── components/                # UI Components (NEW!)
+│   │   ├── toast-manager.js       # Toast notifications
+│   │   ├── status-manager.js     # Status indicators
+│   │   ├── test-panel.js        # Test/analysis panel
+│   │   ├── client-panel.js      # Client selector
 │   │   └── index.js
-│   └── utils/              # Utility functions
-│       └── index.js
+│   ├── managers/
+│   │   ├── notes-manager.js
+│   │   └── qualification-manager.js
+│   └── services/
+│       ├── storage-service.js
+│       └── status-service.js
 │
-├── core/                     # Extension infrastructure
-│   ├── di/                  # Dependency injection container
-│   │   └── container.js
-│   ├── messaging/          # Message bus abstraction
-│   │   └── message-bus.js
-│   ├── storage/            # Storage abstraction
-│   │   └── storage-manager.js
-│   ├── bootstrap.js        # Service registration
-│   └── index.js           # Core module exports
+├── lib/
+│   ├── core.js                    # Legacy core (backward compatible)
+│   └── config-constants.js
 │
-├── services/                # Business logic (existing)
-├── modules/                 # Feature modules (existing)
-├── lib/                    # Legacy core (backward compatible)
-└── main.js                # Entry point (existing)
+└── main.js                        # Entry point
 ```
 
-## Key Principles
+## Key Improvements
 
-1. **No Breaking Changes** - All storage keys, message types, and API endpoints remain the same
-2. **Layer Separation** - Shared code has ZERO Chrome API dependencies
-3. **Dependency Injection** - Services can be injected via the container
-4. **Backward Compatibility** - The existing `ATS` global object still works
+### 1. Shared Layer (No Chrome Dependencies)
+- All constants centralized in `shared/constants/`
+- Utility functions in `shared/utils/`
+- Error handling utility for consistent error management
 
-## New Features
+### 2. Core Infrastructure
+- **DI Container**: Register and get services with dependency injection
+- **Message Bus**: Abstracted cross-context communication
+- **Storage Manager**: Typed storage interface with backward compatibility
+- **Client Manager**: Load client configs, DOM profiles, templates, knowledge bases
 
-### Constants
+### 3. Popup Components (Extracted from monolith)
+- **ToastManager**: Reusable notification system
+- **StatusManager**: Service status indicators
+- **TestPanel**: Analysis testing functionality
+- **ClientPanel**: Client switching
+
+### 4. Content Script Base Class
+- **BaseMonitor**: Abstract base for CTM, Salesforce, Zoho monitors
+- Common functionality: DOM querying, observers, message sending
+- Easy to extend for new target systems
+
+### 5. Service Registry
+- Centralized service access
+- Lazy loading support
+- Backward compatibility with global objects
+
+## Backward Compatibility
+
+All existing code continues to work exactly as before:
+
+| Category | Status |
+|----------|--------|
+| Storage keys | ✅ Unchanged |
+| Message types | ✅ Unchanged |
+| API endpoints | ✅ Unchanged |
+| Client configs | ✅ Unchanged |
+| Server side | ✅ No changes |
+| Tests | ✅ Work as-is |
+
+## Usage Examples
+
+### Using Constants
 ```javascript
 // Access constants
 window.ATS_CONSTANTS.STORAGE_KEYS
-window.ATS_CONSTANTS.MESSAGE_TYPES
-window.ATS_CONSTANTS.API_ENDPOINTS
-
-// Or via ATS
-window.ATS.constants
+window.ATS_CONSTANTS.MESSAGE_TYPES.CTM_CALL_EVENT
+window.ATS_CONSTANTS.API_ENDPOINTS.ANALYZE
 ```
 
-### Container
+### Using Container
 ```javascript
-// Register a service
+// Register service
 window.atsContainer.register('myService', (c) => {
     return new MyService(c.get('storage'));
 });
 
-// Get a service
+// Get service
 const service = window.atsContainer.get('myService');
 ```
 
-### Message Bus
+### Using Client Manager
 ```javascript
-// Send message
-window.messageBus.send('MY_MESSAGE', { data: 'value' });
+const clientManager = new ClientManager();
+await clientManager.loadClient('flyland');
 
-// Listen for message
-window.messageBus.on('MY_MESSAGE', (payload) => {
-    console.log('Received:', payload);
-});
+const domProfile = clientManager.getDOMProfile('salesforce');
+const automations = clientManager.getEnabledAutomations();
 ```
 
-### Storage Manager
+### Using Base Monitor
 ```javascript
-// Get config
-const config = await window.storageManager.getConfig();
+class MyMonitor extends BaseMonitor {
+    constructor() {
+        super({ systemName: 'mySystem' });
+    }
 
-// Get notes
-const notes = await window.storageManager.getNotes('flyland');
+    async onInit() {
+        // Custom initialization
+    }
 
-// Add note
-await window.storageManager.addNote('flyland', 'Test note');
+    handleMutations(mutations) {
+        // Handle DOM changes
+    }
+}
+```
+
+### Using Error Handler
+```javascript
+try {
+    // Some operation
+} catch (error) {
+    ErrorHandler.log(error, { service: 'myService' });
+}
+
+// Or wrap function
+const safeFunction = ErrorHandler.wrapAsync(myAsyncFunction, { context: 'operation' });
 ```
 
 ## Build Commands
@@ -100,18 +181,43 @@ npm run build
 npm run package
 ```
 
-## Backward Compatibility
+## File Changes Summary
 
-All existing code continues to work exactly as before:
+### New Files Created
+- `src/shared/constants/index.js` - All constants
+- `src/shared/utils/index.js` - Utility functions
+- `src/shared/utils/error-handler.js` - Error handling
+- `src/core/di/container.js` - DI container
+- `src/core/messaging/message-bus.js` - Message bus
+- `src/core/storage/storage-manager.js` - Storage abstraction
+- `src/core/clients/client-manager.js` - Client config loader
+- `src/core/bootstrap.js` - Service registration
+- `src/core/index.js` - Core exports
+- `src/services/index.js` - Service registry
+- `src/popup/components/toast-manager.js` - Toast UI
+- `src/popup/components/status-manager.js` - Status UI
+- `src/popup/components/test-panel.js` - Test panel
+- `src/popup/components/client-panel.js` - Client selector
+- `src/content-scripts/common/base-monitor.js` - Base monitor class
+- `package.json` - Build scripts
+- `wxt.config.js` - Build config
+- `MODULAR-README.md` - This file
 
-- Storage keys unchanged (`ats_config`, `activeClient`, etc.)
-- Message types unchanged (`CTM_CALL_EVENT`, `SEARCH_SALESFORCE`, etc.)
-- API endpoints unchanged (`/api/analyze`, `/api/transcribe`, `/health`)
-- Global objects unchanged (`ATS`, `CallMonitor`, `CTMService`, etc.)
+### Files Modified
+- `src/lib/core.js` - Added backward compatibility references
+- `manifest.json` - Added new modules
+
+### No Changes To
+- Storage keys (all preserved)
+- Message types (all preserved)
+- API endpoints (all preserved)
+- Client configurations
+- Server-side Python code
+- Test files
 
 ## Migration Path (Optional)
 
-New code can use the modular approach:
+New code can use the modular approach while old code continues to work:
 
 ```javascript
 // OLD way (still works)
@@ -120,41 +226,11 @@ const config = await ATS.storage.get('activeClient');
 // NEW way (more maintainable)
 const storage = window.storageManager;
 const config = await storage.getConfigValue('activeClient');
+
+// Using constants
+const endpoint = window.ATS_CONSTANTS.API_ENDPOINTS.ANALYZE;
+
+// Using client manager
+const clientManager = new ClientManager();
+await clientManager.loadClient('flyland');
 ```
-
-## Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run unit tests
-npm run test:unit
-
-# Run integration tests  
-npm run test:integration
-```
-
-## File Changes Summary
-
-### New Files Created
-- `src/shared/constants/index.js` - All constants
-- `src/shared/utils/index.js` - Utility functions
-- `src/core/di/container.js` - DI container
-- `src/core/messaging/message-bus.js` - Message bus
-- `src/core/storage/storage-manager.js` - Storage abstraction
-- `src/core/bootstrap.js` - Service registration
-- `src/core/index.js` - Core exports
-
-### Files Modified
-- `src/lib/core.js` - Added backward compatibility references
-- `manifest.json` - Added new modules to content script load order
-- `package.json` - Added npm scripts and wxt dependency
-
-### No Changes To
-- Storage keys
-- Message types
-- API endpoints
-- Client configurations
-- Server-side code
-- Test files (they work with existing code)
