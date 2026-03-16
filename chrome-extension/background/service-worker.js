@@ -290,6 +290,14 @@ async function handleAtsAction(payload) {
         case 'insert_reply':
             insertReply(data.reply);
             break;
+        case 'fill-salesforce':
+            await handleFillSalesforce(data);
+            break;
+        case 'new-lead':
+        case 'existing-lead':
+            // These are handled by SalesforceActionService
+            handleSalesforceAction(action, data);
+            break;
     }
 }
 
@@ -313,4 +321,88 @@ async function insertReply(text) {
     } catch (error) {
         console.error('[AGS] Error inserting reply:', error);
     }
+}
+
+// Handle Fill Salesforce button click
+async function handleFillSalesforce(data) {
+    console.log('[AGS] Fill Salesforce triggered:', data);
+    
+    const phone = data.phone;
+    const analysis = data.analysis || {};
+    const action = data.action || 'log_call';
+    
+    if (!phone) {
+        console.error('[AGS] No phone number provided for fill salesforce');
+        return;
+    }
+    
+    try {
+        // First, search for the contact
+        const searchUrl = `${AGS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${phone.replace(/\D/g, '')}`;
+        
+        // Open Salesforce search in new tab
+        const tab = await chrome.tabs.create({ url: searchUrl, active: true });
+        
+        // Wait for page to load
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Get the form type
+        const formType = action === 'new_task' ? 'NewTask' : 'LogCall';
+        
+        // Try to find contact and open form
+        await fillSalesforceForm(tab.id, formType, analysis);
+        
+    } catch (error) {
+        console.error('[AGS] Error in fill salesforce:', error);
+    }
+}
+
+// Fill the Salesforce form
+async function fillSalesforceForm(tabId, formType, analysis) {
+    console.log('[AGS] Filling Salesforce form:', formType);
+    
+    try {
+        // Inject content script to fill the form
+        await chrome.tabs.sendMessage(tabId, {
+            type: 'FILL_SALESFORME_FORM',
+            payload: {
+                formType: formType,
+                data: {
+                    subject: analysis.call_subject || analysis.recommended_department || 'Inbound Call',
+                    description: analysis.salesforce_notes || analysis.callNotes || analysis.summary || '',
+                    callNotes: analysis.call_notes || '',
+                    phone: analysis.phone || ''
+                }
+            }
+        });
+        
+        console.log('[AGS] Form fill message sent');
+        
+    } catch (error) {
+        console.error('[AGS] Error filling form:', error);
+    }
+}
+
+// Handle new-lead / existing-lead actions
+async function handleSalesforceAction(action, data) {
+    console.log('[AGS] Salesforce action:', action, data);
+    
+    const phone = data.phone;
+    const analysis = data.analysis || {};
+    
+    // Get the action type from analysis
+    const actionType = analysis.action || 'log_call';
+    
+    if (!phone) {
+        console.error('[AGS] No phone number for Salesforce action');
+        return;
+    }
+    
+    // Search for contact first
+    const searchUrl = `${AGS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${phone.replace(/\D/g, '')}`;
+    
+    // Open search in new tab
+    const tab = await chrome.tabs.create({ url: searchUrl, active: true });
+    
+    console.log('[AGS] Opened Salesforce search for:', phone);
 }

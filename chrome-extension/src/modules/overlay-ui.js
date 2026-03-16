@@ -548,6 +548,42 @@ class OverlayUI {
                 background: #f8fafc;
                 border-color: #cbd5e1;
             }
+            
+            /* Fill Salesforce Button */
+            .ats-button-fill-sf {
+                background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+                color: #fff;
+                border: none;
+                padding: 14px 20px;
+                border-radius: 10px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 600;
+                width: 100%;
+                transition: all 0.2s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+            }
+            .ats-button-fill-sf:hover {
+                background: linear-gradient(135deg, #6d28d9 0%, #4c1d95 100%);
+                transform: translateY(-2px);
+                box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+            }
+            .ats-button-fill-sf:active {
+                transform: translateY(0);
+            }
+            .ats-button-fill-sf.loading {
+                opacity: 0.7;
+                pointer-events: none;
+            }
+            .ats-button-fill-sf.success {
+                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            }
+            .ats-button-fill-sf.error {
+                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            }
 
             /* Divider */
             .ats-divider { 
@@ -900,9 +936,11 @@ class OverlayUI {
         }
 
         // Action Buttons
+        const actionType = analysis?.action || 'log_call';
         html += `<div class="ats-button-group">
             <button class="ats-button-primary" data-action="new-lead">✨ New Lead - Create Contact</button>
             <button class="ats-button-secondary" data-action="existing-lead">🔍 Existing Lead</button>
+            <button class="ats-button-fill-sf" data-action="fill-salesforce" data-form-type="${actionType}">🚀 Fill Salesforce (${actionType === 'new_task' ? 'Task' : 'Log Call'})</button>
         </div>`;
 
         content.innerHTML = html;
@@ -927,9 +965,24 @@ class OverlayUI {
         content.querySelectorAll('[data-action]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const actionType = e.target.getAttribute('data-action');
+                const formType = e.target.getAttribute('data-form-type');
+                
+                // Show loading state
+                if (actionType === 'fill-salesforce') {
+                    e.target.classList.add('loading');
+                    e.target.textContent = '⏳ Opening Salesforce...';
+                }
+                
+                // Include form type for fill-salesforce action
+                const payload = { 
+                    action: actionType, 
+                    ...data,
+                    formType: formType
+                };
+                
                 ATS.sendMessage({
                     type: ATS.Messages.ATS_ACTION,
-                    payload: { action: actionType, ...data }
+                    payload: payload
                 });
             });
         });
