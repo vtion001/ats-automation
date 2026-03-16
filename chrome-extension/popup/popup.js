@@ -459,16 +459,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             showTestStatus('Transcribing audio...', 'loading');
             
             try {
-                console.log('[Transcribe] Checking server at:', actualUrl);
-                const healthCheck = await fetch(`${actualUrl}/health`, { 
-                    method: 'GET',
-                    signal: AbortSignal.timeout(10000)
-                }).catch(e => {
-                    console.error('[Transcribe] Server unreachable:', e.message);
-                    throw new Error(`Server not reachable: ${e.message}. Is the AI server running?`);
-                });
-                
-                console.log('[Transcribe] Server is up, uploading file...');
+                console.log('[Transcribe] Proceeding to upload audio file...');
                 
                 const formData = new FormData();
                 formData.append('file', audioFile);
@@ -540,7 +531,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             phone: phone,
                             client: client
                         }),
-                        signal: AbortSignal.timeout(30000)
+                        signal: AbortSignal.timeout(60000)
                     });
                     
                     if (response.ok) break;
@@ -550,7 +541,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     lastError = netError.message;
                     console.log(`[Test Analysis] Attempt ${attempt} failed:`, netError.message);
                     if (attempt < maxRetries) {
-                        await new Promise(r => setTimeout(r, 1000 * attempt)); // Exponential backoff
+                        await new Promise(r => setTimeout(r, 2000 * attempt)); // Increased backoff
                     }
                 }
             }
@@ -570,7 +561,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     analysis: analysis,
                     phone: phone,
                     client: client
-                })
+                }),
+                signal: AbortSignal.timeout(60000)
             });
             
             const action = await actionResponse.json();
