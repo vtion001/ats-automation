@@ -1064,5 +1064,6 @@ async def tag_salesforce(request: dict):
 
 
 if __name__ == "__main__":
-    logger.info("Starting ATS AI Server on http://localhost:8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Only run uvicorn when executed directly, not when imported
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
