@@ -22,14 +22,25 @@ load_dotenv()
 
 app = FastAPI(title="ATS AI Server")
 
-# Add CORS middleware for Chrome extension
+# Add CORS middleware for Chrome extension - more explicit configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
+
+
+# Explicit OPTIONS handler for preflight requests
+@app.options("/{full_path:path}")
+async def handle_options(full_path: str):
+    """Handle CORS preflight requests"""
+    logger.info(f"OPTIONS request for: {full_path}")
+    return {"status": "ok"}
+
 
 API_KEY = os.getenv("ATS_API_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -563,8 +574,12 @@ def get_fallback_action(analysis: dict) -> dict:
 @app.post("/api/analyze")
 async def analyze_transcription(request: TranscriptionRequest):
     """Analyze transcription and return insights using OpenRouter"""
+    logger.info(f"Received analyze request - phone: {request.phone}, client: {request.client}")
+    logger.info(f"Transcription: {request.transcription[:100]}...")
+
     try:
         if not API_KEY:
+            logger.error("OpenRouter API key not configured")
             return {"error": "OpenRouter API key not configured", "status": "fallback"}
 
         client = request.client or "flyland"
