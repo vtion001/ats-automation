@@ -46,6 +46,34 @@ const ATS = {
     });
   },
 
+  storage: {
+    async get(key) {
+      return new Promise((resolve) => {
+        const fullKey = ATS.config.storageKey;
+        chrome.storage.local.get(fullKey, (result) => {
+          const config = result[fullKey] || {};
+          resolve(key ? config[key] : config);
+        });
+      });
+    },
+    async set(key, value) {
+      return new Promise((resolve) => {
+        const fullKey = ATS.config.storageKey;
+        chrome.storage.local.get(fullKey, (result) => {
+          const config = result[fullKey] || {};
+          if (typeof key === 'object') {
+            Object.assign(config, key);
+          } else {
+            config[key] = value;
+          }
+          chrome.storage.local.set({ [fullKey]: config }, () => {
+            resolve(true);
+          });
+        });
+      });
+    }
+  },
+
   async saveConfig(config) {
     return new Promise((resolve) => {
       chrome.storage.local.set({ [this.config.storageKey]: config }, () => {
@@ -105,6 +133,13 @@ const ATS = {
   parsePhone(phone) {
     if (!phone) return null;
     return phone.replace(/[^0-9+]/g, '');
+  },
+
+  utils: {
+    cleanPhoneNumber(phone) {
+      if (!phone) return null;
+      return phone.replace(/[^\d+]/g, '').replace(/^\+1/, '');
+    }
   },
 
   formatDate(date) {
