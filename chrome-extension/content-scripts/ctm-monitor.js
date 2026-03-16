@@ -10,6 +10,7 @@
         pollInterval: 1000,
         transcriptionEnabled: true,
         autoSearchSF: true,
+        autoAnalyze: true,  // Auto-analyze calls
         client: 'flyland',
         salesforceUrl: ''  // Will be loaded from storage
     };
@@ -22,11 +23,12 @@
 
     async function loadConfig() {
         try {
-            const keys = ['transcriptionEnabled', 'autoSearchSF', 'activeClient', 'salesforceUrl', 'saveMarkdown'];
+            const keys = ['transcriptionEnabled', 'autoSearchSF', 'autoAnalyze', 'activeClient', 'salesforceUrl', 'saveMarkdown'];
             const result = await chrome.storage.local.get(keys);
             
             if (result.transcriptionEnabled !== undefined) CONFIG.transcriptionEnabled = result.transcriptionEnabled;
             if (result.autoSearchSF !== undefined) CONFIG.autoSearchSF = result.autoSearchSF;
+            if (result.autoAnalyze !== undefined) CONFIG.autoAnalyze = result.autoAnalyze;
             if (result.activeClient) CONFIG.client = result.activeClient;
             if (result.salesforceUrl) CONFIG.salesforceUrl = result.salesforceUrl;
             if (result.saveMarkdown !== undefined) CONFIG.saveMarkdown = result.saveMarkdown;
@@ -244,6 +246,12 @@ ${transcriptionText || 'No transcription available'}
         console.log('[ATS] Call started:', callData);
         currentCallData = { ...callData, startTime: new Date().toISOString() };
         
+        // Auto-trigger AI analysis if enabled
+        if (CONFIG.autoAnalyze && callData.phoneNumber) {
+            console.log('[ATS] Auto-analyze enabled, triggering AI analysis...');
+            triggerAutoAnalyze(callData);
+        }
+        
         if (CONFIG.transcriptionEnabled) {
             startTranscription();
         }
@@ -256,6 +264,42 @@ ${transcriptionText || 'No transcription available'}
         }
 
         broadcastCallEvent({ ...callData, event: 'call_started' });
+    }
+    
+    // Auto-analyze: Send call data to AI server for analysis
+    async function triggerAutoAnalyze(callData) {
+        try {
+            // Get AI server URL
+            const result = await chrome.storage.local.get('aiServerUrl');
+            const serverUrl = result.aiServerUrl || 'http://4.157.143.70:8000';
+            
+            // Prepare analysis request
+            // Since we don't have transcription yet, we'll use the caller info
+            const analysisData = {
+                phone: callData.phoneNumber,
+                client: CONFIG.client,
+                callerName: callData.callerName,
+                callStatus: callData.status
+            };
+            
+            console.log('[ATS] Sending to AI server for analysis:', analysisData);
+            
+            // For now, we just send the phone number - the server will need transcription
+            // In a real scenario, we'd wait for transcription or use CTM's call info
+            chrome.runtime.sendMessage({
+                type: 'CTM_CALL_DETECTED',
+                payload: {
+                    ...callData,
+                    autoAnalyze: true,
+                    serverUrl: serverUrl
+                }
+            });
+            
+            console.log('[ATS] Auto-analyze triggered for phone:', callData.phoneNumber);
+            
+        } catch (error) {
+            console.error('[ATS] Auto-analyze error:', error);
+        }
     }
 
     function handleCallEnd() {
@@ -281,6 +325,39 @@ ${transcriptionText || 'No transcription available'}
 
         let callActive = false;
 
+        // Event Listener: MutationObserver for efficient DOM detection
+        const observer = new MutationObserver((mutations) => {
+            if (callActive) return;
+            
+            const callEvent = detectCallEvent();
+            if (callEvent) {
+                const phoneNumber = extractPhoneNumber();
+                const callerName = extractCallerName();
+                
+                const callData = {
+                    status: callEvent.status,
+                    phoneNumber,
+                    callerName,
+                    timestamp: Date.now(),
+                    url: window.location.href
+                };
+                
+                handleCallStart(callData);
+                callActive = true;
+            }
+        });
+        
+        // Start observing the body for changes
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'data-call-status']
+        });
+        
+        console.log('[ATS] DOM Event listeners started');
+
+        // Fallback: polling interval
         monitorInterval = setInterval(() => {
             const callEvent = detectCallEvent();
             

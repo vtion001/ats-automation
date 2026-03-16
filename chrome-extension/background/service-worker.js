@@ -112,6 +112,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'CALL_EVENT':
             handleCallEvent(message.payload || message.data);
             break;
+        case 'CTM_CALL_DETECTED':
+            handleCallDetected(message.payload || message.data);
+            break;
         case 'SEARCH_SALESFORCE':
             handleSearchSalesforce(message.payload || message.data);
             break;
@@ -273,6 +276,56 @@ async function showOverlayNotification(message) {
 
 async function handleSfRecordData(payload) {
     console.log('[AGS] SF Record data:', payload);
+}
+
+// Handle CTM call detected - trigger auto-analyze
+async function handleCallDetected(payload) {
+    console.log('[AGS] Call detected - auto-analyze:', payload);
+    
+    const { phoneNumber, callerName, status, autoAnalyze, serverUrl } = payload;
+    
+    if (!autoAnalyze || !phoneNumber) {
+        console.log('[AGS] Auto-analyze disabled or no phone number');
+        return;
+    }
+    
+    // Get configuration
+    const config = await getConfig();
+    
+    // Show notification that analysis is starting
+    showOverlayNotification(`Call detected from ${phoneNumber} - Starting AI analysis...`);
+    
+    // For now, we show the call info in the popup
+    // The full analysis would need transcription which comes after the call
+    // Or we can use the CTM call info directly
+    
+    // Open popup with call info
+    openPopupWithCallInfo({
+        phone: phoneNumber,
+        callerName: callerName,
+        status: status,
+        autoAnalyzed: true
+    });
+}
+
+// Open popup overlay with call information
+async function openPopupWithCallInfo(callInfo) {
+    try {
+        // Send message to open overlay with call info
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        
+        if (tab && tab.id) {
+            chrome.tabs.sendMessage(tab.id, {
+                type: 'SHOW_CALL_INFO',
+                payload: callInfo
+            });
+        }
+        
+        console.log('[AGS] Popup opened with call info:', callInfo);
+        
+    } catch (error) {
+        console.error('[AGS] Error opening popup:', error);
+    }
 }
 
 async function handleAtsAction(payload) {
