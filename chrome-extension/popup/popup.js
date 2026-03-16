@@ -459,12 +459,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             showTestStatus('Transcribing audio...', 'loading');
             
             try {
-                console.log('[Transcribe] Checking server...');
+                console.log('[Transcribe] Checking server at:', actualUrl);
                 const healthCheck = await fetch(`${actualUrl}/health`, { 
                     method: 'GET',
-                    signal: AbortSignal.timeout(5000)
+                    signal: AbortSignal.timeout(10000)
                 }).catch(e => {
-                    throw new Error('Server not reachable. Is the AI server running on Azure?');
+                    console.error('[Transcribe] Server unreachable:', e.message);
+                    throw new Error(`Server not reachable: ${e.message}. Is the AI server running?`);
                 });
                 
                 console.log('[Transcribe] Server is up, uploading file...');
@@ -523,19 +524,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             const actualUrl = serverUrl.includes('localhost') ? 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io' : serverUrl;
             console.log('[Test Analysis] Using URL:', actualUrl);
             
-            // Send to AI server for analysis
-            const response = await fetch(`${actualUrl}/api/analyze`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    transcription: transcriptionInput.value.trim(),
-                    phone: phone,
-                    client: client
-                })
-            });
+            // Send to AI server for analysis with retry logic
+            let response;
+            let lastError = null;
+            const maxRetries = 3;
             
-            if (!response.ok) {
-                throw new Error(`AI Server error: ${response.status}`);
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    console.log(`[Test Analysis] Attempt ${attempt}/${maxRetries}...`);
+                    response = await fetch(`${actualUrl}/api/analyze`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            transcription: transcriptionInput.value.trim(),
+                            phone: phone,
+                            client: client
+                        }),
+                        signal: AbortSignal.timeout(30000)
+                    });
+                    
+                    if (response.ok) break;
+                    lastError = `HTTP ${response.status}: ${response.statusText}`;
+                    
+                } catch (netError) {
+                    lastError = netError.message;
+                    console.log(`[Test Analysis] Attempt ${attempt} failed:`, netError.message);
+                    if (attempt < maxRetries) {
+                        await new Promise(r => setTimeout(r, 1000 * attempt)); // Exponential backoff
+                    }
+                }
+            }
+            
+            if (!response || !response.ok) {
+                throw new Error(lastError || 'AI Server unreachable after retries');
             }
             
             const analysis = await response.json();

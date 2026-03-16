@@ -25,7 +25,7 @@ app = FastAPI(title="ATS AI Server")
 # Add CORS middleware for Chrome extension
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["chrome-extension://*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
