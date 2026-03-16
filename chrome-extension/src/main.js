@@ -21,9 +21,11 @@
     // This ensures PING handler is always available
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-            console.log('[ATS] Message received:', message.type);
+            // Support both message.type and message.action
+            const messageType = message.type || message.action;
+            console.log('[ATS] Message received:', messageType, message);
             
-            switch (message.type) {
+            switch (messageType) {
                 case 'SHOW_NOTIFICATION':
                     if (overlay && overlay.showNotification) {
                         overlay.showNotification(message.payload.message);
@@ -43,7 +45,7 @@
                     break;
                     
                 default:
-                    console.log('[ATS] Unknown message:', message.type);
+                    console.log('[ATS] Unknown message:', messageType);
             }
         });
     }
@@ -63,8 +65,10 @@
     }
 
     // Check if automations are enabled
-    if (!ATS.config.automationEnabled) {
-        console.log('[ATS] Automations disabled');
+    // Default to true if not set
+    const automationEnabled = ATS.config.automationEnabled !== false;
+    if (!automationEnabled) {
+        console.log('[ATS] Automations disabled - config:', ATS.config);
         return;
     }
 
