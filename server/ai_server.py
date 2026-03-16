@@ -338,6 +338,112 @@ async def get_knowledge_base(client: str):
     return {"client": client, "kb_available": False}
 
 
+
+
+# CTM Webhook endpoint - receives call data from CTM
+class CTMWebhookRequest(BaseModel):
+    event: str
+    call_id: Optional[str] = None
+    phone_number: Optional[str] = None
+    caller_number: Optional[str] = None
+    from_number: Optional[str] = None
+    to_number: Optional[str] = None
+    direction: Optional[str] = None
+    duration: Optional[int] = None
+    recording_url: Optional[str] = None
+    transcript: Optional[str] = None
+    transcription: Optional[str] = None
+    client: str = 'flyland'
+    timestamp: Optional[str] = None
+
+@app.post("/api/ctm-webhook")
+async def ctm_webhook(request: CTMWebhookRequest):
+    """Handle incoming webhook from CTM - receives transcript and analyzes with AI"""
+    try:
+        logger.info(f"CTM Webhook received: {request.event}")
+        
+        # Extract phone number from various possible fields
+        phone = request.phone_number or request.caller_number or request.from_number or request.to_number
+        if phone:
+            phone = re.sub(r"[^\d+]", "", phone)
+            if not phone.startswith('+'):
+                phone = '+1' + phone
+        
+        # Get transcript from various possible fields
+        transcript = request.transcript or request.transcription or ''
+        
+        logger.info(f"CTM Webhook - Phone: {phone}, Transcript length: {len(transcript)}")
+        
+        # If we have a transcript, analyze it
+        if transcript and len(transcript) > 10:
+            # Analyze with AI
+            analysis = await analyze_with_openai(transcript, phone, request.client)
+            
+            # Prepare response
+            result = {
+                "status": "success",
+                "event": request.event,
+                "call_id": request.call_id,
+                "phone": phone,
+                "transcript": transcript,
+                "analysis": analysis,
+                "qualification_score": analysis.get("qualification_score", 0),
+                "tags": analysis.get("tags", []),
+                "sentiment": analysis.get("sentiment", "neutral"),
+                "summary": analysis.get("summary", ""),
+                "suggested_disposition": analysis.get("suggested_disposition", "New"),
+                "follow_up_required": analysis.get("follow_up_required", False),
+                "ai_analyzed": True
+            }
+            
+            logger.info(f"CTM Webhook analysis complete: {analysis.get('qualification_score', 0)}")
+            
+            # Store result for polling by extension
+            if phone:
+                WEBHOOK_RESULTS[phone] = result
+            
+            return result
+        else:
+            # No transcript - just acknowledge the webhook
+            logger.info("CTM Webhook - No transcript to analyze")
+            return {
+                "status": "received",
+                "event": request.event,
+                "call_id": request.call_id,
+                "phone": phone,
+                "message": "Webhook received, no transcript to analyze"
+            }
+            
+    except Exception as e:
+        logger.error(f"CTM Webhook error: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+
+
+# In-memory storage for webhook results (for polling by extension)
+WEBHOOK_RESULTS = {}
+
+@app.get("/api/webhook-results")
+async def get_webhook_results(phone: str = None):
+    """Get webhook analysis results for a phone number"""
+    global WEBHOOK_RESULTS
+    
+    if not phone:
+        return {"results": list(WEBHOOK_RESULTS.values())}
+    
+    # Clean phone number
+    phone = re.sub(r"[^\d+]", "", phone)
+    
+    if phone in WEBHOOK_RESULTS:
+        result = WEBHOOK_RESULTS[phone]
+        # Remove after returning (one-time use)
+        del WEBHOOK_RESULTS[phone]
+        return result
+    
+    return {"status": "no_results"}
+
+
 async def get_kb_context(client: str) -> str:
     """Get knowledge base context for the AI prompt - OPTIMIZED for speed"""
     if client not in KNOWLEDGE_BASES:

@@ -14,6 +14,7 @@ class CallMonitor {
         this.aiService = new AIService();
         this.callerInfoService = new CallerInfoService();
         this.audioCaptureService = new AudioCaptureService();
+        this.webhookPollInterval = null;
         
         this.currentCall = null;
         this.currentAnalysis = null;
@@ -66,7 +67,78 @@ class CallMonitor {
         this.isMonitoring = false;
         this.ctmService.stopMonitoring();
         this.transcriptionService.stop();
+        this.stopWebhookPolling();
         ATS.logger.info('Call monitoring stopped');
+    }
+
+    // Check for CTM webhook results via server
+    async checkWebhookResults(phoneNumber) {
+        try {
+            const serverUrl = this.aiService.serverUrl;
+            const response = await fetch(serverUrl + '/api/webhook-results?phone=' + phoneNumber, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.analysis) {
+                    ATS.logger.info('[Webhook] Analysis received:', result.analysis.tags || []);
+                    return result;
+                }
+            }
+        } catch (e) {
+            ATS.logger.debug('[Webhook] Poll no result:', e.message);
+        }
+        return null;
+    }
+
+    // Start polling for webhook results after call ends
+    startWebhookPolling(phoneNumber) {
+        let attempts = 0;
+        const maxAttempts = 30;
+        const self = this;
+        
+        ATS.logger.info('[Webhook] Starting polling for:', phoneNumber);
+        
+        this.webhookPollInterval = setInterval(async () => {
+            attempts++;
+            
+            const result = await self.checkWebhookResults(phoneNumber);
+            
+            if (result && result.analysis) {
+                clearInterval(self.webhookPollInterval);
+                self.webhookPollInterval = null;
+                
+                ATS.logger.info('[Webhook] Result received!');
+                
+                self.currentAnalysis = result.analysis;
+                self.callerInfoService.updateFromAI(result.analysis);
+                
+                ATS.sendMessage({
+                    type: ATS.Messages.SHOW_CALL_SUMMARY,
+                    payload: {
+                        callerInfo: self.callerInfoService.getDisplayInfo(),
+                        analysis: result.analysis,
+                        phone: phoneNumber,
+                        showButtons: true,
+                        transcript: result.transcript
+                    }
+                });
+            } else if (attempts >= maxAttempts) {
+                clearInterval(self.webhookPollInterval);
+                self.webhookPollInterval = null;
+                ATS.logger.warn('[Webhook] Polling timeout - no webhook result');
+            }
+        }, 2000);
+    }
+
+    // Stop webhook polling
+    stopWebhookPolling() {
+        if (this.webhookPollInterval) {
+            clearInterval(this.webhookPollInterval);
+            this.webhookPollInterval = null;
+        }
     }
 
     // Handle call events
@@ -156,7 +228,15 @@ class CallMonitor {
             payload: { ...this.currentCall, event: 'call_ended' }
         });
 
-        // Analyze with AI
+        // Start webhook polling as alternative to audio capture
+        // CTM will send webhook with transcript, we'll poll for results
+        if (ATS.config.aiAnalysisEnabled && this.currentCall.phoneNumber) {
+            ATS.logger.info('[Webhook] Starting webhook polling for:', this.currentCall.phoneNumber);
+            this.startWebhookPolling(this.currentCall.phoneNumber);
+        }
+
+        // Also try local audio capture as fallback
+        // (original audio capture code continues below)
         if (ATS.config.aiAnalysisEnabled) {
             ATS.logger.info('★ Starting AI analysis...');
             
