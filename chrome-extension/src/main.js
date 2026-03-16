@@ -23,8 +23,15 @@
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // Support both message.type and message.action
             const messageType = message.type || message.action;
-            console.log('[ATS] Message received:', messageType, message);
+            console.log('[ATS] Message received:', messageType);
             
+            // Handle PING synchronously to avoid async response issues
+            if (messageType === 'PING') {
+                sendResponse({ pong: true, status: 'ok' });
+                return false;
+            }
+            
+            // Handle other messages
             switch (messageType) {
                 case 'SHOW_NOTIFICATION':
                     if (overlay && overlay.showNotification) {
@@ -40,13 +47,11 @@
                     }
                     break;
                     
-                case 'PING':
-                    sendResponse({ pong: true, status: 'ok' });
-                    break;
-                    
                 default:
                     console.log('[ATS] Unknown message:', messageType);
             }
+            
+            return false;
         });
     }
 
