@@ -38,13 +38,6 @@ const ATS = {
     }
   },
 
-  logger: {
-    info: function(msg, data) { ATS.log(msg, data); },
-    debug: function(msg, data) { ATS.log(msg, data); },
-    warn: function(msg, data) { ATS.log('WARN: ' + msg, data); },
-    error: function(msg, data) { ATS.error(msg, data); }
-  },
-
   async getConfig() {
     return new Promise((resolve) => {
       chrome.storage.local.get(this.config.storageKey, (result) => {
@@ -138,6 +131,21 @@ const ATS = {
     AI_ANALYSIS_RESULT: 'AI_ANALYSIS_RESULT'
   }
 };
+
+// Add logger using Object.defineProperty after ATS is fully defined
+// This ensures ATS.log and ATS.error are available when logger methods are called
+Object.defineProperty(ATS, 'logger', {
+  get: function() {
+    return {
+      info: function(msg, data) { ATS.log(msg, data); },
+      debug: function(msg, data) { ATS.log(msg, data); },
+      warn: function(msg, data) { ATS.log('WARN: ' + msg, data); },
+      error: function(msg, data) { ATS.error(msg, data); }
+    };
+  },
+  configurable: true,
+  enumerable: true
+});
 
 if (typeof window !== 'undefined') {
   window.ATS = ATS;
