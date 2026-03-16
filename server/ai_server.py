@@ -256,6 +256,80 @@ async def transcribe_audio(file: UploadFile = File(...)):
         return {"error": str(e)}
 
 
+
+
+# New endpoint for base64 audio transcription + analysis (from Chrome extension)
+class TranscribeRequest(BaseModel):
+    audio: str  # base64 encoded audio
+    phone: Optional[str] = None
+    client: str = "flyland"
+    format: str = "webm"
+
+@app.post("/api/transcribe")
+async def transcribe_audio(request: TranscribeRequest):
+    """Transcribe base64 audio and analyze with AI (for CTM call recording)"""
+    import base64
+    import io
+    
+    if not WHISPER_AVAILABLE:
+        # If whisper not available, use AI to transcribe from description
+        logger.warning("Whisper not available, using AI for transcription")
+        
+        # Return error - need whisper for transcription
+        return {"error": "Audio transcription not available. Please install faster-whisper."}
+    
+    try:
+        # Decode base64 audio
+        audio_data = base64.b64decode(request.audio)
+        
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{request.format}") as tmp:
+            tmp.write(audio_data)
+            tmp_path = tmp.name
+        
+        logger.info(f"Transcribing audio: {len(audio_data)} bytes, format: {request.format}")
+        
+        # Transcribe using faster-whisper
+        segments, info = WHISPER_MODEL.transcribe(tmp_path)
+        transcription = " ".join([segment.text for segment in segments]).strip()
+        
+        # Clean up temp file
+        os.unlink(tmp_path)
+        
+        logger.info(f"Transcription complete: {len(transcription)} chars")
+        
+        # If phone not provided, extract from transcription
+        phone = request.phone
+        if not phone:
+            phone_pattern = r"\+?1?[-.\s]?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}"
+            phones = re.findall(phone_pattern, transcription)
+            if phones:
+                phone = re.sub(r"[^\d+]", "", phones[0])
+                if not phone.startswith('+'):
+                    phone = '+1' + phone
+        
+        # Analyze with AI
+        if transcription and len(transcription) > 10:
+            analysis = await analyze_with_openai(transcription, phone, request.client)
+            
+            return {
+                "transcription": transcription,
+                "phone": phone,
+                "analysis": analysis,
+                "duration": info.duration or 0
+            }
+        else:
+            return {
+                "transcription": transcription,
+                "phone": phone,
+                "analysis": {"error": "Transcription too short for analysis"},
+                "duration": info.duration or 0
+            }
+            
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        return {"error": str(e)}
+
 @app.get("/api/kb/{client}")
 async def get_knowledge_base(client: str):
     """Get knowledge base for a specific client"""

@@ -8,7 +8,9 @@
     "activeTab",
     "storage",
     "scripting",
-    "windows"
+    "windows",
+    "desktopCapture",
+    "tabCapture"
   ],
   "host_permissions": [
     "*://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/*",
@@ -24,8 +26,15 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/**/*", "config/*", "clients/**/*", "popup/**/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "src/**/*",
+        "config/*",
+        "clients/**/*",
+        "popup/**/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "background": {
@@ -41,7 +50,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.calltrackingmetrics.com/*"],
+      "matches": [
+        "*://*.calltrackingmetrics.com/*"
+      ],
       "js": [
         "src/lib/core.js",
         "src/services/ctm-service.js",
@@ -49,6 +60,7 @@
         "src/services/salesforce-contact-service.js",
         "src/services/salesforce-action-service.js",
         "src/services/caller-info-service.js",
+        "src/services/audio-capture-service.js",
         "src/services/transcription-service.js",
         "src/services/ai-service.js",
         "src/modules/call-monitor.js",
@@ -79,7 +91,9 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["*://*.zoho.com/*"],
+      "matches": [
+        "*://*.zoho.com/*"
+      ],
       "js": [
         "src/lib/core.js"
       ],

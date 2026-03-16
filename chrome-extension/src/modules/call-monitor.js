@@ -13,6 +13,7 @@ class CallMonitor {
         this.transcriptionService = new TranscriptionService();
         this.aiService = new AIService();
         this.callerInfoService = new CallerInfoService();
+        this.audioCaptureService = new AudioCaptureService();
         
         this.currentCall = null;
         this.currentAnalysis = null;
