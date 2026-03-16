@@ -143,38 +143,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('[Popup] Loading...');
     
     try {
-        // Initialize collapsible cards (new card-based structure)
-        document.querySelectorAll('.popup-card .popup-card-header').forEach(header => {
+        // Initialize collapsible sections
+        document.querySelectorAll('.section.collapsible .section-header').forEach(header => {
             header.addEventListener('click', function() {
-                const card = this.closest('.popup-card');
-                card.classList.toggle('collapsed');
+                const section = this.closest('.collapsible');
+                section.classList.toggle('collapsed');
                 
                 // Save state to storage
-                const cardId = card.id;
-                if (cardId) {
-                    StorageService.set({ ['collapsed_' + cardId]: card.classList.contains('collapsed') });
+                const sectionId = section.id;
+                if (sectionId) {
+                    StorageService.set({ ['collapsed_' + sectionId]: section.classList.contains('collapsed') });
                 }
             });
         });
         
         // Restore collapsed states from storage
-        const collapsibleCards = document.querySelectorAll('.popup-card');
+        const collapsibleSections = document.querySelectorAll('.section.collapsible');
         const collapsedKeys = {};
-        collapsibleCards.forEach(c => {
-            collapsedKeys['collapsed_' + c.id] = null;
+        collapsibleSections.forEach(s => {
+            collapsedKeys['collapsed_' + s.id] = null;
         });
         const collapsedStates = await StorageService.get(collapsedKeys);
         Object.entries(collapsedStates).forEach(([key, value]) => {
             if (value === true) {
-                const cardId = key.replace('collapsed_', '');
-                const card = document.getElementById(cardId);
-                if (card) {
-                    card.classList.add('collapsed');
+                const sectionId = key.replace('collapsed_', '');
+                const section = document.getElementById(sectionId);
+                if (section) {
+                    section.classList.add('collapsed');
                 }
             }
         });
     } catch(e) {
-        console.error('[Popup] Error initializing collapsible cards:', e);
+        console.error('[Popup] Error initializing collapsible sections:', e);
     }
     
     // Get elements
