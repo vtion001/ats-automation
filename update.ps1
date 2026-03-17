@@ -1,47 +1,42 @@
 # ATS Automation - Update Script
-# Run this to update to the latest version
+# Run this in PowerShell to pull latest changes
 
-$repoPath = "$env:USERPROFILE\ats-automation"
+Write-Host "Updating ATS Automation..." -ForegroundColor Cyan
 
-if (-not (Test-Path $repoPath)) {
-    Write-Host "ATS Automation not found at $repoPath" -ForegroundColor Red
-    Write-Host "Run the install script first:" -ForegroundColor Yellow
-    Write-Host "  irm https://raw.githubusercontent.com/vtion001/ats-automation/main/install-windows.ps1 | iex" -ForegroundColor Cyan
+$installPath = "$env:USERPROFILE\ats-automation"
+
+if (-not (Test-Path $installPath)) {
+    Write-Host "ATS Automation not found at $installPath" -ForegroundColor Red
+    Write-Host "Please run install first:" -ForegroundColor Yellow
+    Write-Host "  irm https://raw.githubusercontent.com/vtion001/ats-automation/main/install-windows.ps1 | iex" -ForegroundColor White
     exit 1
 }
 
-Write-Host "Updating ATS Automation..." -ForegroundColor Cyan
-Set-Location $repoPath
+Set-Location $installPath
 
-# Stash any local changes
-$stashed = $false
-if ((git status --porcelain) -ne "") {
-    Write-Host "Stashing local changes..." -ForegroundColor Yellow
-    git stash
-    $stashed = $true
-}
-
-# Pull latest changes
 Write-Host "Pulling latest changes..." -ForegroundColor Yellow
 git pull origin main
 
-# Update Python dependencies
-Write-Host "Updating dependencies..." -ForegroundColor Yellow
-if (Test-Path "requirements.txt") {
-    pip install -r requirements.txt --upgrade
-}
-
-if (Test-Path "requirements-server.txt") {
-    pip install -r requirements-server.txt --upgrade
-}
-
-# Restore stashed changes
-if ($stashed) {
-    Write-Host "Restoring local changes..." -ForegroundColor Yellow
-    git stash pop
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Successfully updated!" -ForegroundColor Green
+    
+    # Check if requirements changed
+    if (Test-Path "requirements.txt") {
+        Write-Host "Checking for new dependencies..." -ForegroundColor Yellow
+        $pythonCmd = "python"
+        if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+            $pythonCmd = "python3"
+        }
+        & $pythonCmd -m pip install -r requirements.txt --quiet 2>$null
+    }
+    
+    Write-Host ""
+    Write-Host "Done! Restart Chrome extension if needed." -ForegroundColor Cyan
+} else {
+    Write-Host "Update failed. Trying to stash and pull..." -ForegroundColor Yellow
+    git stash
+    git pull origin main
 }
 
 Write-Host ""
 Write-Host "Update complete!" -ForegroundColor Green
-Write-Host "Restart your server with: python server\main.py" -ForegroundColor Cyan
-Write-Host "Or rebuild your Chrome extension in chrome://extensions/" -ForegroundColor Cyan
