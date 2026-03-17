@@ -13,6 +13,10 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
     $pythonCmd = "C:\Python311\python.exe"
 } elseif (Test-Path "C:\Python310\python.exe") {
     $pythonCmd = "C:\Python310\python.exe"
+} elseif (Test-Path "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe") {
+    $pythonCmd = "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe"
+} elseif (Test-Path "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe") {
+    $pythonCmd = "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe"
 }
 
 if (-not $pythonCmd) {
@@ -30,41 +34,81 @@ $installPath = "$env:USERPROFILE\ats-automation"
 
 Write-Host "Cloning repository to $installPath..." -ForegroundColor Yellow
 
-# Remove existing if present
+# Handle existing folder - try to remove, if fails, use different name
 if (Test-Path $installPath) {
-    Remove-Item -Recurse -Force $installPath
+    Write-Host "Removing existing installation..." -ForegroundColor Yellow
+    try {
+        # Try to remove with retries
+        $removed = $false
+        for ($i = 0; $i -lt 3; $i++) {
+            try {
+                Remove-Item -Recurse -Force $installPath -ErrorAction Stop
+                $removed = $true
+                break
+            } catch {
+                Start-Sleep -Seconds 2
+            }
+        }
+        if (-not $removed) {
+            # If can't remove, use temp name
+            $installPath = "$env:TEMP\ats-automation-new"
+            Write-Host "Using alternate path: $installPath" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "Could not remove existing folder - continuing with existing installation" -ForegroundColor Yellow
+    }
 }
 
 # Clone via git or download zip
 try {
-    git clone $repoUrl $installPath
-    Write-Host "Repository cloned successfully!" -ForegroundColor Green
+    git clone $repoUrl $installPath -Force 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Repository cloned successfully!" -ForegroundColor Green
+    }
 } catch {
     # Fallback: download zip
+    Write-Host "Downloading repository..." -ForegroundColor Yellow
     $zipUrl = "https://github.com/vtion001/ats-automation/archive/refs/heads/main.zip"
-    Invoke-WebRequest -Uri $zipUrl -OutFile "$env:TEMP\ats-automation.zip"
-    Expand-Archive -Path "$env:TEMP\ats-automation.zip" -DestinationPath "$env:USERPROFILE"
-    Rename-Item "$env:USERPROFILE\ats-automation-main" $installPath
-    Write-Host "Repository downloaded successfully!" -ForegroundColor Green
+    $zipPath = "$env:TEMP\ats-automation.zip"
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+    Expand-Archive -Path $zipPath -DestinationPath "$env:TEMP" -Force
+    $extractedPath = "$env:TEMP\ats-automation-main"
+    if (Test-Path $extractedPath) {
+        if (Test-Path $installPath) {
+            Remove-Item -Recurse -Force $installPath -ErrorAction SilentlyContinue
+        }
+        Move-Item -Path $extractedPath -Destination $installPath -Force
+        Write-Host "Repository downloaded successfully!" -ForegroundColor Green
+    }
 }
 
-# Install Python dependencies
-Write-Host "Installing Python dependencies..." -ForegroundColor Yellow
-Set-Location $installPath
+# Change to install directory
+Set-Location $installPath -ErrorAction SilentlyContinue
 
-# Use python -m pip instead of direct pip command
+# Install Python dependencies using python -m pip
+Write-Host "Installing Python dependencies..." -ForegroundColor Yellow
+
 if (Test-Path "requirements.txt") {
-    & $pythonCmd -m pip install -r requirements.txt
+    & $pythonCmd -m pip install -r requirements.txt 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        # Try with --user flag
+        & $pythonCmd -m pip install --user -r requirements.txt
+    }
 }
 
 if (Test-Path "requirements-server.txt") {
-    & $pythonCmd -m pip install -r requirements-server.txt
+    & $pythonCmd -m pip install -r requirements-server.txt 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        & $pythonCmd -m pip install --user -r requirements-server.txt
+    }
 }
 
 # Create .env file from template
 if (Test-Path ".env.example") {
-    Copy-Item ".env.example" ".env"
-    Write-Host "Created .env file - please configure your API keys" -ForegroundColor Yellow
+    if (-not (Test-Path ".env")) {
+        Copy-Item ".env.example" ".env"
+        Write-Host "Created .env file - please configure your API keys" -ForegroundColor Yellow
+    }
 }
 
 # Chrome Extension
