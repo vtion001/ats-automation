@@ -3,7 +3,6 @@
   "name": "ATS Automation",
   "version": "2.1.0",
   "description": "BPO client workflow automation - CTM monitoring, transcription, Salesforce integration",
-  "update_url": "https://releases.ats-automation.local/update.xml",
   "permissions": [
     "activeTab",
     "storage",

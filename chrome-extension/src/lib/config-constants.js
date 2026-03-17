@@ -3,7 +3,9 @@
  * Default values and storage keys used across the extension
  */
 
-const ATS_CONFIG_DEFAULTS = {
+// Only declare if not already defined
+if (typeof window.ATS_CONFIG_DEFAULTS === 'undefined') {
+var ATS_CONFIG_DEFAULTS = {
     // Active client
     activeClient: 'flyland',
     
@@ -22,17 +24,21 @@ const ATS_CONFIG_DEFAULTS = {
     salesforceUrl: 'https://flyland.my.salesforce.com',
     ctmUrl: 'https://app.calltrackingmetrics.com'
 };
+}
 
-const ATS_STORAGE_KEYS = {
+if (typeof window.ATS_STORAGE_KEYS === 'undefined') {
+var ATS_STORAGE_KEYS = {
     CONFIG: 'ats_config',
     STATS: 'ats_stats',
     NOTES_PREFIX: 'ats_notes_',
     QUALIFICATION: 'ats_qualification',
     CACHE: 'ats_cache'
 };
+}
 
 // Client configurations - pre-configured
-const ATS_CLIENTS = {
+if (typeof window.ATS_CLIENTS === 'undefined') {
+var ATS_CLIENTS = {
     flyland: {
         name: 'Flyland Recovery',
         industry: 'Addiction Counseling',
@@ -82,9 +88,10 @@ const ATS_CLIENTS = {
         enabled: false
     }
 };
+}
 
 if (typeof window !== 'undefined') {
-    window.ATS_CONFIG_DEFAULTS = ATS_CONFIG_DEFAULTS;
-    window.ATS_STORAGE_KEYS = ATS_STORAGE_KEYS;
-    window.ATS_CLIENTS = ATS_CLIENTS;
+    window.ATS_CONFIG_DEFAULTS = window.ATS_CONFIG_DEFAULTS || ATS_CONFIG_DEFAULTS;
+    window.ATS_STORAGE_KEYS = window.ATS_STORAGE_KEYS || ATS_STORAGE_KEYS;
+    window.ATS_CLIENTS = window.ATS_CLIENTS || ATS_CLIENTS;
 }

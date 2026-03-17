@@ -8,7 +8,8 @@
 // STORAGE KEYS - PRESERVED EXACTLY AS THEY ARE
 // ============================================================================
 
-const ATS_STORAGE_KEYS = {
+// Avoid redeclaring if already defined in core.js
+var ATS_STORAGE_KEYS = window.ATS_STORAGE_KEYS || {
     CONFIG: 'ats_config',
     STATS: 'ats_stats',
     NOTES_PREFIX: 'ats_notes_',
