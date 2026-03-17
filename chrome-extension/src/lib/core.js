@@ -3,11 +3,14 @@
  * Common utilities and helpers for the ATS Chrome Extension
  * 
  * This is the MAIN backward compatibility layer.
+ * Constants are defined in src/shared/constants/index.js
  * New modules are available via window.ATSCore
  */
 
-// Legacy constants for backward compatibility
-const ATS_STORAGE_KEYS = {
+// Legacy constants - now imported from shared/constants/index.js
+// ATS_STORAGE_KEYS is defined in src/shared/constants/index.js
+// For backward compatibility, reference it from window if available
+var ATS_STORAGE_KEYS = window.ATS_STORAGE_KEYS || {
     CONFIG: 'ats_config',
     STATS: 'ats_stats',
     NOTES_PREFIX: 'ats_notes_',
@@ -179,7 +182,7 @@ const ATS = {
     }
   },
 
-  Messages: {
+  Messages: window.ATS_CONSTANTS?.MESSAGE_TYPES || {
     CTM_CALL_EVENT: 'CTM_CALL_EVENT',
     SHOW_NOTIFICATION: 'SHOW_NOTIFICATION',
     SHOW_OVERLAY: 'SHOW_OVERLAY',
@@ -208,6 +211,9 @@ Object.defineProperty(ATS, 'logger', {
 if (typeof window !== 'undefined') {
   window.ATS = ATS;
   window.ATS_STORAGE_KEYS = ATS_STORAGE_KEYS;
+  window.ATS_MESSAGE_TYPES = window.ATS_CONSTANTS?.MESSAGE_TYPES || window.ATS_MESSAGE_TYPES;
+  window.ATS_CONFIG_DEFAULTS = window.ATS_CONSTANTS?.CONFIG_DEFAULTS || window.ATS_CONFIG_DEFAULTS;
+  window.ATS_CLIENTS = window.ATS_CONSTANTS?.CLIENTS || window.ATS_CLIENTS;
   
   // Expose new modular infrastructure
   // These provide the same functionality but in a more maintainable way

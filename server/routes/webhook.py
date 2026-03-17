@@ -2,7 +2,7 @@
 CTM Webhook endpoint
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from models.requests import CTMWebhookRequest
 from services import ai_service, webhook_storage
 from utils.phone_utils import clean_phone

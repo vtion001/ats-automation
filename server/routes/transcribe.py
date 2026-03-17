@@ -3,10 +3,9 @@ Transcription endpoints
 """
 
 import base64
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File
 from models.requests import TranscribeRequest
 from services import transcription_service, ai_service
-from utils.phone_utils import clean_phone
 import logging
 
 logger = logging.getLogger(__name__)

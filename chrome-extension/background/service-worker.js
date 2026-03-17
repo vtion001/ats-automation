@@ -1,10 +1,10 @@
 /**
- * AGS Background Service Worker
+ * ATS Background Service Worker
  * Handles messaging between content scripts and native automation
  */
 
 // Default configuration - Pre-configured for Flyland
-const AGS_CONFIG = {
+const ATS_CONFIG = {
     activeClient: 'flyland',
     automationEnabled: true,
     autoSearchSF: true,
@@ -32,20 +32,20 @@ async function loadConfig() {
         // Check for new config format first
         if (stored.ats_config) {
             const config = stored.ats_config;
-            if (config.activeClient) AGS_CONFIG.activeClient = config.activeClient;
-            if (config.automationEnabled !== undefined) AGS_CONFIG.automationEnabled = config.automationEnabled;
-            if (config.autoSearchSF !== undefined) AGS_CONFIG.autoSearchSF = config.autoSearchSF;
-            if (config.transcriptionEnabled !== undefined) AGS_CONFIG.transcriptionEnabled = config.transcriptionEnabled;
-            if (config.aiAnalysisEnabled !== undefined) AGS_CONFIG.aiAnalysisEnabled = config.aiAnalysisEnabled;
-            if (config.saveMarkdown !== undefined) AGS_CONFIG.saveMarkdown = config.saveMarkdown;
-            if (config.salesforceUrl) AGS_CONFIG.salesforceUrl = config.salesforceUrl;
-            if (config.aiServerUrl) AGS_CONFIG.aiServerUrl = config.aiServerUrl;
+            if (config.activeClient) ATS_CONFIG.activeClient = config.activeClient;
+            if (config.automationEnabled !== undefined) ATS_CONFIG.automationEnabled = config.automationEnabled;
+            if (config.autoSearchSF !== undefined) ATS_CONFIG.autoSearchSF = config.autoSearchSF;
+            if (config.transcriptionEnabled !== undefined) ATS_CONFIG.transcriptionEnabled = config.transcriptionEnabled;
+            if (config.aiAnalysisEnabled !== undefined) ATS_CONFIG.aiAnalysisEnabled = config.aiAnalysisEnabled;
+            if (config.saveMarkdown !== undefined) ATS_CONFIG.saveMarkdown = config.saveMarkdown;
+            if (config.salesforceUrl) ATS_CONFIG.salesforceUrl = config.salesforceUrl;
+            if (config.aiServerUrl) ATS_CONFIG.aiServerUrl = config.aiServerUrl;
         }
         
         // Legacy support - check individual keys
-        if (stored.salesforceUrl) AGS_CONFIG.salesforceUrl = stored.salesforceUrl;
-        if (stored.aiServerUrl) AGS_CONFIG.aiServerUrl = stored.aiServerUrl;
-        if (stored.activeClient) AGS_CONFIG.activeClient = stored.activeClient;
+        if (stored.salesforceUrl) ATS_CONFIG.salesforceUrl = stored.salesforceUrl;
+        if (stored.aiServerUrl) ATS_CONFIG.aiServerUrl = stored.aiServerUrl;
+        if (stored.activeClient) ATS_CONFIG.activeClient = stored.activeClient;
         
         // Initialize storage with defaults if not set
         if (!stored.aiServerUrl) {
@@ -55,7 +55,7 @@ async function loadConfig() {
             await chrome.storage.local.set({ salesforceUrl: 'https://flyland.my.salesforce.com' });
         }
         
-        console.log('[AGS] Config loaded:', AGS_CONFIG);
+        console.log('[AGS] Config loaded:', ATS_CONFIG);
     } catch (error) {
         console.error('[AGS] Error loading config:', error);
     }
@@ -141,7 +141,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             handleClientChanged(message.client);
             break;
         case 'GET_CONFIG':
-            sendResponse(AGS_CONFIG);
+            sendResponse(ATS_CONFIG);
             break;
         case 'PING':
             sendResponse({ pong: true, status: 'ok' });
@@ -165,15 +165,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     return true;
 });
-            return true; // async response
-    }
-
-    return true;
-});
 
 async function handleClientChanged(client) {
     console.log('[AGS] Client changed to:', client);
-    AGS_CONFIG.activeClient = client;
+    ATS_CONFIG.activeClient = client;
 }
 
 async function handleCallEvent(payload) {
@@ -205,17 +200,17 @@ async function handleSearchSalesforce(payload) {
     }
 
     // Ensure we have a Salesforce URL configured
-    if (!AGS_CONFIG.salesforceUrl) {
+    if (!ATS_CONFIG.salesforceUrl) {
         console.error('[AGS] Salesforce URL not configured. Please configure in popup.');
         showOverlayNotification('⚠️ Salesforce URL not configured. Open extension settings.');
         return;
     }
 
     console.log('[AGS] Searching Salesforce for:', phone);
-    console.log('[AGS] Using Salesforce URL:', AGS_CONFIG.salesforceUrl);
+    console.log('[AGS] Using Salesforce URL:', ATS_CONFIG.salesforceUrl);
 
     try {
-        const searchUrl = `${AGS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${encodeURIComponent(phone)}`;
+        const searchUrl = `${ATS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${encodeURIComponent(phone)}`;
         
         const tabs = await chrome.tabs.query({ url: '*://*.salesforce.com/*' });
         
@@ -251,19 +246,19 @@ async function handleTranscriptionComplete(payload) {
 }
 
 async function processWithAI(payload) {
-    if (!AGS_CONFIG.aiAnalysisEnabled) {
+    if (!ATS_CONFIG.aiAnalysisEnabled) {
         console.log('[AGS] AI Analysis disabled');
         return;
     }
 
     try {
-        const response = await fetch(`${AGS_CONFIG.aiServerUrl}/api/analyze`, {
+        const response = await fetch(`${ATS_CONFIG.aiServerUrl}/api/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 transcription: payload.markdown,
                 phone: payload.phone,
-                client: AGS_CONFIG.activeClient
+                client: ATS_CONFIG.activeClient
             })
         });
 
@@ -469,7 +464,7 @@ async function handleFillSalesforce(data) {
     
     try {
         // First, search for the contact
-        const searchUrl = `${AGS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${phone.replace(/\D/g, '')}`;
+        const searchUrl = `${ATS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${phone.replace(/\D/g, '')}`;
         
         // Open Salesforce search in new tab
         const tab = await chrome.tabs.create({ url: searchUrl, active: true });
@@ -530,7 +525,7 @@ async function handleSalesforceAction(action, data) {
     }
     
     // Search for contact first
-    const searchUrl = `${AGS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${phone.replace(/\D/g, '')}`;
+    const searchUrl = `${ATS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${phone.replace(/\D/g, '')}`;
     
     // Open search in new tab
     const tab = await chrome.tabs.create({ url: searchUrl, active: true });

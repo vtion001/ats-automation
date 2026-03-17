@@ -5,36 +5,9 @@ Analysis endpoints
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from models.requests import TranscriptionRequest, DetermineActionRequest
-from services import ai_service, KNOWLEDGE_BASES, get_knowledge_base
+from services import ai_service, KNOWLEDGE_BASES
 
 router = APIRouter(prefix="/api", tags=["analysis"])
-
-
-@router.get("/test")
-async def test_analysis():
-    """Test endpoint to verify AI analysis"""
-    test_transcription = "Hello, I'm calling to inquire about addiction treatment options. I have private insurance and I've been sober for 30 days. I'm from California."
-
-    try:
-        result = await ai_service.analyze(test_transcription, "5551234567", "flyland")
-
-        if "error" in result:
-            return {"status": "error", "message": result.get("error")}
-
-        return {
-            "status": "success",
-            "message": "AI analysis working correctly",
-            "transcription": test_transcription,
-            "result": {
-                "tags": result.get("tags", []),
-                "sentiment": result.get("sentiment"),
-                "summary": result.get("summary"),
-                "qualification_score": result.get("qualification_score", 0),
-                "follow_up_required": result.get("follow_up_required", False),
-            },
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 
 @router.post("/analyze")

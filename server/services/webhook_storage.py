@@ -3,9 +3,10 @@ Webhook results storage service
 """
 
 import json
+import logging
+import os
 import threading
 import time
-import logging
 from config.settings import WEBHOOK_RESULTS_FILE
 from utils.phone_utils import normalize_phone
 
@@ -66,7 +67,5 @@ class WebhookStorage:
             results = self.load()
             return list(results.values())
 
-
-import os
 
 webhook_storage = WebhookStorage()
