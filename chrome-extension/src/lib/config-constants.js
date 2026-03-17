@@ -18,7 +18,7 @@ const ATS_CONFIG_DEFAULTS = {
     popupFloatEnabled: false,
     
     // Server URLs - Pre-configured for Flyland
-    aiServerUrl: 'https://ags-ai-server.azurewebsites.net',
+    aiServerUrl: 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io',
     salesforceUrl: 'https://flyland.my.salesforce.com',
     ctmUrl: 'https://app.calltrackingmetrics.com'
 };

@@ -465,7 +465,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         const serverUrl = await StatusService.getAIServerUrl();
-        const actualUrl = serverUrl.includes('localhost') ? 'https://ags-ai-server.azurewebsites.net' : serverUrl;
+        const actualUrl = serverUrl.includes('localhost') ? 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io' : serverUrl;
         
         console.log('[Test Analysis] Server URL:', actualUrl);
         
@@ -527,7 +527,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             // Get AI Server URL - use Azure as default
             const serverUrl = await StatusService.getAIServerUrl();
-            const actualUrl = serverUrl.includes('localhost') ? 'https://ags-ai-server.azurewebsites.net' : serverUrl;
+            const actualUrl = serverUrl.includes('localhost') ? 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io' : serverUrl;
             console.log('[Test Analysis] Using URL:', actualUrl);
             
             // Send to AI server for analysis with retry logic
