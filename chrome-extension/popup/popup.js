@@ -429,18 +429,160 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // Test Existing Lead button
+    // Test Existing Lead button - Fetch from webhook results
     if (testExistingLeadBtn) {
-        testExistingLeadBtn.addEventListener('click', () => {
+        testExistingLeadBtn.addEventListener('click', async () => {
             currentTestType = 'existing';
-            if (testInputArea) testInputArea.style.display = 'block';
-            if (testStatus) testStatus.style.display = 'none';
+            if (testInputArea) testInputArea.style.display = 'none';
+            if (testStatus) testStatus.style.display = 'block';
             
-            // Clear fields - user will upload audio or paste transcription
-            if (transcriptionInput) transcriptionInput.value = '';
-            if (testPhoneInput) testPhoneInput.value = '';
-            if (testClientSelect) testClientSelect.value = 'flyland';
-            if (audioFileInput) audioFileInput.value = '';
+            showTestStatus('Fetching latest call data...', 'loading');
+            
+            try {
+                const serverUrl = await StatusService.getAIServerUrl();
+                const actualUrl = serverUrl.includes('localhost') 
+                    ? 'http://localhost:8000' 
+                    : serverUrl;
+                
+                // Fetch all webhook results
+                const response = await fetch(`${actualUrl}/api/webhook-results`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: AbortSignal.timeout(10000)
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch webhook results');
+                }
+                
+                const data = await response.json();
+                
+                // Get results - could be array or object
+                let results = [];
+                if (data.results && Array.isArray(data.results)) {
+                    results = data.results;
+                } else if (data.phone || data.call_id) {
+                    results = [data];
+                }
+                
+                if (results.length === 0) {
+                    showTestStatus('No calls found. Make a call first or send a webhook.', 'error');
+                    return;
+                }
+                
+                // Get the most recent result
+                const result = results[0];
+                
+                // Extract data from the stored result
+                const phone = result.phone || result.phone_number;
+                const transcript = result.transcript || result.transcription || '';
+                const analysis = result.analysis || {};
+                const client = result.client || 'flyland';
+                
+                if (!transcript) {
+                    showTestStatus('No transcript found in stored call data.', 'error');
+                    return;
+                }
+                
+                // Display the results in the popup
+                showTestStatus('Analysis found! Displaying results...', 'success');
+                
+                // Build caller info display
+                const callerInfoDisplay = [];
+                
+                if (phone) {
+                    callerInfoDisplay.push({
+                        label: 'Phone',
+                        value: String(phone),
+                        confidence: 1.0,
+                        source: 'ctm',
+                        isHighConfidence: true
+                    });
+                }
+                
+                // Helper to safely extract string values
+                const getStringValue = (value) => {
+                    if (typeof value === 'string') return value;
+                    if (typeof value === 'object' && value !== null) {
+                        return value.text || value.name || value.value || String(value);
+                    }
+                    return String(value || '');
+                };
+                
+                if (analysis.detected_state) {
+                    callerInfoDisplay.push({
+                        label: 'State',
+                        value: getStringValue(analysis.detected_state),
+                        confidence: 0.8,
+                        source: 'ai',
+                        isHighConfidence: true
+                    });
+                }
+                
+                if (analysis.detected_insurance) {
+                    callerInfoDisplay.push({
+                        label: 'Insurance',
+                        value: getStringValue(analysis.detected_insurance),
+                        confidence: 0.7,
+                        source: 'ai',
+                        isHighConfidence: false
+                    });
+                }
+                
+                // Get tags
+                const tags = analysis.tags || result.tags || [];
+                
+                // Get sentiment
+                const sentiment = analysis.sentiment || result.sentiment || 'neutral';
+                
+                // Get qualification score
+                const qualificationScore = analysis.qualification_score || result.qualification_score || 0;
+                
+                // Get summary
+                const summary = analysis.summary || result.summary || '';
+                
+                // Get suggested disposition
+                const suggestedDisposition = analysis.suggested_disposition || result.suggested_disposition || 'New';
+                
+                // Get follow up required
+                const followUpRequired = analysis.follow_up_required || result.follow_up_required || false;
+                
+                // Get salesforce notes
+                const salesforceNotes = analysis.salesforce_notes || result.salesforce_notes || '';
+                
+                // Build full result for overlay
+                const fullResult = {
+                    phone: phone,
+                    callerName: analysis.caller_name || null,
+                    tags: tags,
+                    sentiment: sentiment,
+                    qualificationScore: qualificationScore,
+                    summary: summary,
+                    suggestedDisposition: suggestedDisposition,
+                    followUpRequired: followUpRequired,
+                    salesforceNotes: salesforceNotes,
+                    detectedState: analysis.detected_state,
+                    detectedInsurance: analysis.detected_insurance,
+                    callType: analysis.call_type,
+                    recommendedDepartment: analysis.recommended_department,
+                    testType: currentTestType,
+                    transcript: transcript
+                };
+                
+                // Display in qualification section
+                displayQualificationResult(fullResult);
+                
+                // Also send to overlay if available
+                if (window.overlayUI) {
+                    window.overlayUI.showCallAnalysis(fullResult);
+                }
+                
+                showTestStatus('Call analysis loaded!', 'success');
+                
+            } catch (error) {
+                console.error('[Test Existing Lead] Error:', error);
+                showTestStatus('Error: ' + error.message, 'error');
+            }
         });
     }
     
@@ -720,6 +862,65 @@ document.addEventListener('DOMContentLoaded', async () => {
         span.className = 'test-status-text';
         span.textContent = message;
         testStatus.appendChild(span);
+    }
+    
+    // Display qualification result in popup
+    function displayQualificationResult(result) {
+        const qualStatus = document.getElementById('qualStatus');
+        const qualResult = document.getElementById('qualResult');
+        const qualBadge = document.getElementById('qualBadge');
+        const qualScore = document.getElementById('qualScore');
+        const qualReason = document.getElementById('qualReason');
+        const qualDept = document.getElementById('deptName');
+        const qualKeywords = document.getElementById('keywordsList');
+        
+        if (qualStatus) qualStatus.style.display = 'none';
+        if (qualResult) qualResult.style.display = 'block';
+        
+        // Update badge (disposition)
+        if (qualBadge) {
+            qualBadge.textContent = result.suggestedDisposition || 'New';
+            qualBadge.className = 'qual-badge ' + (result.qualificationScore >= 70 ? 'qualified' : 'unqualified');
+        }
+        
+        // Update score
+        if (qualScore) {
+            const score = result.qualificationScore || 0;
+            qualScore.textContent = `Score: ${score}%`;
+            qualScore.className = 'qual-score ' + (score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low');
+        }
+        
+        // Update reason (summary)
+        if (qualReason) {
+            qualReason.textContent = result.summary || result.salesforceNotes || 'No summary available';
+        }
+        
+        // Update department
+        if (qualDept) {
+            qualDept.textContent = result.recommendedDepartment || '-';
+        }
+        
+        // Update keywords
+        if (qualKeywords) {
+            const tags = result.tags || [];
+            qualKeywords.innerHTML = '';
+            if (tags.length > 0) {
+                tags.slice(0, 8).forEach(tag => {
+                    const span = document.createElement('span');
+                    span.className = 'keyword-tag';
+                    span.textContent = tag;
+                    qualKeywords.appendChild(span);
+                });
+            } else {
+                qualKeywords.innerHTML = '<span class="keyword-tag">None</span>';
+            }
+        }
+        
+        // Update qualification section visibility
+        const qualSection = document.getElementById('qualificationSection');
+        if (qualSection) {
+            qualSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     }
     
     // Make overlayUI globally accessible
