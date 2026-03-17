@@ -14,6 +14,21 @@ class TestPanel {
     }
 
     /**
+     * Handle Test New Lead button click
+     */
+    handleNewLeadClick() {
+        this.currentTestType = 'new-lead';
+        
+        const testInputArea = document.getElementById('testInputArea');
+        const testStatus = document.getElementById('testStatus');
+        
+        if (testInputArea) testInputArea.style.display = 'block';
+        if (testStatus) testStatus.style.display = 'none';
+        
+        this.clearFields();
+    }
+
+    /**
      * Initialize test panel
      */
     init() {
@@ -98,18 +113,15 @@ class TestPanel {
             return;
         }
 
-        // Get server URL
-        const serverUrl = await this.getAIServerUrl();
-        const actualUrl = serverUrl.includes('localhost') 
-            ? 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io' 
-            : serverUrl;
-
+        // Get server URLs to try
+        const urlsToTry = await this.getServerUrls();
+        
         // Transcribe audio if provided
         if (audioFile) {
             this.showTestStatus('Transcribing audio...', 'loading');
             
             try {
-                transcription = await this.transcribeAudio(actualUrl, audioFile);
+                transcription = await this.transcribeAudio(urlsToTry, audioFile, testPhoneInput);
                 if (transcriptionInput) transcriptionInput.value = transcription;
             } catch (error) {
                 this.showTestStatus('Transcription error: ' + error.message, 'error');
@@ -120,8 +132,9 @@ class TestPanel {
         this.showTestStatus('Running AI Analysis...', 'loading');
 
         try {
-            const analysis = await this.analyzeWithAI(actualUrl, transcription, phone, client);
-            const action = await this.determineAction(actualUrl, transcription, analysis, phone, client);
+            // Try each server URL
+            const analysis = await this.analyzeWithMultiUrl(urlsToTry, transcription, phone, client);
+            const action = await this.determineAction(urlsToTry[0], transcription, analysis, phone, client);
 
             const fullResult = {
                 ...analysis,
@@ -133,10 +146,127 @@ class TestPanel {
 
             this.showTestStatus('Analysis complete!', 'success');
             this.displayResults(fullResult, phone);
+            
+            // Show overlay with full analysis
+            if (this.overlayUI) {
+                this.overlayUI.showCallAnalysis(fullResult);
+            }
+            
+            // Update stats
+            if (window.StorageService) {
+                await window.StorageService.incrementAnalysis();
+            }
 
         } catch (error) {
             console.error('Test analysis error:', error);
             this.showTestStatus('Error: ' + error.message, 'error');
+        }
+    }
+
+    async getServerUrls() {
+        let serverUrl = await this.getAIServerUrl();
+        
+        const urls = [
+            serverUrl,
+            'http://localhost:8000',
+            'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io'
+        ];
+        
+        return [...new Set(urls)].map(url => {
+            if (!url) return null;
+            let normalized = url.trim();
+            if (!normalized.startsWith('http')) {
+                normalized = 'https://' + normalized;
+            }
+            return normalized;
+        }).filter(Boolean);
+    }
+
+    async transcribeAudio(urls, audioFile, phoneInputEl) {
+        for (const serverUrl of urls) {
+            try {
+                const formData = new FormData();
+                formData.append('file', audioFile);
+
+                const response = await fetch(`${serverUrl}/api/transcribe`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) continue;
+
+                const result = await response.json();
+                if (result.error) throw new Error(result.error);
+
+                // Update phone if extracted
+                if (result.phone && phoneInputEl && !phoneInputEl.value) {
+                    phoneInputEl.value = result.phone;
+                }
+
+                return result.transcription;
+            } catch (e) {
+                console.log('[Transcribe] Failed:', serverUrl, e.message);
+                continue;
+            }
+        }
+        throw new Error('All transcription servers failed');
+    }
+
+    async analyzeWithMultiUrl(urls, transcription, phone, client) {
+        let lastError = null;
+
+        for (const serverUrl of urls) {
+            try {
+                const response = await fetch(`${serverUrl}/api/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        transcription,
+                        phone,
+                        client
+                    }),
+                    signal: AbortSignal.timeout(30000)
+                });
+
+                if (response.ok) {
+                    console.log('[Analysis] Success from:', serverUrl);
+                    return await response.json();
+                }
+                lastError = `HTTP ${response.status}: ${response.statusText}`;
+                console.log('[Analysis] Failed:', serverUrl, lastError);
+
+            } catch (netError) {
+                lastError = netError.message;
+                console.log('[Analysis] Error:', serverUrl, netError.message);
+                continue;
+            }
+        }
+
+        throw new Error(lastError || 'AI Server unreachable');
+    }
+
+    async determineAction(serverUrl, transcription, analysis, phone, client) {
+        try {
+            const response = await fetch(`${serverUrl}/api/determine-action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    transcription,
+                    analysis,
+                    phone,
+                    client
+                }),
+                signal: AbortSignal.timeout(60000)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to determine action');
+            }
+
+            return await response.json();
+        } catch (e) {
+            console.error('[determineAction] Error:', e);
+            throw e;
         }
     }
 
@@ -148,85 +278,6 @@ class TestPanel {
         // Fallback
         const result = await chrome.storage.local.get('aiServerUrl');
         return result.aiServerUrl || 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
-    }
-
-    async transcribeAudio(serverUrl, audioFile) {
-        const formData = new FormData();
-        formData.append('file', audioFile);
-
-        const response = await fetch(`${serverUrl}/api/transcribe`, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'Transcription failed');
-        }
-
-        const result = await response.json();
-        if (result.error) throw new Error(result.error);
-
-        // Update phone if extracted
-        if (result.phone) {
-            const testPhoneInput = document.getElementById('testPhoneInput');
-            if (testPhoneInput && !testPhoneInput.value) {
-                testPhoneInput.value = result.phone;
-            }
-        }
-
-        return result.transcription;
-    }
-
-    async analyzeWithAI(serverUrl, transcription, phone, client) {
-        let lastError = null;
-        const maxRetries = 3;
-
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                const response = await fetch(`${serverUrl}/api/analyze`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        transcription,
-                        phone,
-                        client
-                    }),
-                    signal: AbortSignal.timeout(60000)
-                });
-
-                if (response.ok) return await response.json();
-                lastError = `HTTP ${response.status}: ${response.statusText}`;
-
-            } catch (netError) {
-                lastError = netError.message;
-                if (attempt < maxRetries) {
-                    await new Promise(r => setTimeout(r, 2000 * attempt));
-                }
-            }
-        }
-
-        throw new Error(lastError || 'AI Server unreachable after retries');
-    }
-
-    async determineAction(serverUrl, transcription, analysis, phone, client) {
-        const response = await fetch(`${serverUrl}/api/determine-action`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                transcription,
-                analysis,
-                phone,
-                client
-            }),
-            signal: AbortSignal.timeout(60000)
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to determine action');
-        }
-
-        return await response.json();
     }
 
     displayResults(fullResult, phone) {
@@ -302,6 +353,116 @@ class TestPanel {
         span.className = 'test-status-text';
         span.textContent = message;
         testStatus.appendChild(span);
+    }
+
+    /**
+     * Handle Test Existing Lead button click - fetch from webhook results
+     */
+    async handleExistingLeadClick() {
+        this.currentTestType = 'existing';
+        
+        const testInputArea = document.getElementById('testInputArea');
+        const testStatus = document.getElementById('testStatus');
+        
+        if (testInputArea) testInputArea.style.display = 'none';
+        if (testStatus) testStatus.style.display = 'block';
+        
+        this.showTestStatus('Fetching latest call data...', 'loading');
+        
+        try {
+            const urls = await this.getServerUrls();
+            const data = await this.fetchFromServers(urls, '/api/webhook-results');
+            
+            if (!data) {
+                throw new Error('Could not connect to any server');
+            }
+            
+            let results = [];
+            if (data.results && Array.isArray(data.results)) {
+                results = data.results;
+            } else if (data.phone || data.call_id) {
+                results = [data];
+            }
+            
+            if (results.length === 0) {
+                this.showTestStatus('No calls found. Make a call first or send a webhook.', 'error');
+                return;
+            }
+            
+            const result = results[0];
+            const phone = result.phone || result.phone_number;
+            const transcript = result.transcript || result.transcription || '';
+            const analysis = result.analysis || {};
+            
+            if (!transcript) {
+                this.showTestStatus('No transcript found in stored call data.', 'error');
+                return;
+            }
+            
+            this.showTestStatus('Analysis found! Displaying results...', 'success');
+            
+            const fullResult = {
+                phone: phone,
+                callerName: analysis.caller_name || null,
+                tags: analysis.tags || result.tags || [],
+                sentiment: analysis.sentiment || result.sentiment || 'neutral',
+                qualificationScore: analysis.qualification_score || result.qualification_score || 0,
+                summary: analysis.summary || result.summary || '',
+                suggestedDisposition: analysis.suggested_disposition || result.suggested_disposition || 'New',
+                followUpRequired: analysis.follow_up_required || result.follow_up_required || false,
+                salesforceNotes: analysis.salesforce_notes || result.salesforce_notes || '',
+                detectedState: analysis.detected_state,
+                detectedInsurance: analysis.detected_insurance,
+                callType: analysis.call_type,
+                recommendedDepartment: analysis.recommended_department,
+                testType: 'existing',
+                transcript: transcript
+            };
+            
+            // Display results
+            if (window.qualificationDisplay) {
+                window.qualificationDisplay.display(fullResult);
+            }
+            
+            if (this.overlayUI) {
+                this.overlayUI.showCallAnalysis(fullResult);
+            }
+            
+            this.showTestStatus('Call analysis loaded!', 'success');
+            
+            // Update stats
+            if (window.StorageService) {
+                await window.StorageService.incrementAnalysis();
+                await window.StorageService.incrementCalls();
+            }
+            
+        } catch (error) {
+            console.error('[Test Existing Lead] Error:', error);
+            this.showTestStatus('Error: ' + error.message, 'error');
+        }
+    }
+
+    async fetchFromServers(urls, endpoint) {
+        for (const url of urls) {
+            try {
+                console.log('[Fetch] Trying:', url);
+                const response = await fetch(`${url}${endpoint}`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: AbortSignal.timeout(8000)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('[Fetch] Success from:', url);
+                    return data;
+                }
+            } catch (error) {
+                console.log('[Fetch] Failed:', url, error.message);
+                continue;
+            }
+        }
+        return null;
     }
 }
 

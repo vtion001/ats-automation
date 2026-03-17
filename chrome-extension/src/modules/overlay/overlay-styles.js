@@ -1,6 +1,7 @@
 /**
  * Overlay Styles Module
  * Contains all CSS styles for the overlay UI
+ * Enterprise 2-Color Theme: Primary #1e3a5f, Accent #3182ce
  */
 
 const OverlayStyles = {
@@ -13,12 +14,12 @@ const OverlayStyles = {
                 width: 380px;
                 max-height: 90vh;
                 background: #ffffff;
-                border-radius: 16px;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+                border-radius: 4px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.15);
                 z-index: 999999;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 font-size: 13px;
-                color: #1e293b;
+                color: #1a202c;
                 overflow: hidden;
                 animation: ats-slide-in 0.3s ease;
                 border: 1px solid #e2e8f0;
@@ -33,29 +34,29 @@ const OverlayStyles = {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 16px 20px;
-                background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+                padding: 14px 16px;
+                background: #1e3a5f;
                 border-bottom: none;
                 flex-shrink: 0;
             }
-            .ats-title { font-weight: 700; color: #ffffff; font-size: 15px; }
+            .ats-title { font-weight: 600; color: #ffffff; font-size: 14px; }
             .ats-close-btn {
-                background: none;
+                background: rgba(255,255,255,0.1);
                 border: none;
                 color: rgba(255,255,255,0.8);
-                font-size: 24px;
+                font-size: 20px;
                 cursor: pointer;
                 padding: 0;
                 line-height: 1;
-                width: 28px;
-                height: 28px;
+                width: 24px;
+                height: 24px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                border-radius: 6px;
+                border-radius: 4px;
                 transition: all 0.2s;
             }
-            .ats-close-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+            .ats-close-btn:hover { color: #fff; background: rgba(255,255,255,0.2); }
             
             .ats-overlay-content {
                 flex: 1;
@@ -67,7 +68,7 @@ const OverlayStyles = {
             /* Toast Container */
             .ats-toast-container {
                 position: absolute;
-                top: 70px;
+                top: 60px;
                 left: 16px;
                 right: 16px;
                 z-index: 100;
@@ -75,7 +76,7 @@ const OverlayStyles = {
             }
             .ats-toast {
                 padding: 10px 14px;
-                border-radius: 8px;
+                border-radius: 4px;
                 font-size: 12px;
                 font-weight: 500;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.15);

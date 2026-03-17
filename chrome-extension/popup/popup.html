@@ -25,6 +25,32 @@
             padding: 0;
             box-sizing: border-box;
         }
+        
+        /* Floating Debug Button */
+        .debug-overlay-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #1e3a5f;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .debug-overlay-btn:hover {
+            background: #2c5282;
+            transform: scale(1.1);
+        }
+        
         body {
             width: 100%;
             max-width: 400px;
@@ -1078,9 +1104,17 @@
     <script src="../src/lib/core.js"></script>
     <script src="../src/popup/services/storage-service.js"></script>
     <script src="../src/popup/services/status-service.js"></script>
+    <script src="../src/popup/components/toast-manager.js"></script>
+    <script src="../src/popup/components/status-manager.js"></script>
+    <script src="../src/popup/components/qualification-display.js"></script>
+    <script src="../src/popup/components/test-panel.js"></script>
     <script src="../src/popup/managers/notes-manager.js"></script>
     <script src="../src/popup/managers/qualification-manager.js"></script>
     <script src="../src/modules/overlay-ui.js"></script>
     <script src="popup.js"></script>
+    
+    <!-- Floating Debug Button -->
+    <button class="debug-overlay-btn" id="debugOverlayBtn" title="Test Overlay">AT</button>
+    
 </body>
 </html>

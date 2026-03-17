@@ -47,13 +47,13 @@
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 14px 18px;
-                background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
-                border-bottom: 1px solid #3d3d3d;
+                padding: 14px 16px;
+                background: #1e3a5f;
+                border-bottom: none;
             }
             .ats-title {
-                font-weight: 700;
-                color: #4CAF50;
+                font-weight: 600;
+                color: #ffffff;
                 font-size: 14px;
             }
             .ats-status {
@@ -61,12 +61,13 @@
                 align-items: center;
                 gap: 6px;
                 font-size: 11px;
-                color: #888;
+                color: rgba(255,255,255,0.7);
             }
             .ats-status-dot {
                 width: 8px;
                 height: 8px;
                 border-radius: 50%;
+                background: #3182ce;
                 background: #4CAF50;
                 animation: pulse 2s infinite;
             }

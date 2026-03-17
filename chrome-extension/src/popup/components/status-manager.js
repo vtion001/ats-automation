@@ -29,6 +29,22 @@ class StatusManager {
     }
 
     /**
+     * Update all services to initializing state
+     */
+    setAllInitializing() {
+        this.services.forEach(service => {
+            const statusEl = document.getElementById(service + 'Status');
+            if (!statusEl) return;
+            
+            const indicator = statusEl.querySelector('.status-indicator');
+            statusEl.classList.remove('online', 'offline');
+            indicator.classList.remove('online', 'offline');
+            statusEl.classList.add('checking');
+            indicator.classList.add('checking');
+        });
+    }
+
+    /**
      * Update all services to same status
      */
     updateAllServiceStatus(status) {
@@ -45,15 +61,18 @@ class StatusManager {
         const statusText = document.getElementById('statusText');
         if (!statusDot || !statusText) return;
         
-        if (isOnline) {
+        if (isOnline === true) {
             statusDot.classList.remove('inactive');
+            statusText.classList.remove('inactive');
             statusText.classList.add('active');
             statusText.textContent = 'Ready';
-        } else {
+        } else if (isOnline === false) {
             statusDot.classList.add('inactive');
             statusText.classList.remove('active');
+            statusText.classList.add('inactive');
             statusText.textContent = 'Issues Detected';
         }
+        // null = initializing, do nothing
     }
 
     /**

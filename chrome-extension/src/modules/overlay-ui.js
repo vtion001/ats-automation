@@ -67,26 +67,26 @@ class OverlayUI {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 16px 20px;
-                background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+                padding: 14px 16px;
+                background: #1e3a5f;
                 border-bottom: none;
                 flex-shrink: 0;
             }
-            .ats-title { font-weight: 700; color: #ffffff; font-size: 15px; }
+            .ats-title { font-weight: 600; color: #ffffff; font-size: 14px; }
             .ats-close-btn {
-                background: none;
+                background: rgba(255,255,255,0.1);
                 border: none;
                 color: rgba(255,255,255,0.8);
-                font-size: 24px;
+                font-size: 20px;
                 cursor: pointer;
                 padding: 0;
                 line-height: 1;
-                width: 28px;
-                height: 28px;
+                width: 24px;
+                height: 24px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                border-radius: 6px;
+                border-radius: 4px;
                 transition: all 0.2s;
             }
             .ats-close-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
@@ -202,32 +202,32 @@ class OverlayUI {
             }
             .ats-status-label.hot { color: #dc2626; }
             .ats-status-label.warm { color: #d97706; }
-            .ats-status-label.cold { color: #2563eb; }
+            .ats-status-label.cold { color: #3182ce; }
 
             /* Cards */
             .ats-card {
                 background: #fff;
                 border: 1px solid #e2e8f0;
-                border-radius: 12px;
+                border-radius: 4px;
                 margin-bottom: 12px;
                 overflow: hidden;
                 transition: all 0.2s ease;
             }
             .ats-card:hover {
-                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             }
             .ats-card-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 12px 16px;
+                padding: 10px 14px;
                 cursor: pointer;
-                background: #f8fafc;
-                border-bottom: 1px solid #f1f5f9;
+                background: #f7f8fa;
+                border-bottom: 1px solid #e2e8f0;
                 user-select: none;
             }
             .ats-card-header:hover {
-                background: #f1f5f9;
+                background: #edf2f7;
             }
             .ats-card-title {
                 display: flex;
@@ -235,7 +235,7 @@ class OverlayUI {
                 gap: 8px;
                 font-weight: 600;
                 font-size: 13px;
-                color: #475569;
+                color: #1e3a5f;
             }
             .ats-card-toggle {
                 width: 20px;
@@ -243,21 +243,21 @@ class OverlayUI {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                color: #94a3b8;
+                color: #a0aec0;
                 transition: transform 0.3s ease;
             }
             .ats-card.collapsed .ats-card-toggle {
                 transform: rotate(-90deg);
             }
             .ats-card-body {
-                padding: 14px 16px;
+                padding: 12px 14px;
                 max-height: 300px;
                 overflow-y: auto;
                 transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
             }
             .ats-card.collapsed .ats-card-body {
                 max-height: 0;
-                padding: 0 16px;
+                padding: 0 14px;
                 opacity: 0;
                 overflow: hidden;
             }
@@ -268,15 +268,15 @@ class OverlayUI {
                 display: flex;
                 justify-content: space-between;
                 align-items: flex-start;
-                padding: 10px 12px;
-                background: #f8fafc;
-                border-radius: 8px;
-                margin-bottom: 8px;
+                padding: 8px 10px;
+                background: #f7f8fa;
+                border-radius: 4px;
+                margin-bottom: 6px;
                 font-size: 13px;
             }
             .ats-info-item:last-child { margin-bottom: 0; }
             .ats-info-label { 
-                color: #64748b; 
+                color: #4a5568; 
                 font-weight: 500; 
                 min-width: 80px;
                 flex-shrink: 0;
@@ -336,14 +336,14 @@ class OverlayUI {
 
             /* Copy Button */
             .ats-copy-notes-btn {
-                background: #22c55e;
+                background: #1e3a5f;
                 color: #fff;
                 border: none;
-                padding: 10px 16px;
-                border-radius: 8px;
+                padding: 8px 14px;
+                border-radius: 4px;
                 cursor: pointer;
                 font-size: 12px;
-                font-weight: 600;
+                font-weight: 500;
                 margin-top: 10px;
                 width: 100%;
                 transition: all 0.2s;
@@ -353,8 +353,7 @@ class OverlayUI {
                 gap: 6px;
             }
             .ats-copy-notes-btn:hover {
-                background: #16a34a;
-                transform: translateY(-1px);
+                background: #2c5282;
             }
             .ats-copy-notes-btn:active {
                 transform: translateY(0);
@@ -362,14 +361,14 @@ class OverlayUI {
 
             /* Recommendation */
             .ats-recommendation {
-                background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-                border: 1px solid #22c55e;
-                border-radius: 10px;
-                padding: 14px 16px;
+                background: #f7f8fa;
+                border: 1px solid #e2e8f0;
+                border-radius: 4px;
+                padding: 12px 14px;
                 font-size: 13px;
-                font-weight: 600;
-                color: #166534;
-                margin: 16px 0;
+                font-weight: 500;
+                color: #1a202c;
+                margin: 12px 0;
                 display: flex;
                 align-items: center;
                 gap: 10px;
@@ -509,13 +508,13 @@ class OverlayUI {
                 padding-top: 4px;
             }
             .ats-button-primary {
-                background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+                background: #1e3a5f;
                 color: #fff;
                 border: none;
-                padding: 14px 20px;
-                border-radius: 10px;
+                padding: 12px 16px;
+                border-radius: 4px;
                 cursor: pointer;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: 600;
                 width: 100%;
                 transition: all 0.2s;
@@ -525,17 +524,16 @@ class OverlayUI {
                 gap: 8px;
             }
             .ats-button-primary:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+                background: #2c5282;
             }
             .ats-button-secondary {
                 background: #fff;
-                color: #475569;
+                color: #1a202c;
                 border: 1px solid #e2e8f0;
-                padding: 14px 20px;
-                border-radius: 10px;
+                padding: 12px 16px;
+                border-radius: 4px;
                 cursor: pointer;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: 500;
                 width: 100%;
                 transition: all 0.2s;
@@ -545,19 +543,19 @@ class OverlayUI {
                 gap: 8px;
             }
             .ats-button-secondary:hover {
-                background: #f8fafc;
-                border-color: #cbd5e1;
+                background: #f7f8fa;
+                border-color: #3182ce;
             }
             
             /* Fill Salesforce Button */
             .ats-button-fill-sf {
-                background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+                background: #3182ce;
                 color: #fff;
                 border: none;
-                padding: 14px 20px;
-                border-radius: 10px;
+                padding: 12px 16px;
+                border-radius: 4px;
                 cursor: pointer;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: 600;
                 width: 100%;
                 transition: all 0.2s;
@@ -1051,6 +1049,67 @@ class OverlayUI {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    showCallAnalysis(result) {
+        this.create();
+        const content = document.querySelector(`#${this.overlayId} .ats-overlay-content`);
+        
+        const phone = result.phone || 'Unknown';
+        const isUnknown = !result.phone;
+        const score = result.qualificationScore || result.qualification_score || 0;
+        const scoreClass = score >= 70 ? 'hot' : score >= 40 ? 'warm' : 'cold';
+        const statusLabel = score >= 70 ? 'Hot Lead' : score >= 40 ? 'Warm Lead' : 'Cold Lead';
+        
+        const detectedState = result.detectedState || result.detected_state || '';
+        const detectedInsurance = result.detectedInsurance || result.detected_insurance || '';
+        const tags = result.tags || [];
+        const summary = result.summary || '';
+        const salesforceNotes = result.salesforceNotes || result.salesforce_notes || '';
+        const transcript = result.transcript || '';
+        const sentiment = result.sentiment || 'neutral';
+        const suggestedDisposition = result.suggestedDisposition || result.suggested_disposition || 'New';
+        
+        let html = `
+            <div class="ats-header-section">
+                <div class="ats-header-info">
+                    <div class="ats-phone-icon"></div>
+                    <span class="ats-phone-number ${isUnknown ? 'unknown' : ''}">${isUnknown ? 'No Phone Data' : this.escapeHtml(phone)}</span>
+                </div>
+                <div class="ats-status-row">
+                    <span class="ats-score-badge ${scoreClass}">${score}</span>
+                    <span class="ats-status-label ${scoreClass}">${statusLabel}</span>
+                </div>
+            </div>
+        `;
+        
+        if (detectedState || detectedInsurance || tags.length > 0) {
+            html += `<div class="ats-card"><div class="ats-card-header"><div class="ats-card-title">Key Details</div><div class="ats-card-toggle">▼</div></div><div class="ats-card-body"><div class="ats-info-list">`;
+            if (detectedState) html += `<div class="ats-info-item"><span class="ats-info-label">State:</span><span class="ats-info-value">${this.escapeHtml(detectedState)}</span></div>`;
+            if (detectedInsurance) html += `<div class="ats-info-item"><span class="ats-info-label">Insurance:</span><span class="ats-info-value">${this.escapeHtml(detectedInsurance)}</span></div>`;
+            if (tags.length > 0) html += `<div class="ats-info-item"><span class="ats-info-label">Tags:</span><span class="ats-info-value">${this.escapeHtml(tags.join(', '))}</span></div>`;
+            html += `</div></div></div>`;
+        }
+        
+        if (transcript) {
+            html += `<div class="ats-card"><div class="ats-card-header"><div class="ats-card-title">Full Transcription</div><div class="ats-card-toggle">▼</div></div><div class="ats-card-body"><div class="ats-transcription-box">${this.escapeHtml(transcript)}</div></div></div>`;
+        }
+        
+        if (salesforceNotes || summary) {
+            html += `<div class="ats-card"><div class="ats-card-header"><div class="ats-card-title">Salesforce Notes</div><div class="ats-card-toggle">▼</div></div><div class="ats-card-body"><div class="ats-salesforce-notes">${this.escapeHtml(salesforceNotes || summary)}</div><button class="ats-copy-notes-btn" id="ats-copy-notes">Copy Notes</button></div></div>`;
+        }
+        
+        html += `<div class="ats-recommendation">Disposition: ${suggestedDisposition} | Sentiment: ${sentiment}</div>`;
+        
+        html += `<div class="ats-button-group">
+            <button class="ats-button-primary" data-action="new-lead">✨ New Lead - Create Contact</button>
+            <button class="ats-button-secondary" data-action="existing-lead">Existing Lead</button>
+            <button class="ats-button-fill-sf" data-action="fill-salesforce" data-form-type="log_call">Fill Salesforce (Log Call)</button>
+        </div>`;
+        
+        content.innerHTML = html;
+        this.setupCollapsibleSections();
+        this.attachActionHandlers(content, result);
     }
 
     hide() {
