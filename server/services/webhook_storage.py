@@ -18,13 +18,17 @@ WEBHOOK_RESULTS_LOCK = threading.Lock()
 class WebhookStorage:
     def __init__(self, filepath: str = WEBHOOK_RESULTS_FILE):
         self.filepath = filepath
+        logger.info(f"WebhookStorage initialized with filepath: {self.filepath}")
 
     def load(self) -> dict:
         """Load webhook results from file"""
         try:
+            logger.info(f"Loading from: {self.filepath}, exists: {os.path.exists(self.filepath)}")
             if os.path.exists(self.filepath):
                 with open(self.filepath, "r") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    logger.info(f"Loaded keys: {list(data.keys())}")
+                    return data
         except Exception as e:
             logger.error(f"Error loading webhook results: {e}")
         return {}
@@ -34,6 +38,7 @@ class WebhookStorage:
         try:
             with open(self.filepath, "w") as f:
                 json.dump(results, f)
+            logger.info(f"Saved, new keys: {list(results.keys())}")
         except Exception as e:
             logger.error(f"Error saving webhook results: {e}")
 
@@ -41,8 +46,10 @@ class WebhookStorage:
         """Store result for a phone number"""
         with WEBHOOK_RESULTS_LOCK:
             results = self.load()
-            results[normalize_phone(phone)] = data
-            results[normalize_phone(phone)]["timestamp"] = time.time()
+            normalized = normalize_phone(phone)
+            logger.info(f"Storing for phone: {phone} -> normalized: {normalized}")
+            results[normalized] = data
+            results[normalized]["timestamp"] = time.time()
             self.save(results)
         logger.info(f"Webhook result stored for phone: {phone}")
 
@@ -51,14 +58,17 @@ class WebhookStorage:
         with WEBHOOK_RESULTS_LOCK:
             results = self.load()
             normalized = normalize_phone(phone)
+            logger.info(f"GET looking for: {normalized}, available keys: {list(results.keys())}")
 
             if normalized in results:
                 result = results[normalized]
+                logger.info(f"Found result for {normalized}")
                 if delete:
                     del results[normalized]
                     self.save(results)
                 return result
 
+        logger.info(f"No result found for {normalized}")
         return None
 
     def get_all(self) -> list:
