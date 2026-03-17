@@ -445,27 +445,52 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Get server URL - check if localhost or Azure
                 let serverUrl = await StatusService.getAIServerUrl();
                 
-                // Use localhost if it contains localhost, otherwise use the configured URL
-                let actualUrl = serverUrl;
-                if (serverUrl.includes('localhost') || serverUrl.includes('127.0.0.1')) {
-                    actualUrl = 'http://localhost:8000';
+                // Try multiple URLs in order
+                const urlOptions = [
+                    serverUrl,
+                    'http://localhost:8000',
+                    'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io'
+                ];
+                
+                // Remove duplicates
+                const uniqueUrls = [...new Set(urlOptions)];
+                
+                let data = null;
+                let success = false;
+                
+                for (const url of uniqueUrls) {
+                    if (!url) continue;
+                    
+                    try {
+                        // Normalize URL
+                        let actualUrl = url.trim();
+                        if (!actualUrl.startsWith('http')) {
+                            actualUrl = 'https://' + actualUrl;
+                        }
+                        
+                        console.log('[Test Existing Lead] Trying URL:', actualUrl);
+                        
+                        const response = await fetch(`${actualUrl}/api/webhook-results`, {
+                            method: 'GET',
+                            headers: { 'Content-Type': 'application/json' },
+                            signal: AbortSignal.timeout(8000)
+                        });
+                        
+                        if (response.ok) {
+                            data = await response.json();
+                            console.log('[Test Existing Lead] Success from:', actualUrl, data);
+                            success = true;
+                            break;
+                        }
+                    } catch (urlError) {
+                        console.log('[Test Existing Lead] Failed URL:', url, urlError.message);
+                        continue;
+                    }
                 }
                 
-                console.log('[Test Existing Lead] Using URL:', actualUrl);
-                
-                // Fetch all webhook results
-                const response = await fetch(`${actualUrl}/api/webhook-results`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: AbortSignal.timeout(10000)
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to fetch webhook results: ' + response.status);
+                if (!success || !data) {
+                    throw new Error('Could not connect to any server. Try checking if server is running.');
                 }
-                
-                const data = await response.json();
-                console.log('[Test Existing Lead] Response:', data);
                 
                 // Get results - could be array or object
                 let results = [];
