@@ -3,6 +3,27 @@
 
 Write-Host "Installing ATS Automation..." -ForegroundColor Cyan
 
+# Check for Python
+$pythonCmd = $null
+if (Get-Command python -ErrorAction SilentlyContinue) {
+    $pythonCmd = "python"
+} elseif (Get-Command python3 -ErrorAction SilentlyContinue) {
+    $pythonCmd = "python3"
+} elseif (Test-Path "C:\Python311\python.exe") {
+    $pythonCmd = "C:\Python311\python.exe"
+} elseif (Test-Path "C:\Python310\python.exe") {
+    $pythonCmd = "C:\Python310\python.exe"
+}
+
+if (-not $pythonCmd) {
+    Write-Host "ERROR: Python not found!" -ForegroundColor Red
+    Write-Host "Please install Python 3.10+ from https://www.python.org/downloads/" -ForegroundColor Yellow
+    Write-Host "Make sure to check 'Add Python to PATH' during installation" -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "Found Python: $pythonCmd" -ForegroundColor Green
+
 # Clone the repository
 $repoUrl = "https://github.com/vtion001/ats-automation.git"
 $installPath = "$env:USERPROFILE\ats-automation"
@@ -31,12 +52,13 @@ try {
 Write-Host "Installing Python dependencies..." -ForegroundColor Yellow
 Set-Location $installPath
 
+# Use python -m pip instead of direct pip command
 if (Test-Path "requirements.txt") {
-    pip install -r requirements.txt
+    & $pythonCmd -m pip install -r requirements.txt
 }
 
 if (Test-Path "requirements-server.txt") {
-    pip install -r requirements-server.txt
+    & $pythonCmd -m pip install -r requirements-server.txt
 }
 
 # Create .env file from template
