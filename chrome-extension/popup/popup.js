@@ -27,12 +27,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSettings();
     await initNotesAndQualification();
     
-    // Show initializing state
-    statusManager.showStatus('Initializing...', null);
-    statusManager.setAllInitializing();
+    // Check if first time load
+    const isFirstLoad = await checkFirstLoad();
+    
+    // Show initializing state only on first load
+    if (isFirstLoad) {
+        statusManager.showStatus('Initializing...', null);
+        statusManager.setAllInitializing();
+    }
     
     // Initialize services and start auto-refresh
-    await runAllServiceChecks(statusManager);
+    await runAllServiceChecks(statusManager, !isFirstLoad);
     startServiceAutoRefresh(statusManager);
     
     // Bind all events
@@ -124,9 +129,11 @@ async function checkServerConnection(statusManager) {
     }
 }
 
-async function runAllServiceChecks(statusManager) {
+async function runAllServiceChecks(statusManager, skipStatus = false) {
     try {
-        statusManager.showStatus('Checking services...', null);
+        if (!skipStatus) {
+            statusManager.showStatus('Checking services...', null);
+        }
         
         const results = await StatusService.runAllTests();
         
@@ -140,24 +147,43 @@ async function runAllServiceChecks(statusManager) {
         // Update main status
         const allPassed = services.every(s => s === 'ctm' ? results.ctmMonitor : results[s]);
         statusManager.updateMainStatus(allPassed);
-        statusManager.showStatus(allPassed ? 'Ready' : 'Issues detected', allPassed);
+        
+        if (!skipStatus) {
+            statusManager.showStatus(allPassed ? 'Ready' : 'Issues detected', allPassed);
+        }
         
     } catch(e) {
         console.error('[Popup] Service check error:', e);
-        statusManager.showStatus('Error checking services', false);
+        if (!skipStatus) {
+            statusManager.showStatus('Error checking services', false);
+        }
+    }
+}
+
+async function checkFirstLoad() {
+    try {
+        const result = await StorageService.get('popupInitialized');
+        if (result.popupInitialized) {
+            return false;
+        }
+        // Mark as initialized
+        await StorageService.set({ popupInitialized: true });
+        return true;
+    } catch(e) {
+        return true; // First load if error
     }
 }
 
 let autoRefreshInterval = null;
 
 function startServiceAutoRefresh(statusManager) {
-    // Run immediately on start
-    runAllServiceChecks(statusManager);
+    // Run immediately (skip status since we're already initialized)
+    runAllServiceChecks(statusManager, true);
     
     // Then refresh every 30 seconds
     if (autoRefreshInterval) clearInterval(autoRefreshInterval);
     autoRefreshInterval = setInterval(() => {
-        runAllServiceChecks(statusManager);
+        runAllServiceChecks(statusManager, true);
     }, 30000);
     
     console.log('[Popup] Auto-refresh started (30s)');
@@ -299,6 +325,7 @@ function bindDebugButton() {
             if (window.overlayUI) {
                 window.overlayUI.showCallAnalysis({
                     phone: '+15551234567',
+                    caller_id: '+15551234567',
                     callerName: 'Test Caller',
                     tags: ['hot_lead', 'treatment'],
                     sentiment: 'positive',
@@ -307,7 +334,8 @@ function bindDebugButton() {
                     suggestedDisposition: 'Qualified',
                     followUpRequired: true,
                     recommendedDepartment: 'intake',
-                    testType: 'debug'
+                    testType: 'debug',
+                    isLiveCall: true
                 });
             }
         });

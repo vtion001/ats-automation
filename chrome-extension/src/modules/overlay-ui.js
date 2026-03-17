@@ -149,12 +149,25 @@ class OverlayUI {
             .ats-phone-icon { 
                 width: 44px; 
                 height: 44px; 
-                background: #2563eb; 
+                background: #1e3a5f; 
                 border-radius: 10px; 
                 display: flex; 
                 align-items: center; 
                 justify-content: center;
-                font-size: 20px;
+                flex-shrink: 0;
+            }
+            .ats-phone-icon svg {
+                width: 22px;
+                height: 22px;
+                fill: white;
+            }
+            .ats-phone-icon.ringing {
+                animation: phoneRinging 1s infinite;
+            }
+            @keyframes phoneRinging {
+                0%, 100% { transform: rotate(0deg); }
+                25% { transform: rotate(15deg); }
+                75% { transform: rotate(-15deg); }
             }
             .ats-phone-number { 
                 font-size: 22px; 
@@ -549,7 +562,7 @@ class OverlayUI {
             
             /* Fill Salesforce Button */
             .ats-button-fill-sf {
-                background: #3182ce;
+                background: #1e3a5f;
                 color: #fff;
                 border: none;
                 padding: 12px 16px;
@@ -565,9 +578,9 @@ class OverlayUI {
                 gap: 8px;
             }
             .ats-button-fill-sf:hover {
-                background: linear-gradient(135deg, #6d28d9 0%, #4c1d95 100%);
+                background: #2c5282;
                 transform: translateY(-2px);
-                box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+                box-shadow: 0 4px 12px rgba(30, 58, 95, 0.3);
             }
             .ats-button-fill-sf:active {
                 transform: translateY(0);
@@ -577,10 +590,10 @@ class OverlayUI {
                 pointer-events: none;
             }
             .ats-button-fill-sf.success {
-                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                background: #38a169;
             }
             .ats-button-fill-sf.error {
-                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                background: #e53e3e;
             }
 
             /* Divider */
@@ -669,15 +682,15 @@ class OverlayUI {
         this.create();
         const content = document.querySelector(`#${this.overlayId} .ats-overlay-content`);
         
-        const displayPhone = phoneNumber || 'Unknown';
+        const formattedPhone = phoneNumber ? this.getFormattedPhoneNumber(phoneNumber) : 'Unknown';
         const displayName = callerName || 'Unknown Caller';
         
         content.innerHTML = `
             <div class="ats-header-section" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
                 <div class="ats-header-info">
-                    <div class="ats-phone-icon" style="background: #1e3a5f;">●</div>
+                    <div class="ats-phone-icon ringing">${this.getPhoneIconSvg(true)}</div>
                     <div>
-                        <div class="ats-phone-number">${this.escapeHtml(displayPhone)}</div>
+                        <div class="ats-phone-number">${this.escapeHtml(formattedPhone)}</div>
                         <div style="font-size: 12px; color: #92400e; margin-top: 2px;">${this.escapeHtml(displayName)}</div>
                     </div>
                 </div>
@@ -690,7 +703,7 @@ class OverlayUI {
             <div class="ats-call-recording-section">
                 <div class="ats-recording-prompt">
                     <div style="text-align: center; margin-bottom: 16px;">
-                        <div style="font-size: 32px; margin-bottom: 8px; color: #1e3a5f;">●</div>
+                        <div style="width: 44px; height: 44px; margin: 0 auto 8px; color: #1e3a5f;">${this.getPhoneIconSvg()}</div>
                         <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">Record this call?</div>
                         <div style="font-size: 11px; color: #64748b;">Click below to start capturing audio</div>
                     </div>
@@ -741,12 +754,14 @@ class OverlayUI {
         
         let html = '';
         
-        if (data.phone) {
+        const displayPhone = this.getDisplayPhone(data);
+        if (displayPhone) {
+            const formattedPhone = this.getFormattedPhoneNumber(displayPhone);
             html += `
                 <div class="ats-header-section">
                     <div class="ats-header-info">
-                        <div class="ats-phone-icon"></div>
-                        <span class="ats-phone-number">${this.escapeHtml(data.phone)}</span>
+                        <div class="ats-phone-icon">${this.getPhoneIconSvg()}</div>
+                        <span class="ats-phone-number">${this.escapeHtml(formattedPhone)}</span>
                     </div>
                     <div class="ats-status-row">
             `;
@@ -821,13 +836,13 @@ class OverlayUI {
         
         let html = '';
         
-        const displayPhone = phone || 'Unknown';
-        const isUnknown = !phone;
+        const displayPhone = phone ? this.getFormattedPhoneNumber(phone) : null;
+        const isUnknown = !displayPhone;
         
         html += `
             <div class="ats-header-section">
                 <div class="ats-header-info">
-                    <div class="ats-phone-icon"></div>
+                    <div class="ats-phone-icon">${this.getPhoneIconSvg()}</div>
                     <span class="ats-phone-number ${isUnknown ? 'unknown' : ''}">${isUnknown ? 'No Phone Data' : this.escapeHtml(displayPhone)}</span>
                 </div>
                 <div class="ats-status-row">
@@ -1051,12 +1066,40 @@ class OverlayUI {
         return div.innerHTML;
     }
 
+    getPhoneIconSvg(ringing = false) {
+        return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" ${ringing ? 'class="ringing"' : ''}>
+            <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+        </svg>`;
+    }
+
+    getFormattedPhoneNumber(phone) {
+        if (!phone) return null;
+        const cleaned = phone.replace(/\D/g, '');
+        if (cleaned.length === 10) {
+            return `(${cleaned.slice(0,3)}) ${cleaned.slice(3,6)}-${cleaned.slice(6)}`;
+        } else if (cleaned.length === 11 && cleaned[0] === '1') {
+            return `+1 (${cleaned.slice(1,4)}) ${cleaned.slice(4,7)}-${cleaned.slice(7)}`;
+        }
+        return phone;
+    }
+
+    getDisplayPhone(data) {
+        if (data.phone) {
+            return this.getFormattedPhoneNumber(data.phone);
+        }
+        if (data.callerId || data.caller_id) {
+            return this.getFormattedPhoneNumber(data.callerId || data.caller_id);
+        }
+        return null;
+    }
+
     showCallAnalysis(result) {
         this.create();
         const content = document.querySelector(`#${this.overlayId} .ats-overlay-content`);
         
-        const phone = result.phone || 'Unknown';
-        const isUnknown = !result.phone;
+        const displayPhone = this.getDisplayPhone(result);
+        const isUnknown = !displayPhone;
+        const isLiveCall = result.testType === 'debug' || result.isLiveCall;
         const score = result.qualificationScore || result.qualification_score || 0;
         const scoreClass = score >= 70 ? 'hot' : score >= 40 ? 'warm' : 'cold';
         const statusLabel = score >= 70 ? 'Hot Lead' : score >= 40 ? 'Warm Lead' : 'Cold Lead';
@@ -1073,8 +1116,8 @@ class OverlayUI {
         let html = `
             <div class="ats-header-section">
                 <div class="ats-header-info">
-                    <div class="ats-phone-icon"></div>
-                    <span class="ats-phone-number ${isUnknown ? 'unknown' : ''}">${isUnknown ? 'No Phone Data' : this.escapeHtml(phone)}</span>
+                    <div class="ats-phone-icon ${isLiveCall ? 'ringing' : ''}">${this.getPhoneIconSvg(isLiveCall)}</div>
+                    <span class="ats-phone-number ${isUnknown ? 'unknown' : ''}">${isUnknown ? (isLiveCall ? 'Live Call' : 'No Phone Data') : this.escapeHtml(displayPhone)}</span>
                 </div>
                 <div class="ats-status-row">
                     <span class="ats-score-badge ${scoreClass}">${score}</span>
@@ -1102,7 +1145,7 @@ class OverlayUI {
         html += `<div class="ats-recommendation">Disposition: ${suggestedDisposition} | Sentiment: ${sentiment}</div>`;
         
         html += `<div class="ats-button-group">
-            <button class="ats-button-primary" data-action="new-lead">✨ New Lead - Create Contact</button>
+            <button class="ats-button-primary" data-action="new-lead">New Lead - Create Contact</button>
             <button class="ats-button-secondary" data-action="existing-lead">Existing Lead</button>
             <button class="ats-button-fill-sf" data-action="fill-salesforce" data-form-type="log_call">Fill Salesforce (Log Call)</button>
         </div>`;
