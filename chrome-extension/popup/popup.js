@@ -180,6 +180,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('[Popup] Error initializing collapsible sections:', e);
     }
     
+    // Update stats display
+    updateStats();
+    
     // Get elements
     const clientSelect = document.getElementById('clientSelect');
     const callMonitorToggle = document.getElementById('callMonitorToggle');
@@ -579,6 +582,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 showTestStatus('Call analysis loaded!', 'success');
                 
+                // Increment analysis and calls stats
+                StorageService.incrementAnalysis().then(() => StorageService.incrementCalls()).then(() => updateStats());
+                
             } catch (error) {
                 console.error('[Test Existing Lead] Error:', error);
                 showTestStatus('Error: ' + error.message, 'error');
@@ -734,6 +740,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
             
             showTestStatus('Analysis complete!', 'success');
+            
+            // Increment analysis stat
+            StorageService.incrementAnalysis().then(() => updateStats());
             
             // Send to overlay to display results
             if (window.overlayUI) {

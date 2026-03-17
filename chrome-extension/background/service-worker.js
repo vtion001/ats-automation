@@ -18,8 +18,36 @@ const ATS_CONFIG = {
 
 let callLog = [];
 
+const ATS_STORAGE_KEYS = {
+    CONFIG: 'ats_config',
+    STATS: 'ats_stats',
+    NOTES_PREFIX: 'ats_notes_',
+    QUALIFICATION: 'ats_qualification',
+    CACHE: 'ats_cache'
+};
+
 // Load config on startup
 loadConfig();
+
+// Increment stat counter
+async function incrementStat(statName) {
+    try {
+        const key = ATS_STORAGE_KEYS.STATS;
+        const result = await chrome.storage.local.get(key);
+        let stats = result[key] || { calls: 0, searches: 0, analysis: 0 };
+        
+        if (stats[statName] !== undefined) {
+            stats[statName]++;
+        } else {
+            stats[statName] = 1;
+        }
+        
+        await chrome.storage.local.set({ [key]: stats });
+        console.log(`[AGS] Incremented ${statName}:`, stats);
+    } catch (error) {
+        console.error('[AGS] Error incrementing stat:', error);
+    }
+}
 
 // Load config from chrome.storage
 async function loadConfig() {
@@ -121,15 +149,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'CTM_CALL_EVENT':
         case 'CALL_EVENT':
             handleCallEvent(message.payload || message.data);
+            // Increment calls count
+            incrementStat('calls');
             break;
         case 'CTM_CALL_DETECTED':
             handleCallDetected(message.payload || message.data);
             break;
         case 'SEARCH_SALESFORCE':
             handleSearchSalesforce(message.payload || message.data);
+            // Increment searches count
+            incrementStat('searches');
             break;
         case 'TRANSCRIPTION_COMPLETE':
             handleTranscriptionComplete(message.payload || message.data);
+            // Increment analysis count
+            incrementStat('analysis');
             break;
         case 'SF_RECORD_DATA':
             handleSfRecordData(message.payload || message.data);

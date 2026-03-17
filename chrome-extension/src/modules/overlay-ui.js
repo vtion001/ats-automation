@@ -677,7 +677,7 @@ class OverlayUI {
         content.innerHTML = `
             <div class="ats-header-section" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
                 <div class="ats-header-info">
-                    <div class="ats-phone-icon" style="background: #f59e0b;">📞</div>
+                    <div class="ats-phone-icon" style="background: #1e3a5f;">●</div>
                     <div>
                         <div class="ats-phone-number">${this.escapeHtml(displayPhone)}</div>
                         <div style="font-size: 12px; color: #92400e; margin-top: 2px;">${this.escapeHtml(displayName)}</div>
@@ -692,22 +692,22 @@ class OverlayUI {
             <div class="ats-call-recording-section">
                 <div class="ats-recording-prompt">
                     <div style="text-align: center; margin-bottom: 16px;">
-                        <div style="font-size: 32px; margin-bottom: 8px;">🎙️</div>
+                        <div style="font-size: 32px; margin-bottom: 8px; color: #1e3a5f;">●</div>
                         <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">Record this call?</div>
                         <div style="font-size: 11px; color: #64748b;">Click below to start capturing audio</div>
                     </div>
-                    <button class="ats-button-primary" id="ats-start-recording-btn" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
-                        🎙️ Start Recording
+                    <button class="ats-button-primary" id="ats-start-recording-btn" style="background: #1e3a5f;">
+                        Start Recording
                     </button>
                 </div>
             </div>
             
-            <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 11px; color: #64748b;">
+            <div style="margin-top: 16px; padding: 12px; background: #f7f8fa; border-radius: 4px; font-size: 11px; color: #64748b;">
                 <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-                    <span style="color: #22c55e;">●</span> Call detection active
+                    <span style="color: #3182ce;">●</span> Call detection active
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="color: #94a3b8;">○</span> Audio recording off
+                    <span style="color: #a0aec0;">○</span> Audio recording off
                 </div>
             </div>
         `;
@@ -747,7 +747,7 @@ class OverlayUI {
             html += `
                 <div class="ats-header-section">
                     <div class="ats-header-info">
-                        <div class="ats-phone-icon">📞</div>
+                        <div class="ats-phone-icon"></div>
                         <span class="ats-phone-number">${this.escapeHtml(data.phone)}</span>
                     </div>
                     <div class="ats-status-row">
@@ -766,7 +766,7 @@ class OverlayUI {
         if (data.callerInfo && data.callerInfo.length > 0) {
             html += `<div class="ats-card">
                 <div class="ats-card-header">
-                    <div class="ats-card-title">📋 Extracted Information</div>
+                    <div class="ats-card-title">Extracted Information</div>
                     <div class="ats-card-toggle">▼</div>
                 </div>
                 <div class="ats-card-body">
@@ -792,7 +792,7 @@ class OverlayUI {
         if (data.summary) {
             html += `<div class="ats-card">
                 <div class="ats-card-header">
-                    <div class="ats-card-title">📝 Summary</div>
+                    <div class="ats-card-title">Summary</div>
                     <div class="ats-card-toggle">▼</div>
                 </div>
                 <div class="ats-card-body">
@@ -802,13 +802,13 @@ class OverlayUI {
         }
 
         if (data.recommendation) {
-            html += `<div class="ats-recommendation">🎯 ${this.escapeHtml(data.recommendation)}</div>`;
+            html += `<div class="ats-recommendation">Recommendation: ${this.escapeHtml(data.recommendation)}</div>`;
         }
 
         if (data.showButtons) {
             html += `<div class="ats-button-group">
                 <button class="ats-button-primary" data-action="new-lead">✨ New Lead - Create Contact</button>
-                <button class="ats-button-secondary" data-action="existing-lead">🔍 Existing Lead</button>
+                <button class="ats-button-secondary" data-action="existing-lead">Existing Lead</button>
             </div>`;
         }
 
@@ -829,7 +829,7 @@ class OverlayUI {
         html += `
             <div class="ats-header-section">
                 <div class="ats-header-info">
-                    <div class="ats-phone-icon">📞</div>
+                    <div class="ats-phone-icon"></div>
                     <span class="ats-phone-number ${isUnknown ? 'unknown' : ''}">${isUnknown ? 'No Phone Data' : this.escapeHtml(displayPhone)}</span>
                 </div>
                 <div class="ats-status-row">
@@ -857,7 +857,7 @@ class OverlayUI {
         if (hasKeyDetails) {
             html += `<div class="ats-card">
                 <div class="ats-card-header">
-                    <div class="ats-card-title">📝 Key Details</div>
+                    <div class="ats-card-title">Key Details</div>
                     <div class="ats-card-toggle">▼</div>
                 </div>
                 <div class="ats-card-body">
@@ -895,7 +895,7 @@ class OverlayUI {
         if (fullTranscription) {
             html += `<div class="ats-card">
                 <div class="ats-card-header">
-                    <div class="ats-card-title">📄 Full Transcription</div>
+                    <div class="ats-card-title">Full Transcription</div>
                     <div class="ats-card-toggle">▼</div>
                 </div>
                 <div class="ats-card-body">
@@ -909,19 +909,19 @@ class OverlayUI {
         if (salesforceNotes) {
             html += `<div class="ats-card">
                 <div class="ats-card-header">
-                    <div class="ats-card-title">💾 Salesforce Notes</div>
+                    <div class="ats-card-title">Salesforce Notes</div>
                     <div class="ats-card-toggle">▼</div>
                 </div>
                 <div class="ats-card-body">
                     <div class="ats-salesforce-notes">${this.escapeHtml(salesforceNotes)}</div>
-                    <button class="ats-copy-notes-btn" id="ats-copy-notes">📋 Copy Notes</button>
+                    <button class="ats-copy-notes-btn" id="ats-copy-notes">Copy Notes</button>
                 </div>
             </div>`;
         }
 
         // Recommendation
         const recommendation = analysis?.recommended_department || 'Transfer to appropriate department';
-        html += `<div class="ats-recommendation">🎯 Recommendation: ${this.escapeHtml(recommendation)}</div>`;
+        html += `<div class="ats-recommendation">Recommendation: ${this.escapeHtml(recommendation)}</div>`;
 
         // Scoring Breakdown Section
         const scoringBreakdown = analysis?.scoringBreakdown || {};
@@ -930,7 +930,7 @@ class OverlayUI {
         if (scoringBreakdown && Object.keys(scoringBreakdown).length > 0) {
             html += `<div class="ats-card ats-scoring-card">
                 <div class="ats-card-header">
-                    <div class="ats-card-title">📊 Lead Scoring Breakdown</div>
+                    <div class="ats-card-title">Lead Scoring Breakdown</div>
                     <div class="ats-card-toggle">▼</div>
                 </div>
                 <div class="ats-card-body ats-scoring-body">`;
@@ -984,7 +984,7 @@ class OverlayUI {
             if (scoringExplanation) {
                 html += `
                     <div class="ats-scoring-explanation">
-                        <span class="ats-scoring-explanation-label">📝 Explanation:</span>
+                        <span class="ats-scoring-explanation-label">Explanation:</span>
                         <p class="ats-scoring-explanation-text">${this.escapeHtml(scoringExplanation)}</p>
                     </div>
                 `;
@@ -997,8 +997,8 @@ class OverlayUI {
         const actionType = analysis?.action || 'log_call';
         html += `<div class="ats-button-group">
             <button class="ats-button-primary" data-action="new-lead">✨ New Lead - Create Contact</button>
-            <button class="ats-button-secondary" data-action="existing-lead">🔍 Existing Lead</button>
-            <button class="ats-button-fill-sf" data-action="fill-salesforce" data-form-type="${actionType}">🚀 Fill Salesforce (${actionType === 'new_task' ? 'Task' : 'Log Call'})</button>
+            <button class="ats-button-secondary" data-action="existing-lead">Existing Lead</button>
+            <button class="ats-button-fill-sf" data-action="fill-salesforce" data-form-type="${actionType}">Fill Salesforce (${actionType === 'new_task' ? 'Task' : 'Log Call'})</button>
         </div>`;
 
         content.innerHTML = html;

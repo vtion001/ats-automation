@@ -6,25 +6,19 @@
     <title>AGS Automation Tool</title>
     <style>
         :root {
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --primary-light: #3b82f6;
-            --accent: #06b6d4;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --error: #ef4444;
+            /* Enterprise 2-Color Theme */
+            --primary: #1e3a5f;
+            --primary-light: #2c5282;
+            --accent: #3182ce;
             --bg-white: #ffffff;
-            --bg-light: #f8fafc;
-            --bg-card: #ffffff;
-            --bg-hover: #f1f5f9;
-            --bg-input: #f8fafc;
-            --text-primary: #1e293b;
-            --text-secondary: #64748b;
-            --text-muted: #94a3b8;
+            --bg-light: #f7f8fa;
+            --bg-hover: #edf2f7;
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --text-muted: #a0aec0;
             --border: #e2e8f0;
-            --border-light: #f1f5f9;
-            --shadow: 0 1px 3px rgba(0,0,0,0.05);
-            --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+            --shadow: 0 1px 3px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
         }
         * {
             margin: 0;
@@ -49,10 +43,9 @@
             line-height: 1.5;
         }
         .header {
-            background: var(--bg-white);
+            background: var(--primary);
             padding: 20px;
             text-align: center;
-            border-bottom: 1px solid var(--border);
             position: relative;
         }
         .header-controls {
@@ -65,34 +58,35 @@
         .header-btn {
             width: 28px;
             height: 28px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: var(--bg-white);
+            border-radius: 4px;
+            border: none;
+            background: rgba(255,255,255,0.15);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--text-muted);
+            color: rgba(255,255,255,0.8);
             transition: all 0.2s;
         }
         .header-btn:hover {
-            background: var(--bg-light);
-            color: var(--text-primary);
+            background: rgba(255,255,255,0.25);
+            color: white;
         }
         .header-btn.pinned {
-            background: var(--primary);
+            background: var(--accent);
             color: white;
-            border-color: var(--primary);
         }
         .logo {
-            width: 64px;
-            height: 64px;
+            width: 56px;
+            height: 56px;
             margin: 0 auto 12px;
-            border-radius: 12px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            background: white;
+            padding: 8px;
         }
         .logo img {
             width: 100%;
@@ -100,14 +94,14 @@
             object-fit: contain;
         }
         .header h1 {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 4px;
+            color: white;
+            margin-bottom: 2px;
         }
         .header .tagline {
             font-size: 12px;
-            color: var(--text-secondary);
+            color: rgba(255,255,255,0.7);
         }
         .status-bar {
             display: flex;
@@ -122,7 +116,7 @@
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: var(--success);
+            background: var(--accent);
             animation: pulse 2s infinite;
         }
         .status-dot.inactive {
@@ -131,7 +125,7 @@
         }
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            50% { opacity: 0.4; }
         }
         
         /* Toast Notifications */
@@ -148,10 +142,10 @@
         }
         .toast {
             padding: 12px 16px;
-            border-radius: 10px;
+            border-radius: 6px;
             font-size: 13px;
             font-weight: 500;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             animation: toastSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             display: flex;
             align-items: center;
@@ -159,21 +153,16 @@
             min-width: 220px;
             max-width: 340px;
         }
-        .toast.success {
-            background: linear-gradient(135deg, #10b981, #059669);
+        .toast.success, .toast.error, .toast.warning, .toast.info {
+            background: var(--primary);
             color: white;
+            border-left: 4px solid var(--accent);
         }
         .toast.error {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: white;
+            border-left-color: #e53e3e;
         }
         .toast.warning {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white;
-        }
-        .toast.info {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            color: white;
+            border-left-color: #dd6b20;
         }
         .toast.hiding {
             animation: toastSlideOut 0.25s ease forwards;
@@ -198,11 +187,11 @@
         
         /* Notes Section */
         .note-count {
-            background: var(--primary);
+            background: var(--accent);
             color: white;
             font-size: 10px;
             padding: 2px 6px;
-            border-radius: 10px;
+            border-radius: 4px;
             font-weight: 600;
         }
         
@@ -212,13 +201,14 @@
             color: var(--text-secondary);
         }
         .status-text.active {
-            color: var(--success);
+            color: var(--primary);
+            font-weight: 500;
         }
         
         /* Section Styles */
         .section {
             padding: 16px;
-            border-bottom: 1px solid var(--border-light);
+            border-bottom: 1px solid var(--border);
         }
         .section.collapsible .section-header {
             display: flex;
@@ -270,30 +260,31 @@
         
         /* Client Select */
         .client-select {
-            padding: 12px 14px;
+            padding: 10px 12px;
             background: var(--bg-white);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 4px;
             color: var(--text-primary);
             font-size: 14px;
             cursor: pointer;
             transition: all 0.2s;
+            width: 100%;
         }
         .client-select:hover {
-            border-color: var(--primary);
+            border-color: var(--accent);
         }
         .client-select:focus {
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.15);
         }
         .toggle-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px;
+            padding: 10px 12px;
             background: var(--bg-light);
-            border-radius: 8px;
+            border-radius: 4px;
             margin-bottom: 8px;
         }
         .toggle-row:last-child {
@@ -306,15 +297,17 @@
         .toggle-label span:first-child {
             font-weight: 500;
             color: var(--text-primary);
+            font-size: 13px;
         }
         .toggle-label span:last-child {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-muted);
+            margin-top: 2px;
         }
         .toggle {
             position: relative;
-            width: 48px;
-            height: 26px;
+            width: 44px;
+            height: 24px;
             flex-shrink: 0;
         }
         .toggle input {
@@ -329,27 +322,27 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: #cbd5e1;
-            border-radius: 26px;
+            background: #cbd5e0;
+            border-radius: 24px;
             transition: 0.3s;
         }
         .toggle-slider:before {
             position: absolute;
             content: "";
-            height: 20px;
-            width: 20px;
+            height: 18px;
+            width: 18px;
             left: 3px;
             bottom: 3px;
             background: white;
             border-radius: 50%;
             transition: 0.3s;
-            box-shadow: var(--shadow);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
         }
         .toggle input:checked + .toggle-slider {
-            background: var(--primary);
+            background: var(--accent);
         }
         .toggle input:checked + .toggle-slider:before {
-            transform: translateX(22px);
+            transform: translateX(20px);
         }
         .btn-row {
             display: flex;
@@ -357,11 +350,11 @@
         }
         .btn {
             flex: 1;
-            padding: 12px 16px;
+            padding: 10px 14px;
             background: var(--primary);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 13px;
             font-weight: 500;
@@ -372,7 +365,7 @@
             gap: 6px;
         }
         .btn:hover {
-            background: var(--primary-dark);
+            background: var(--primary-light);
             transform: translateY(-1px);
             box-shadow: var(--shadow-md);
         }
@@ -386,7 +379,7 @@
         }
         .btn.secondary:hover {
             background: var(--bg-light);
-            border-color: var(--primary);
+            border-color: var(--accent);
         }
         .stats-grid {
             display: grid;
@@ -396,7 +389,7 @@
         .stat-card {
             background: var(--bg-light);
             padding: 12px;
-            border-radius: 8px;
+            border-radius: 4px;
             text-align: center;
         }
         .stat-value {
@@ -413,34 +406,34 @@
             display: flex;
             justify-content: space-between;
             padding: 8px 0;
-            border-bottom: 1px solid var(--border-light);
+            border-bottom: 1px solid var(--border);
         }
         .info-row:last-child {
             border-bottom: none;
         }
         .info-label {
             color: var(--text-muted);
+            font-size: 13px;
         }
         .info-value {
             color: var(--text-primary);
             font-weight: 500;
+            font-size: 13px;
         }
         .footer {
             padding: 12px 16px;
             text-align: center;
             font-size: 11px;
-            color: #ffffff;
             background: var(--primary);
-            border-radius: 0;
             margin: 0 -16px -16px -16px;
         }
         .footer a {
-            color: #ffffff;
+            color: rgba(255,255,255,0.85);
             text-decoration: none;
         }
         .footer a:hover {
             text-decoration: underline;
-            color: #ffffff;
+            color: white;
         }
         .icon {
             width: 16px;
@@ -453,7 +446,7 @@
             padding: 10px 12px;
             background: var(--bg-white);
             border: 1px solid var(--border);
-            border-radius: 6px;
+            border-radius: 4px;
             margin-bottom: 8px;
         }
         .service-row:last-child {
@@ -479,24 +472,23 @@
             transition: all 0.3s;
         }
         .status-indicator.online {
-            background: var(--success);
-            box-shadow: 0 0 6px var(--success);
+            background: var(--accent);
         }
         .status-indicator.offline {
-            background: var(--error);
+            background: #e53e3e;
         }
         .status-indicator.checking {
-            background: var(--warning);
+            background: #dd6b20;
             animation: pulse 1s infinite;
         }
         
         /* Note Count Badge */
         .note-count {
-            background: var(--primary);
+            background: var(--accent);
             color: white;
             font-size: 10px;
             padding: 2px 6px;
-            border-radius: 10px;
+            border-radius: 4px;
             font-weight: 600;
         }
         .notes-container {
@@ -504,7 +496,7 @@
             overflow-y: auto;
             margin-bottom: 10px;
             border: 1px solid var(--border);
-            border-radius: 6px;
+            border-radius: 4px;
             background: var(--bg-light);
         }
         .notes-empty {
@@ -512,10 +504,6 @@
             text-align: center;
             color: var(--text-muted);
             font-size: 13px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
         }
         .note-item {
             padding: 10px 12px;
@@ -540,8 +528,8 @@
             word-break: break-word;
         }
         .note-text.editing {
-            background: var(--bg-input);
-            border: 1px solid var(--primary);
+            background: var(--bg-white);
+            border: 1px solid var(--accent);
             border-radius: 4px;
             padding: 4px 8px;
             outline: none;
@@ -572,16 +560,16 @@
             background: var(--bg-hover);
         }
         .note-action-btn.edit:hover {
-            color: var(--primary);
+            color: var(--accent);
         }
         .note-action-btn.delete:hover {
-            color: #ef4444;
+            color: #e53e3e;
         }
         .note-action-btn.save {
-            color: #22c55e;
+            color: #38a169;
         }
         .note-action-btn.cancel {
-            color: #ef4444;
+            color: #e53e3e;
         }
         .note-action-btn svg {
             width: 14px;
@@ -601,16 +589,16 @@
             font-weight: 500;
         }
         .note-type.auto {
-            background: rgba(37, 99, 235, 0.1);
-            color: var(--primary);
+            background: rgba(49, 130, 206, 0.1);
+            color: var(--accent);
         }
         .note-type.manual {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
+            background: rgba(56, 161, 105, 0.1);
+            color: #38a169;
         }
         .note-type.keyword {
-            background: rgba(245, 158, 11, 0.1);
-            color: var(--warning);
+            background: rgba(221, 107, 32, 0.1);
+            color: #dd6b20;
         }
         .note-input-row {
             display: flex;
@@ -620,14 +608,14 @@
             flex: 1;
             padding: 8px 10px;
             border: 1px solid var(--border);
-            border-radius: 6px;
+            border-radius: 4px;
             font-size: 12px;
             resize: none;
             font-family: inherit;
         }
         .note-input:focus {
             outline: none;
-            border-color: var(--primary);
+            border-color: var(--accent);
         }
         .btn-note-add {
             width: 36px;
@@ -635,7 +623,7 @@
             border: none;
             background: var(--primary);
             color: white;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 18px;
             font-weight: 600;
@@ -644,7 +632,7 @@
             justify-content: center;
         }
         .btn-note-add:hover {
-            background: var(--primary-dark);
+            background: var(--primary-light);
         }
         
         /* Qualification Section */
@@ -654,7 +642,7 @@
             gap: 10px;
             padding: 12px;
             background: var(--bg-light);
-            border-radius: 6px;
+            border-radius: 4px;
             margin-bottom: 12px;
         }
         .qual-indicator {
@@ -664,41 +652,42 @@
             background: var(--text-muted);
         }
         .qualification-status.listening .qual-indicator {
-            background: var(--success);
+            background: var(--accent);
             animation: pulse 1.5s infinite;
         }
         .qualification-status.analyzing .qual-indicator {
-            background: var(--warning);
+            background: #dd6b20;
             animation: pulse 0.5s infinite;
         }
         .qual-result {
             background: var(--bg-light);
-            border-radius: 6px;
+            border-radius: 4px;
             padding: 12px;
             margin-bottom: 12px;
         }
         .qual-badge {
             display: inline-block;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
             font-weight: 600;
             margin-bottom: 8px;
+            text-transform: uppercase;
         }
         .qual-badge.hot {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
+            background: rgba(229, 62, 62, 0.1);
+            color: #e53e3e;
         }
         .qual-badge.warm {
-            background: rgba(245, 158, 11, 0.1);
-            color: #f59e0b;
+            background: rgba(221, 107, 32, 0.1);
+            color: #dd6b20;
         }
         .qual-badge.cold {
-            background: rgba(37, 99, 235, 0.1);
-            color: var(--primary);
+            background: rgba(49, 130, 206, 0.1);
+            color: var(--accent);
         }
         .qual-badge.unqualified {
-            background: rgba(100, 116, 139, 0.1);
+            background: rgba(160, 174, 192, 0.2);
             color: var(--text-secondary);
         }
         .qual-score {
@@ -728,12 +717,12 @@
         .dept-name {
             font-size: 12px;
             font-weight: 600;
-            color: var(--primary);
+            color: var(--accent);
         }
         .qual-keywords {
             padding: 10px;
             background: var(--bg-light);
-            border-radius: 6px;
+            border-radius: 4px;
         }
         .keywords-title {
             font-size: 11px;
@@ -748,9 +737,9 @@
         .keyword-tag {
             font-size: 11px;
             padding: 4px 8px;
-            background: rgba(245, 158, 11, 0.1);
-            color: #f59e0b;
-            border-radius: 4px;
+            background: rgba(221, 107, 32, 0.1);
+            color: #dd6b20;
+            border-radius: 3px;
         }
         
         /* Test Analysis Styles */
@@ -761,33 +750,34 @@
         }
         .test-btn {
             flex: 1;
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 13px;
+            padding: 10px 14px;
+            border-radius: 4px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
             border: none;
         }
         .test-btn.new-lead {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: var(--primary);
             color: white;
         }
         .test-btn.new-lead:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            background: var(--primary-light);
+            box-shadow: var(--shadow-md);
         }
         .test-btn.existing-lead {
-            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-            color: white;
+            background: var(--bg-white);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
         }
         .test-btn.existing-lead:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            border-color: var(--accent);
+            background: var(--bg-light);
         }
         .test-input-area {
             background: var(--bg-light);
-            border-radius: 8px;
+            border-radius: 4px;
             padding: 16px;
             margin-top: 12px;
         }
@@ -810,7 +800,7 @@
             width: 100%;
             padding: 10px 12px;
             border: 1px solid var(--border);
-            border-radius: 6px;
+            border-radius: 4px;
             font-size: 13px;
             background: white;
             color: var(--text-primary);
@@ -819,26 +809,26 @@
         .test-field textarea:focus,
         .test-field select:focus {
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.15);
         }
         .test-status {
             margin-top: 12px;
             padding: 10px;
-            border-radius: 6px;
+            border-radius: 4px;
             text-align: center;
         }
         .test-status.loading {
-            background: rgba(245, 158, 11, 0.1);
-            color: #f59e0b;
+            background: rgba(221, 107, 32, 0.1);
+            color: #dd6b20;
         }
         .test-status.success {
-            background: rgba(16, 185, 129, 0.1);
-            color: #10b981;
+            background: rgba(56, 161, 105, 0.1);
+            color: #38a169;
         }
         .test-status.error {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
+            background: rgba(229, 62, 62, 0.1);
+            color: #e53e3e;
         }
     </style>
 </head>
@@ -977,7 +967,7 @@
 
     <div class="section collapsible collapsed" id="testAnalysisSection">
         <div class="section-header">
-            <div class="section-title">🎤 Test Analysis</div>
+            <div class="section-title">Test Analysis</div>
             <div class="section-toggle">
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </div>
@@ -985,10 +975,10 @@
         <div class="section-content">
         <div class="test-buttons">
             <button class="btn test-btn new-lead" id="testNewLeadBtn">
-                🎯 Test New Lead
+                New Lead
             </button>
             <button class="btn test-btn existing-lead" id="testExistingLeadBtn">
-                🔍 Test Existing Lead
+                Existing Lead
             </button>
         </div>
         <div class="test-input-area" id="testInputArea" style="display:none;">
@@ -1016,7 +1006,7 @@
                 </select>
             </div>
             <button class="btn" id="runAnalysisBtn" style="width:100%; margin-top:12px;">
-                ▶ Run Analysis
+                Run Analysis
             </button>
             <!-- Quick Test button hidden - using real data only -->
             <!-- <button class="btn secondary" id="quickTestBtn" style="width:100%; margin-top:8px;">⚡ Quick Test (Sample Data)</button> -->
@@ -1034,7 +1024,7 @@
         </div>
         <div class="notes-container" id="notesContainer">
             <div class="notes-empty" id="notesEmpty">
-                <div style="font-size: 24px; margin-bottom: 8px;">📝</div>
+                <div style="font-size: 24px; margin-bottom: 8px; color: var(--text-muted);">-</div>
                 <div>No notes yet</div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Notes appear automatically during calls, or add one below</div>
             </div>

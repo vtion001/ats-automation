@@ -239,7 +239,7 @@
         content.innerHTML = `
             <div class="ats-call-in-progress">
                 <div class="ats-call-header">
-                    <div class="ats-call-icon">📞</div>
+                    <div class="ats-call-icon"></div>
                     <div class="ats-call-info">
                         <div class="ats-call-phone">${displayPhone}</div>
                         <div class="ats-call-name">${displayName}</div>
@@ -248,12 +248,12 @@
                 </div>
                 <div class="ats-recording-prompt">
                     <div style="text-align: center; margin-bottom: 12px;">
-                        <div style="font-size: 24px; margin-bottom: 6px;">🎙️</div>
+                        <div style="font-size: 24px; margin-bottom: 6px; color: #1e3a5f;">●</div>
                         <div style="font-weight: 600; margin-bottom: 2px;">Record this call?</div>
                         <div style="font-size: 11px; color: #888;">Click below to capture audio</div>
                     </div>
                     <button class="ats-start-recording-btn" id="ats-start-recording">
-                        🎙️ Start Recording
+                        Start Recording
                     </button>
                 </div>
             </div>

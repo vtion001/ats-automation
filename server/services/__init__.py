@@ -1,29 +1,17 @@
 """
-Services module exports
+Services Package
+Business logic services for the AI server
 """
 
-from services.ai_service import ai_service, AIService
-from services.cache_service import cache_service, CacheService
-from services.knowledge_base_service import (
-    KNOWLEDGE_BASES,
-    load_knowledge_bases,
-    get_knowledge_base,
-    get_kb_context,
-)
-from services.transcription_service import transcription_service, TranscriptionService
-from services.webhook_storage import webhook_storage, WebhookStorage
+from .knowledge_base import KnowledgeBaseService, get_kb_service
+from .storage import StorageService, get_storage_service
+from .cache import CacheService, get_cache_service
 
 __all__ = [
-    "ai_service",
-    "AIService",
-    "cache_service",
+    "KnowledgeBaseService",
+    "get_kb_service",
+    "StorageService",
+    "get_storage_service",
     "CacheService",
-    "KNOWLEDGE_BASES",
-    "load_knowledge_bases",
-    "get_knowledge_base",
-    "get_kb_context",
-    "transcription_service",
-    "TranscriptionService",
-    "webhook_storage",
-    "WebhookStorage",
+    "get_cache_service",
 ]

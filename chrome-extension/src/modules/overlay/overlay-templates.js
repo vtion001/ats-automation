@@ -21,7 +21,7 @@ const OverlayTemplates = {
         return `
             <div class="ats-header-section">
                 <div class="ats-header-info">
-                    <div class="ats-phone-icon">📞</div>
+                    <div class="ats-phone-icon"></div>
                     <div>
                         <div class="ats-phone-number ${phoneClass}">${displayPhone}</div>
                     </div>

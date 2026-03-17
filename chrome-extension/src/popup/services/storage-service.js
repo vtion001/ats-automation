@@ -70,6 +70,31 @@ const StorageService = {
         return stats;
     },
 
+    // Increment a specific stat counter
+    async incrementStat(statName) {
+        const stats = await this.getStats();
+        if (stats[statName] !== undefined) {
+            stats[statName]++;
+        } else {
+            stats[statName] = 1;
+        }
+        await this.set({ [ATS_STORAGE_KEYS.STATS]: stats });
+        return stats;
+    },
+
+    // Convenience methods
+    async incrementCalls() {
+        return this.incrementStat('calls');
+    },
+
+    async incrementSearches() {
+        return this.incrementStat('searches');
+    },
+
+    async incrementAnalysis() {
+        return this.incrementStat('analysis');
+    },
+
     async getNotes(clientId) {
         const key = ATS_STORAGE_KEYS.NOTES_PREFIX + clientId;
         const result = await this.get(key);
