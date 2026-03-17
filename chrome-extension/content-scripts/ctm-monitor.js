@@ -310,6 +310,23 @@ ${transcriptionText || 'No transcription available'}
             saveTranscriptionToMarkdown(currentCallData);
         }
 
+        // TRIGGER AUTOMATION ON CALL END with full transcription
+        if (CONFIG.autoAnalyze && currentCallData && currentCallData.phoneNumber) {
+            console.log('[ATS] Triggering automation on call end...');
+            
+            // Send to background for automation
+            chrome.runtime.sendMessage({
+                type: 'TRIGGER_AUTOMATION',
+                payload: {
+                    phone: currentCallData.phoneNumber,
+                    callerName: currentCallData.callerName,
+                    transcript: transcriptionText,
+                    status: currentCallData.status,
+                    timestamp: new Date().toISOString()
+                }
+            });
+        }
+
         if (currentCallData) {
             broadcastCallEvent({ ...currentCallData, event: 'call_ended' });
         }

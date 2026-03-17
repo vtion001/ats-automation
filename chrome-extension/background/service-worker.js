@@ -180,6 +180,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'PING':
             sendResponse({ pong: true, status: 'ok' });
             break;
+        case 'TRIGGER_AUTOMATION':
+            handleTriggerAutomation(message.payload, sender.tab?.id);
+            sendResponse({ success: true });
+            break;
         case 'GET_DESKTOP_SOURCES':
             handleGetDesktopSources(message.payload).then(sources => {
                 sendResponse({ success: true, sources: sources });
@@ -223,6 +227,50 @@ async function handleCallEvent(payload) {
             lastCall.endTime = payload.timestamp;
             lastCall.duration = payload.timestamp - lastCall.startTime;
         }
+    }
+}
+
+async function handleTriggerAutomation(payload, tabId) {
+    console.log('[AGS] Triggering automation:', payload);
+    
+    const { phone, callerName, transcript, status } = payload;
+    
+    // Get AI server URL
+    const result = await chrome.storage.local.get('aiServerUrl');
+    const serverUrl = result.aiServerUrl || 'http://localhost:8000';
+    
+    // Prepare automation request
+    const automationData = {
+        phone: phone,
+        callerName: callerName || 'Unknown',
+        transcript: transcript || '',
+        status: status || 'completed',
+        timestamp: payload.timestamp
+    };
+    
+    console.log('[AGS] Sending to automation server:', serverUrl);
+    
+    // Try to send to automation server
+    try {
+        const response = await fetch(`${serverUrl}/api/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(automationData)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('[AGS] Automation result:', result);
+            
+            // Show notification
+            showOverlayNotification(`Automation complete for ${phone}`);
+        } else {
+            console.error('[AGS] Automation failed:', response.status);
+            showOverlayNotification(`Automation failed for ${phone}`);
+        }
+    } catch (error) {
+        console.error('[AGS] Automation error:', error);
+        showOverlayNotification(`Automation error for ${phone}`);
     }
 }
 

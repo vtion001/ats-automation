@@ -1,6 +1,6 @@
 /**
- * Transcription Service
- * Handles call transcription using Web Speech API
+ * Transcription Service - Enhanced
+ * Handles call transcription using Web Speech API with better error handling
  */
 
 class TranscriptionService {
@@ -10,17 +10,18 @@ class TranscriptionService {
         this.transcript = '';
         this.onTranscriptUpdate = null;
         this.onError = null;
+        this.retryCount = 0;
+        this.maxRetries = 3;
     }
 
-    // Check if speech recognition is supported
     isSupported() {
         return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
     }
 
-    // Initialize speech recognition
     init() {
         if (!this.isSupported()) {
-            ATS.logger.warn('Speech recognition not supported');
+            ATS.logger.warn('Speech recognition not supported in this browser');
+            this.notifyError('not-supported');
             return false;
         }
 
@@ -30,29 +31,55 @@ class TranscriptionService {
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
+        this.recognition.maxAlternatives = 1;
 
         this.recognition.onresult = (event) => {
             let interimTranscript = '';
+            this.retryCount = 0; // Reset on any result
             
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
                 
                 if (event.results[i].isFinal) {
-                    this.transcript += transcript + ' ';
-                    ATS.logger.info('★ Final transcript received:', transcript.substring(0, 50));
-                    
-                    if (this.onTranscriptUpdate) {
-                        this.onTranscriptUpdate(this.transcript, true);
+                    if (transcript.trim()) {
+                        this.transcript += transcript + ' ';
+                        ATS.logger.info('★ Final transcript received:', transcript.substring(0, 50));
+                        
+                        if (this.onTranscriptUpdate) {
+                            this.onTranscriptUpdate(this.transcript, true);
+                        }
                     }
                 } else {
                     interimTranscript += transcript;
-                    ATS.logger.debug('Interim transcript:', transcript);
                 }
             }
         };
 
         this.recognition.onerror = (event) => {
-            ATS.logger.error('★ Speech recognition error:', event.error, event);
+            ATS.logger.error('★ Speech recognition error:', event.error);
+            
+            // Handle specific errors
+            switch (event.error) {
+                case 'no-speech':
+                    ATS.logger.warn('No speech detected - this is normal if caller is silent');
+                    // Don't treat as critical error - just log
+                    break;
+                case 'audio-capture':
+                    this.notifyError('microphone-denied');
+                    ATS.logger.error('Microphone not available or denied');
+                    break;
+                case 'not-allowed':
+                    this.notifyError('permission-denied');
+                    ATS.logger.error('Microphone permission denied');
+                    break;
+                case 'network':
+                    this.notifyError('network-error');
+                    ATS.logger.error('Network error');
+                    break;
+                default:
+                    ATS.logger.error('Speech recognition error:', event.error);
+            }
+            
             if (this.onError) {
                 this.onError(event.error);
             }
@@ -61,17 +88,34 @@ class TranscriptionService {
         this.recognition.onend = () => {
             this.isRecording = false;
             ATS.logger.info('★ Speech recognition ended, transcript length:', this.transcript.length);
+            
+            // Auto-restart if ended unexpectedly but we have retry count
+            if (this.retryCount < this.maxRetries && this.transcript === '') {
+                this.retryCount++;
+                ATS.logger.info('★ Retrying transcription, attempt:', this.retryCount);
+                setTimeout(() => this.start(), 1000);
+            }
         };
 
         this.recognition.onstart = () => {
-            ATS.logger.info('★ Speech recognition started successfully');
+            ATS.logger.info('★ Speech recognition started');
+            this.retryCount = 0;
         };
 
         ATS.logger.info('Transcription service initialized');
         return true;
     }
 
-    // Start recording
+    notifyError(errorType) {
+        // Send message to popup/background
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({
+                type: 'TRANSCRIPTION_ERROR',
+                payload: { error: errorType }
+            });
+        }
+    }
+
     start() {
         ATS.logger.info('★ Transcription start() called');
         
@@ -92,12 +136,11 @@ class TranscriptionService {
             ATS.logger.info('★ Transcription start() successful');
             return true;
         } catch (e) {
-            ATS.logger.error('★ Error starting transcription:', e.message, e);
+            ATS.logger.error('★ Error starting transcription:', e.message);
             return false;
         }
     }
 
-    // Stop recording
     stop() {
         if (!this.recognition || !this.isRecording) {
             return;
@@ -112,12 +155,10 @@ class TranscriptionService {
         }
     }
 
-    // Get current transcript
     getTranscript() {
         return this.transcript;
     }
 
-    // Generate markdown from transcript
     generateMarkdown(callData) {
         const markdown = `# Call Transcription - ${new Date().toISOString()}
 
@@ -141,7 +182,6 @@ ${this.transcript || 'No transcription available'}
         return markdown;
     }
 
-    // Save to markdown file
     saveToMarkdown(callData) {
         const markdown = this.generateMarkdown(callData);
         
