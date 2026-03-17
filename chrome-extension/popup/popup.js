@@ -442,10 +442,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             showTestStatus('Fetching latest call data...', 'loading');
             
             try {
-                const serverUrl = await StatusService.getAIServerUrl();
-                const actualUrl = serverUrl.includes('localhost') 
-                    ? 'http://localhost:8000' 
-                    : serverUrl;
+                // Get server URL - check if localhost or Azure
+                let serverUrl = await StatusService.getAIServerUrl();
+                
+                // Use localhost if it contains localhost, otherwise use the configured URL
+                let actualUrl = serverUrl;
+                if (serverUrl.includes('localhost') || serverUrl.includes('127.0.0.1')) {
+                    actualUrl = 'http://localhost:8000';
+                }
+                
+                console.log('[Test Existing Lead] Using URL:', actualUrl);
                 
                 // Fetch all webhook results
                 const response = await fetch(`${actualUrl}/api/webhook-results`, {
@@ -455,10 +461,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to fetch webhook results');
+                    throw new Error('Failed to fetch webhook results: ' + response.status);
                 }
                 
                 const data = await response.json();
+                console.log('[Test Existing Lead] Response:', data);
                 
                 // Get results - could be array or object
                 let results = [];
@@ -466,7 +473,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     results = data.results;
                 } else if (data.phone || data.call_id) {
                     results = [data];
+                } else if (data.status === 'success') {
+                    // Single result case
+                    results = [data];
                 }
+                
+                console.log('[Test Existing Lead] Found results:', results.length);
                 
                 if (results.length === 0) {
                     showTestStatus('No calls found. Make a call first or send a webhook.', 'error');
@@ -741,6 +753,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             showTestStatus('Analysis complete!', 'success');
             
+            // Also display in popup qualification section
+            displayQualificationResult(fullResult);
+            
             // Increment analysis stat
             StorageService.incrementAnalysis().then(() => updateStats());
             
@@ -886,32 +901,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (qualStatus) qualStatus.style.display = 'none';
         if (qualResult) qualResult.style.display = 'block';
         
+        // Handle both camelCase and snake_case from API
+        const disposition = result.suggestedDisposition || result.suggested_disposition || 'New';
+        const score = result.qualificationScore || result.qualification_score || 0;
+        const summary = result.summary || result.salesforceNotes || '';
+        const dept = result.recommendedDepartment || result.recommended_department || '-';
+        const tags = result.tags || [];
+        const phone = result.phone || '';
+        const notes = result.salesforceNotes || result.summary || '';
+        
+        // Determine badge class based on score
+        let badgeClass = 'unqualified';
+        if (score >= 70) badgeClass = 'hot';
+        else if (score >= 40) badgeClass = 'warm';
+        else badgeClass = 'cold';
+        
         // Update badge (disposition)
         if (qualBadge) {
-            qualBadge.textContent = result.suggestedDisposition || 'New';
-            qualBadge.className = 'qual-badge ' + (result.qualificationScore >= 70 ? 'qualified' : 'unqualified');
+            qualBadge.textContent = disposition;
+            qualBadge.className = 'qual-badge ' + badgeClass;
         }
         
         // Update score
         if (qualScore) {
-            const score = result.qualificationScore || 0;
             qualScore.textContent = `Score: ${score}%`;
             qualScore.className = 'qual-score ' + (score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low');
         }
         
         // Update reason (summary)
         if (qualReason) {
-            qualReason.textContent = result.summary || result.salesforceNotes || 'No summary available';
+            qualReason.textContent = summary || 'No summary available';
         }
         
         // Update department
         if (qualDept) {
-            qualDept.textContent = result.recommendedDepartment || '-';
+            qualDept.textContent = dept;
         }
         
         // Update keywords
         if (qualKeywords) {
-            const tags = result.tags || [];
             qualKeywords.innerHTML = '';
             if (tags.length > 0) {
                 tags.slice(0, 8).forEach(tag => {
@@ -922,6 +950,106 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             } else {
                 qualKeywords.innerHTML = '<span class="keyword-tag">None</span>';
+            }
+        }
+        
+        // Add or update copy notes button and notes display
+        let notesSection = document.getElementById('copyNotesSection');
+        if (!notesSection) {
+            // Create notes section
+            notesSection = document.createElement('div');
+            notesSection.id = 'copyNotesSection';
+            notesSection.className = 'section';
+            notesSection.style.marginTop = '12px';
+            
+            const notesTitle = document.createElement('div');
+            notesTitle.className = 'section-title';
+            notesTitle.textContent = '📋 Notes (Copy-Paste Ready)';
+            notesSection.appendChild(notesTitle);
+            
+            const notesContent = document.createElement('div');
+            notesContent.id = 'notesContent';
+            notesContent.className = 'notes-content';
+            notesContent.style.cssText = 'background: #f5f5f5; padding: 10px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; max-height: 150px; overflow-y: auto;';
+            notesSection.appendChild(notesContent);
+            
+            const copyBtn = document.createElement('button');
+            copyBtn.id = 'copyNotesBtn';
+            copyBtn.className = 'btn';
+            copyBtn.style.cssText = 'width: 100%; margin-top: 8px;';
+            copyBtn.textContent = '📋 Copy Notes';
+            copyBtn.onclick = function() {
+                const noteText = document.getElementById('notesContent').textContent;
+                navigator.clipboard.writeText(noteText).then(() => {
+                    copyBtn.textContent = '✅ Copied!';
+                    setTimeout(() => copyBtn.textContent = '📋 Copy Notes', 2000);
+                });
+            };
+            notesSection.appendChild(copyBtn);
+            
+            // Insert after qualification section
+            const qualSection = document.getElementById('qualificationSection');
+            if (qualSection && qualSection.nextSibling) {
+                qualSection.parentNode.insertBefore(notesSection, qualSection.nextSibling);
+            } else if (qualSection) {
+                qualSection.parentNode.appendChild(notesSection);
+            }
+        }
+        
+        // Update notes content
+        const notesContent = document.getElementById('notesContent');
+        if (notesContent) {
+            const fullNotes = `Phone: ${phone}
+State: ${result.detectedState || result.detected_state || '-'}
+Insurance: ${result.detectedInsurance || result.detected_insurance || '-'}
+Tags: ${tags.join(', ')}
+
+Summary: ${summary}
+
+Salesforce Notes: ${notes}`;
+            notesContent.textContent = fullNotes;
+        }
+        
+        // Add Salesforce action buttons
+        let sfActionsSection = document.getElementById('sfActionsSection');
+        if (!sfActionsSection) {
+            sfActionsSection = document.createElement('div');
+            sfActionsSection.id = 'sfActionsSection';
+            sfActionsSection.className = 'btn-row';
+            sfActionsSection.style.cssText = 'margin-top: 12px; display: flex; gap: 8px;';
+            
+            const searchBtn = document.createElement('button');
+            searchBtn.className = 'btn secondary';
+            searchBtn.style.flex = '1';
+            searchBtn.textContent = '🔍 Search SF';
+            searchBtn.onclick = function() {
+                if (phone) {
+                    const cleanPhone = phone.replace(/\D/g, '');
+                    const searchUrl = `${ATS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${encodeURIComponent(cleanPhone)}`;
+                    window.open(searchUrl, '_blank');
+                }
+            };
+            
+            const logCallBtn = document.createElement('button');
+            logCallBtn.className = 'btn';
+            logCallBtn.style.flex = '1';
+            logCallBtn.textContent = '📝 Log Call';
+            logCallBtn.onclick = function() {
+                // Open Salesforce with pre-filled data
+                const sfUrl = ATS_CONFIG.salesforceUrl;
+                const taskUrl = `${sfUrl}/lightning/o/Task/new?recordTypeId=...`;
+                window.open(taskUrl, '_blank');
+            };
+            
+            sfActionsSection.appendChild(searchBtn);
+            sfActionsSection.appendChild(logCallBtn);
+            
+            // Insert after notes section
+            const notesSection = document.getElementById('copyNotesSection');
+            if (notesSection && notesSection.nextSibling) {
+                notesSection.parentNode.insertBefore(sfActionsSection, notesSection.nextSibling);
+            } else if (notesSection) {
+                notesSection.parentNode.appendChild(sfActionsSection);
             }
         }
         
