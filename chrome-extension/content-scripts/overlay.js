@@ -230,12 +230,19 @@
         setTimeout(() => notif.remove(), 5000);
     }
 
+    function escapeHtml(str) {
+        if (str == null) return '';
+        const div = document.createElement('div');
+        div.textContent = String(str);
+        return div.innerHTML;
+    }
+
     function showCallInProgress(phoneNumber, callerName) {
         createOverlay();
         const content = document.querySelector(`#${OVERLAY_ID} .ats-overlay-content`);
         
-        const displayPhone = phoneNumber || 'Unknown';
-        const displayName = callerName || 'Unknown Caller';
+        const displayPhone = escapeHtml(phoneNumber) || 'Unknown';
+        const displayName = escapeHtml(callerName) || 'Unknown Caller';
         
         content.innerHTML = `
             <div class="ats-call-in-progress">
@@ -348,7 +355,7 @@
             html += `
                 <div class="ats-field">
                     <div class="ats-field-label">Phone</div>
-                    <div class="ats-field-value">${data.phone}</div>
+                    <div class="ats-field-value">${escapeHtml(data.phone)}</div>
                 </div>
             `;
         }
@@ -357,7 +364,7 @@
             html += `
                 <div class="ats-field">
                     <div class="ats-field-label">Caller</div>
-                    <div class="ats-field-value">${data.callerName}</div>
+                    <div class="ats-field-value">${escapeHtml(data.callerName)}</div>
                 </div>
             `;
         }

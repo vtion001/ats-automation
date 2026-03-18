@@ -58,7 +58,6 @@
     max-height: 340px;
     overflow-y: auto;
 }
-}
 
 .ats-field {
     margin-bottom: 12px;
@@ -72,7 +71,7 @@
 }
 
 .ats-field-value {
-    color: #fff;
+    color: #1a202c;
 }
 
 .ats-button {
