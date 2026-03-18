@@ -1,19 +1,19 @@
 """
 ATS Remote Log Viewer - Flask App for Azure
-Simple web app that receives and displays logs from remote extensions
+Receives logs and forwards to AI server for persistence.
+Reads logs from AI server for display.
 """
 
 import os
-import json
-import threading
+import requests
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template_string
 
 app = Flask(__name__)
 
-# Thread-safe log storage
-LOG_STORE = {"logs": [], "lock": threading.Lock()}
-MAX_LOGS = 5000
+AI_SERVER_URL = os.environ.get(
+    "AI_SERVER_URL", "https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io"
+)
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>ATS Remote Log Viewer</title>
@@ -33,33 +33,43 @@ button:hover{background:#21262d}.log-container{height:calc(100vh-120px);overflow
 .no-logs{text-align:center;padding:60px;color:#484f58}.badge{display:inline-block;padding:2px 8px;background:#238636;border-radius:4px;font-size:10px;margin-left:10px}
 .live{color:#3fb950;font-size:10px;margin-left:10px}.url-box{background:#0d1117;padding:10px 15px;font-size:12px;border-radius:6px;margin-left:auto}
 .url-box span{color:#58a6ff;font-weight:bold}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}.pulse{animation:pulse 2s infinite}
+.ai-status{font-size:10px;margin-left:15px}.ai-status.connected{color:#3fb950}.ai-status.disconnected{color:#f85149}
 </style></head><body>
-<div class="header"><h1>📡 ATS Remote Log Viewer <span class="live pulse">● LIVE</span></h1><div class="stats" id="stats">0 logs</div></div>
+<div class="header"><h1>📡 ATS Remote Log Viewer <span class="live pulse">● LIVE</span><span class="ai-status" id="aiStatus">checking AI server...</span></h1><div class="stats" id="stats">0 logs</div></div>
 <div class="controls">
 <select id="fs"><option value="">All Sources</option><option value="ctm">CTM</option><option value="extension">Extension</option><option value="server">Server</option></select>
 <select id="fl"><option value="">All Levels</option><option value="log">Log</option><option value="info">Info</option><option value="warn">Warning</option><option value="error">Error</option></select>
 <select id="fc"><option value="">All Clients</option><option value="flyland">Flyland</option><option value="banyan">Banyan</option><option value="element">Element</option><option value="takami">Takami</option><option value="tbt">TBT</option></select>
 <button onclick="clearLogs()">Clear</button>
-<div class="url-box">Endpoint: <span id="ep">-</span></div>
+<div class="url-box">Backend: <span id="ep">-</span></div>
 </div>
 <div class="log-container" id="lc"><div class="no-logs">Waiting for logs...</div></div>
 <script>
+const AI_SERVER = document.currentScript?._aiServer || '';
 let logs=[];
+let aiConnected=false;
 async function fetchLogs(){
   try{
-    let url='/api/logs?';
+    let url=AI_SERVER+'/api/logs?';
     if(document.getElementById('fs').value)url+='source='+document.getElementById('fs').value+'&';
     if(document.getElementById('fl').value)url+='level='+document.getElementById('fl').value+'&';
     if(document.getElementById('fc').value)url+='client='+document.getElementById('fc').value+'&';
-    const r=await fetch(url);logs=await r.json();render();
-  }catch(e){console.error(e)}}
+    const r=await fetch(url);logs=await r.json();render();aiConnected=true;
+  }catch(e){
+    console.error('AI server unreachable:',e);
+    aiConnected=false;
+    render();
+  }
+  updateAiStatus();
+}
 function render(){
   const c=document.getElementById('lc');
   const s=document.getElementById('stats');
+  if(!aiConnected&&logs.length===0){c.innerHTML='<div class="no-logs">AI server unreachable. Waiting for connection...</div>';s.textContent='?';return}
   if(logs.length===0){c.innerHTML='<div class="no-logs">No logs</div>';s.textContent='0 logs';return}
   s.textContent=logs.length+' logs';
   c.innerHTML=logs.map(l=>{
-    const t=new Date(l.received_at||l.timestamp).toLocaleTimeString();
+    const t=new Date(l.received_at||l.timestamp||Date.now()).toLocaleTimeString();
     const d=l.data||{};
     const ds=Object.keys(d).length?JSON.stringify(d,null,2):'';
     return`<div class="log-entry ${l.level||'log'}">
@@ -72,10 +82,17 @@ function render(){
     </div>`;
   }).join('')
 }
+function updateAiStatus(){
+  const el=document.getElementById('aiStatus');
+  if(el){el.textContent=aiConnected?'✓ AI server connected':'✗ AI server unreachable';el.className='ai-status '+(aiConnected?'connected':'disconnected');}
+}
 ['fs','fl','fc'].forEach(id=>document.getElementById(id).addEventListener('change',fetchLogs));
 setInterval(fetchLogs,2000);fetchLogs();
-document.getElementById('ep').textContent=window.location.host+'/api/logs/{client}';
-function clearLogs(){fetch('/api/clear',{method:'POST'});logs=[];render()}
+document.getElementById('ep').textContent=AI_SERVER.replace('https://','');
+function clearLogs(){
+  if(!aiConnected){alert('AI server unreachable. Cannot clear logs.');return}
+  fetch(AI_SERVER+'/api/logs/clear',{method:'POST'}).then(()=>{logs=[];render()}).catch(()=>{alert('Failed to clear logs')});
+}
 </script></body></html>"""
 
 
@@ -90,20 +107,21 @@ def get_logs():
     level = request.args.get("level")
     client = request.args.get("client")
 
-    with LOG_STORE["lock"]:
-        logs = list(LOG_STORE["logs"])
+    try:
+        params = {}
+        if source:
+            params["source"] = source
+        if level:
+            params["level"] = level
+        if client:
+            params["client"] = client
 
-    filtered = []
-    for log in logs:
-        if source and log.get("source") != source:
-            continue
-        if level and log.get("level") != level:
-            continue
-        if client and log.get("client") != client:
-            continue
-        filtered.append(log)
-
-    return jsonify(filtered)
+        resp = requests.get(f"{AI_SERVER_URL}/api/logs", params=params, timeout=10)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        print(f"Error fetching from AI server: {e}")
+        return jsonify([])
 
 
 @app.route("/api/logs/<client>", methods=["POST"])
@@ -113,29 +131,41 @@ def add_log(client):
         log_entry["received_at"] = datetime.now().isoformat()
         log_entry["client"] = client
 
-        with LOG_STORE["lock"]:
-            LOG_STORE["logs"].insert(0, log_entry)
-            if len(LOG_STORE["logs"]) > MAX_LOGS:
-                LOG_STORE["logs"] = LOG_STORE["logs"][:MAX_LOGS]
-
         print(
             f"📨 [{client}] {log_entry.get('level', 'log')} - {log_entry.get('message', '')[:60]}"
         )
-        return jsonify({"status": "ok"})
+
+        try:
+            resp = requests.post(f"{AI_SERVER_URL}/api/logs/{client}", json=log_entry, timeout=5)
+            if resp.status_code == 200:
+                return jsonify({"status": "ok", "forwarded": True})
+        except Exception as e:
+            print(f"Warning: Could not forward to AI server: {e}")
+
+        return jsonify({"status": "ok", "forwarded": False})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
 
 @app.route("/api/clear", methods=["POST"])
 def clear_logs():
-    with LOG_STORE["lock"]:
-        LOG_STORE["logs"] = []
-    return jsonify({"status": "ok"})
+    try:
+        resp = requests.post(f"{AI_SERVER_URL}/api/logs/clear", timeout=10)
+        resp.raise_for_status()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        print(f"Error clearing logs on AI server: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "logs_count": len(LOG_STORE["logs"])})
+    try:
+        resp = requests.get(f"{AI_SERVER_URL}/api/logs", timeout=5)
+        ai_ok = resp.status_code == 200
+    except:
+        ai_ok = False
+    return jsonify({"status": "ok", "ai_server_connected": ai_ok})
 
 
 if __name__ == "__main__":
