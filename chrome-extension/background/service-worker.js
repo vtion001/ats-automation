@@ -14,7 +14,8 @@ const ATS_CONFIG = {
     saveMarkdown: true,
     aiServerUrl: 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io',
     salesforceUrl: 'https://flyland.my.salesforce.com',
-    ctmUrl: 'https://app.calltrackingmetrics.com'
+    ctmUrl: 'https://app.calltrackingmetrics.com',
+    remoteLogUrl: 'https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io'
 };
 
 let callLog = [];
@@ -142,6 +143,25 @@ function handleConsoleIntercept(message) {
 // Load config on startup
 loadConfig();
 
+// Initialize remoteLogUrl with default if not set
+async function ensureRemoteLogUrl() {
+    try {
+        const result = await chrome.storage.local.get('remoteLogUrl');
+        if (!result.remoteLogUrl) {
+            await chrome.storage.local.set({
+                remoteLogUrl: 'https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io'
+            });
+            _remoteLogUrl = 'https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io';
+        } else {
+            _remoteLogUrl = result.remoteLogUrl.replace(/\/$/, '');
+        }
+        _origConsole.log('[AGS] Remote log URL initialized:', _remoteLogUrl);
+    } catch (e) {
+        _origConsole.error('[AGS] Error initializing remote log URL:', e);
+    }
+}
+ensureRemoteLogUrl();
+
 // Increment stat counter
 async function incrementStat(statName) {
     try {
@@ -167,7 +187,7 @@ async function loadConfig() {
     try {
         const keys = ['activeClient', 'automationEnabled', 'autoSearchSF', 'transcriptionEnabled', 
                      'aiAnalysisEnabled', 'saveMarkdown', 'salesforceUrl', 'aiServerUrl',
-                     'ats_config'];
+                     'remoteLogUrl', 'ats_config'];
         const stored = await chrome.storage.local.get(keys);
         
         // Check for new config format first
@@ -187,6 +207,7 @@ async function loadConfig() {
         if (stored.salesforceUrl) ATS_CONFIG.salesforceUrl = stored.salesforceUrl;
         if (stored.aiServerUrl) ATS_CONFIG.aiServerUrl = stored.aiServerUrl;
         if (stored.activeClient) ATS_CONFIG.activeClient = stored.activeClient;
+        if (stored.remoteLogUrl) ATS_CONFIG.remoteLogUrl = stored.remoteLogUrl;
         
         // Initialize storage with defaults if not set
         if (!stored.aiServerUrl) {
@@ -194,6 +215,11 @@ async function loadConfig() {
         }
         if (!stored.salesforceUrl) {
             await chrome.storage.local.set({ salesforceUrl: 'https://flyland.my.salesforce.com' });
+        }
+        if (!stored.remoteLogUrl) {
+            const defaultUrl = 'https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io';
+            await chrome.storage.local.set({ remoteLogUrl: defaultUrl });
+            ATS_CONFIG.remoteLogUrl = defaultUrl;
         }
         
         console.log('[AGS] Config loaded:', ATS_CONFIG);
