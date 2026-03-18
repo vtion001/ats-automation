@@ -46,6 +46,25 @@
         "src/main.js"
       ],
       "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://*.calltrackingmetrics.com/calls/phone*"
+      ],
+      "js": [
+        "content-scripts/ctm-monitor.js",
+        "content-scripts/overlay.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://*.calltrackingmetrics.com/*"
+      ],
+      "js": [
+        "content-scripts/console-interceptor.js"
+      ],
+      "run_at": "document_start"
     }
   ],
   "icons": {

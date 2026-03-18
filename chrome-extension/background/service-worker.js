@@ -20,6 +20,13 @@ let currentCapture = {
     mimeType: null
 };
 
+let ctmMonitorState = {
+    state: 'unknown',
+    phone: null,
+    initialized: false,
+    lastUpdate: null
+};
+
 function getMessageType(message) {
     return message.type || message.action;
 }
@@ -144,12 +151,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return true;
 
         case 'CTM_MONITOR_STATE':
-            console.log('[BG] CTM Monitor state:', message.payload);
+            ctmMonitorState = {
+                state: message.payload?.state || 'unknown',
+                phone: message.payload?.phone || null,
+                initialized: true,
+                lastUpdate: Date.now()
+            };
             sendResponse({ success: true });
             return true;
 
         case 'GET_CTM_MONITOR_STATE':
-            sendResponse({ state: 'unknown' });
+            sendResponse({ 
+                state: ctmMonitorState.state,
+                phone: ctmMonitorState.phone,
+                initialized: ctmMonitorState.initialized
+            });
+            return true;
+        
+        case 'PING':
+            sendResponse({ pong: true });
             return true;
         
         default:
