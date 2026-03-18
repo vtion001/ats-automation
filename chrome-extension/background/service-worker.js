@@ -24,27 +24,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     switch (msgType) {
         case 'START_TAB_CAPTURE':
-            handleStartCapture(message.tabId || message.payload?.tabId, sendResponse);
+            sendResponse({ error: 'Capture now runs in popup, not service worker' });
             return true;
             
         case 'STOP_TAB_CAPTURE':
-            handleStopCapture(sendResponse);
+            sendResponse({ success: false, error: 'Capture now runs in popup' });
             return true;
             
         case 'GET_CAPTURE_STATUS':
-            sendResponse({
-                recording: currentCapture.recording,
-                tabId: currentCapture.tabId,
-                startTime: currentCapture.startTime
-            });
+            sendResponse({ recording: false, tabId: null, startTime: null });
             return true;
             
         case 'GET_CAPTURED_AUDIO':
-            getCapturedAudio(sendResponse);
+            sendResponse({ success: false, error: 'No audio captured via service worker' });
             return true;
             
         case 'CLEAR_CAPTURED_AUDIO':
-            clearCapturedAudio();
             sendResponse({ success: true });
             return true;
             
