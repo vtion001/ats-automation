@@ -161,27 +161,24 @@ async function startRecording() {
             return;
         }
         
-        // Switch to target tab first (tabCapture only works on active tab)
-        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        const previousTabId = currentTab?.id;
-        
-        await chrome.tabs.update(selectedTabId, { active: true });
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // tabCapture requires the extension to be "activated" on the target tab.
+        // User must click the extension icon on the CTM tab first.
+        const tabInfo = await chrome.tabs.get(selectedTabId).catch(() => null);
         
         const stream = await new Promise((resolve, reject) => {
-            chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+            chrome.tabCapture.capture({ audio: true, video: false, tabId: selectedTabId }, (stream) => {
                 if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
+                    const err = chrome.runtime.lastError.message;
+                    if (err.includes('not been invoked') || err.includes('cannot be captured')) {
+                        reject(new Error('CLICK_ICON_FIRST: Click the ATS Automation icon on the CTM tab first, then try again.'));
+                    } else {
+                        reject(new Error(err));
+                    }
                 } else {
                     resolve(stream);
                 }
             });
         });
-        
-        // Restore previous tab
-        if (previousTabId) {
-            chrome.tabs.update(previousTabId, { active: true });
-        }
         
         if (!stream) {
             updateStatus('Could not capture tab - permission denied', 'stopped');
@@ -215,7 +212,11 @@ async function startRecording() {
         
     } catch (e) {
         console.error('[TabCapture] Start error:', e);
-        updateStatus('Error: ' + e.message, 'stopped');
+        if (e.message.startsWith('CLICK_ICON_FIRST:')) {
+            updateStatus('Click the ATS icon on the CTM tab first!', 'stopped');
+        } else {
+            updateStatus('Error: ' + e.message, 'stopped');
+        }
     }
 }
 
