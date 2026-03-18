@@ -944,9 +944,9 @@
                 mediaRecorder = null;
                 broadcastMonitorState(MONITOR_STATE.IDLE);
                 sendResponse({ success: true });
-                break;
+                return false;
         }
-        return true;
+        return false;
     });
 
     // =============================================================================
