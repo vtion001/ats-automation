@@ -1,12 +1,14 @@
 /**
  * Call Monitor - Auto-detects CTM calls from softphone OR webpage
- * No manual selection needed!
+ * Uses DOM-based detection for reliable call state monitoring
  */
 
 class CallMonitor {
     constructor() {
         this.ctmService = new CTMService();
         this.isRunning = false;
+        this.currentCallKey = null;
+        this.callStartTime = null;
     }
 
     /**
@@ -23,10 +25,14 @@ class CallMonitor {
 
         console.log('[CallMonitor] Starting auto-detection...');
 
-        // Start CTM service - automatically detects softphone + webpage
         this.ctmService.startMonitoring((callInfo) => {
-            console.log('[CallMonitor] Call detected:', callInfo);
-            this.onCallDetected(callInfo);
+            console.log('[CallMonitor] Call event:', callInfo);
+            
+            if (callInfo.ended) {
+                this.onCallEnded();
+            } else {
+                this.onCallDetected(callInfo);
+            }
         });
     }
 
@@ -34,82 +40,48 @@ class CallMonitor {
      * Handle detected call
      */
     onCallDetected(callInfo) {
-        // Show the overlay with caller info
+        const callKey = `${callInfo.phoneNumber}_${callInfo.direction}`;
+        
+        if (this.currentCallKey !== callKey) {
+            this.currentCallKey = callKey;
+            this.callStartTime = Date.now();
+            console.log('[CallMonitor] New call:', callInfo);
+        }
+
         this.showCallOverlay(callInfo);
     }
 
     /**
-     * Show call overlay popup
+     * Handle call ended
+     */
+    onCallEnded() {
+        this.currentCallKey = null;
+        this.callStartTime = null;
+        
+        chrome.runtime.sendMessage({
+            type: 'HIDE_CALL_OVERLAY'
+        });
+    }
+
+    /**
+     * Show call overlay popup with call details
      */
     showCallOverlay(callInfo) {
-        // Create overlay if not exists
-        let overlay = document.getElementById('ats-call-overlay');
+        const direction = callInfo.direction || 'inbound';
+        const phoneNumber = callInfo.phoneNumber || 'Unknown';
+        const callerName = callInfo.callerName || 'Unknown Caller';
+        const callState = callInfo.callState || 'ringing';
         
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'ats-call-overlay';
-            overlay.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                width: 350px;
-                background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
-                border-radius: 12px;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-                z-index: 999999;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                color: white;
-                padding: 16px;
-                animation: slideIn 0.3s ease;
-            `;
-            
-            // Add animation keyframes
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes slideIn {
-                    from { transform: translateX(100%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
-                }
-            `;
-            document.head.appendChild(style);
-            document.body.appendChild(overlay);
-        }
-
-        // Update content
-        const direction = callInfo.direction === 'inbound' ? '📥 Incoming' : '📤 Outgoing';
-        const source = callInfo.source === 'softphone' ? '☎️ Softphone' : '🌐 Webpage';
-        
-        overlay.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <span style="font-size: 14px; opacity: 0.8;">${direction} Call</span>
-                <span style="font-size: 12px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px;">${source}</span>
-            </div>
-            <div style="font-size: 24px; font-weight: bold; margin-bottom: 8px;">
-                ${callInfo.phone}
-            </div>
-            <div style="font-size: 12px; opacity: 0.7;">
-                Auto-detected - No action needed
-            </div>
-            <button onclick="this.parentElement.remove()" style="
-                position: absolute;
-                top: 8px;
-                right: 8px;
-                background: none;
-                border: none;
-                color: white;
-                font-size: 18px;
-                cursor: pointer;
-                opacity: 0.7;
-            ">✕</button>
-        `;
-
-        // Auto-hide after 10 seconds
-        setTimeout(() => {
-            if (overlay && overlay.parentElement) {
-                overlay.style.animation = 'slideIn 0.3s ease reverse';
-                setTimeout(() => overlay.remove(), 300);
+        chrome.runtime.sendMessage({
+            type: 'SHOW_CALL_IN_PROGRESS',
+            payload: {
+                phoneNumber,
+                callerName,
+                direction,
+                callState,
+                callStartTime: this.callStartTime
             }
-        }, 10000);
+        });
     }
 
     /**
@@ -121,19 +93,11 @@ class CallMonitor {
     }
 }
 
-// Auto-start when page loads (only on softphone page)
+// Auto-start when page loads (on CTM softphone pages)
 document.addEventListener('DOMContentLoaded', () => {
-    // Only run on the CTM live softphone page (/calls/phone)
-    const pathname = new URL(window.location.href).pathname;
-    if (pathname !== '/calls/phone' && !pathname.endsWith('/calls/phone')) {
-        console.log('[CallMonitor] Not on softphone page, skipping');
-        return;
-    }
-    
     const monitor = new CallMonitor();
     monitor.start();
     
-    // Also start on CTM ready
     if (window.CTM) {
         document.addEventListener('ctm:ready', () => {
             if (!monitor.isRunning) {

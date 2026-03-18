@@ -237,22 +237,36 @@
         return div.innerHTML;
     }
 
-    function showCallInProgress(phoneNumber, callerName) {
+    function showCallInProgress(payload) {
         createOverlay();
         const content = document.querySelector(`#${OVERLAY_ID} .ats-overlay-content`);
         
-        const displayPhone = escapeHtml(phoneNumber) || 'Unknown';
-        const displayName = escapeHtml(callerName) || 'Unknown Caller';
+        const phoneNumber = payload.phoneNumber || 'Unknown';
+        const callerName = payload.callerName || 'Unknown Caller';
+        const direction = payload.direction || 'inbound';
+        const callStartTime = payload.callStartTime || Date.now();
+        
+        const isInbound = direction === 'inbound';
+        const directionLabel = isInbound ? 'INBOUND CALL' : 'OUTBOUND CALL';
+        const directionColor = isInbound ? '#22c55e' : '#f59e0b';
+        const directionIcon = isInbound ? '📥' : '📤';
+        
+        const displayPhone = escapeHtml(phoneNumber);
+        const displayName = escapeHtml(callerName);
         
         content.innerHTML = `
             <div class="ats-call-in-progress">
                 <div class="ats-call-header">
-                    <div class="ats-call-icon"></div>
+                    <div class="ats-call-icon" style="background: ${directionColor};">${directionIcon}</div>
                     <div class="ats-call-info">
                         <div class="ats-call-phone">${displayPhone}</div>
                         <div class="ats-call-name">${displayName}</div>
                     </div>
-                    <div class="ats-call-status">CALLING</div>
+                    <div class="ats-call-status" style="background: ${directionColor};">${directionLabel}</div>
+                </div>
+                <div class="ats-call-timer" id="ats-call-timer">
+                    <span class="ats-timer-icon">⏱</span>
+                    <span class="ats-timer-value" id="ats-timer-display">00:00</span>
                 </div>
                 <div class="ats-recording-prompt">
                     <div style="text-align: center; margin-bottom: 12px;">
@@ -272,13 +286,24 @@
             startBtn.addEventListener('click', () => {
                 chrome.runtime.sendMessage({
                     type: 'START_AUDIO_CAPTURE',
-                    payload: { phoneNumber, callerName }
+                    payload: { phoneNumber, callerName, direction }
                 });
             });
         }
         
-        // Add styles for call in progress
+        const timerDisplay = document.getElementById('ats-timer-display');
+        const updateTimer = () => {
+            if (!timerDisplay) return;
+            const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toString().padStart(2, '0');
+            timerDisplay.textContent = `${mins}:${secs}`;
+        };
+        updateTimer();
+        const timerInterval = setInterval(updateTimer, 1000);
+        
         const style = document.createElement('style');
+        style.id = 'ats-call-styles';
         style.textContent = `
             .ats-call-in-progress {
                 padding: 0;
@@ -294,7 +319,6 @@
             .ats-call-icon {
                 width: 44px;
                 height: 44px;
-                background: #f59e0b;
                 border-radius: 10px;
                 display: flex;
                 align-items: center;
@@ -314,12 +338,27 @@
                 color: #888;
             }
             .ats-call-status {
-                background: #f59e0b;
                 color: #000;
                 padding: 4px 10px;
                 border-radius: 12px;
                 font-size: 10px;
                 font-weight: 700;
+                white-space: nowrap;
+            }
+            .ats-call-timer {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                padding: 12px;
+                background: #1a1a1a;
+                border-bottom: 1px solid #3d3d3d;
+                font-size: 16px;
+                font-weight: 600;
+                color: #4CAF50;
+            }
+            .ats-timer-icon {
+                font-size: 14px;
             }
             .ats-recording-prompt {
                 padding: 20px;
@@ -342,6 +381,8 @@
                 box-shadow: 0 8px 20px rgba(34, 197, 94, 0.4);
             }
         `;
+        const existingStyle = document.getElementById('ats-call-styles');
+        if (existingStyle) existingStyle.remove();
         document.head.appendChild(style);
     }
 
@@ -543,7 +584,10 @@
                 showData(message.payload);
                 break;
             case 'SHOW_CALL_IN_PROGRESS':
-                showCallInProgress(message.payload.phoneNumber, message.payload.callerName);
+                showCallInProgress(message.payload);
+                break;
+            case 'HIDE_CALL_OVERLAY':
+                hideOverlay();
                 break;
             case 'SHOW_CALL_ANALYSIS':
                 showCallAnalysisOverlay(message.payload);

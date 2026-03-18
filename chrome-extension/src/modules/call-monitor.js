@@ -54,12 +54,14 @@ class CallMonitor {
     showCallOverlay(callData) {
         const phoneNumber = callData.phoneNumber || 'Unknown';
         const callerName = callData.callerName || 'Unknown Caller';
+        const direction = callData.direction || 'inbound';
 
         chrome.runtime.sendMessage({
             type: 'SHOW_CALL_IN_PROGRESS',
             payload: {
                 phoneNumber,
                 callerName,
+                direction,
                 status: callData.status
             }
         });

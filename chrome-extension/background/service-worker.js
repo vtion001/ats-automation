@@ -100,6 +100,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: true });
             return true;
         
+        case 'SHOW_CALL_IN_PROGRESS':
+            forwardToOverlay({ type: 'SHOW_CALL_IN_PROGRESS', payload: message.payload }, sender, sendResponse);
+            return true;
+        
+        case 'HIDE_CALL_OVERLAY':
+            forwardToOverlay({ type: 'HIDE_CALL_OVERLAY' }, sender, sendResponse);
+            return true;
+        
         default:
             sendResponse({ error: 'Unknown message type' });
             return true;
@@ -261,6 +269,26 @@ function handleSetBadge(color, text) {
 
 function updateStatus(msg) {
     console.log('[BG]', msg);
+}
+
+async function forwardToOverlay(message, sender, sendResponse) {
+    try {
+        if (sender.tab?.id) {
+            await chrome.tabs.sendMessage(sender.tab.id, message);
+        } else {
+            const tabs = await chrome.tabs.query({ url: '*://*.calltrackingmetrics.com/*' });
+            for (const tab of tabs) {
+                try {
+                    await chrome.tabs.sendMessage(tab.id, message);
+                } catch (e) {
+                    // Tab might not have overlay loaded
+                }
+            }
+        }
+    } catch (e) {
+        console.log('[BG] Forward to overlay error:', e.message);
+    }
+    sendResponse({ success: true });
 }
 
 console.log('[BG] ATS Background Service Worker loaded');
