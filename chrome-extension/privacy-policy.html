@@ -1,0 +1,80 @@
+# ATS Automation - Privacy Policy
+
+**Last updated: March 19, 2026**
+
+## Overview
+
+ATS Automation ("we," "our," or "us") operates the ATS Automation Chrome Extension. This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our extension.
+
+## Data Collection
+
+ATS Automation processes the following data locally on your device:
+
+### Audio Data
+- **Tab Audio Capture**: When you activate recording, the extension captures audio from the selected browser tab using the Chrome TabCapture API. This audio is processed locally and transmitted to our AI server for transcription and analysis.
+- Audio is **never stored** on our servers after processing.
+- Audio data is transmitted securely over HTTPS to our Azure-hosted AI server for transcription only.
+
+### Call Data
+- Phone numbers, caller information, and call metadata are processed for lead qualification and CRM integration purposes.
+- Call data may be stored locally in Chrome storage and transmitted to configured services (Salesforce, AI analysis server).
+
+### Usage Data
+- The extension collects anonymous usage statistics including:
+  - Service connectivity status (which services are online)
+  - Feature usage counts (number of calls analyzed, recordings processed)
+  - Error logs for debugging purposes
+
+## Data Storage
+
+- **Local Storage**: Call data, settings, and configuration are stored in Chrome's local storage (`chrome.storage.local`). This data remains on your device.
+- **AI Server**: Audio is transmitted to our Azure AI server for transcription and analysis, processed, and not persistently stored.
+- **Markdown Logs**: If configured, call logs may be saved locally to your device's Downloads folder.
+
+## Data Sharing
+
+- We do **not sell, trade, or otherwise transfer** your personal data to outside parties.
+- Audio data is processed by our AI server (Azure-hosted) for transcription purposes only.
+- Data may be shared with third-party services you explicitly configure (Salesforce, Zoho).
+
+## Permissions Used
+
+| Permission | Purpose |
+|------------|---------|
+| `activeTab` | Access current tab for CTM page detection |
+| `storage` | Store settings and call data locally |
+| `scripting` | Inject content scripts for call detection |
+| `tabCapture` | Capture audio from browser tabs during calls |
+| `notifications` | Alert you when analysis is complete |
+| `downloads` | Save call recordings and transcripts locally |
+
+## Host Permissions
+
+| Host | Purpose |
+|------|---------|
+| `*.calltrackingmetrics.com/*` | Monitor CTM softphone for call events |
+| `*.zoho.com/*` | CRM integration for lead management |
+| `localhost:8765/*` | Local log server (optional) |
+
+## Security
+
+- All data transmitted to external servers uses HTTPS encryption.
+- Audio processing is performed by our Azure-hosted AI server with industry-standard security.
+- No personal data is stored on third-party servers beyond what's required for processing.
+
+## Children's Privacy
+
+Our extension is not intended for use by individuals under the age of 18.
+
+## Changes to This Policy
+
+We may update this privacy policy from time to time. We will notify users of any material changes by updating the "Last updated" date on this policy.
+
+## Contact
+
+If you have questions about this privacy policy, please contact:
+- Email: generalmanager.tiongsons@gmail.com
+
+## Your Consent
+
+By using ATS Automation, you consent to our privacy policy.
