@@ -83,26 +83,19 @@ Verify `.env` settings and ensure server is running
 
 ```
 ats-automation/
-├── main.py                 # CLI entry point
-├── core/                   # Shared modules
-│   ├── browser_manager.py
-│   ├── config_loader.py
-│   └── logger.py
-├── clients/                # Client-specific
-│   ├── flyland/
-│   ├── legacy/
-│   └── ...
-├── server/                 # FastAPI server
-├── chrome-extension/       # Browser extension
-└── Documentation/         # Full docs
+├── chrome-extension/       # Browser extension (Manifest V3)
+├── server/               # FastAPI AI server
+├── core/                 # Shared Python modules
+├── deploy/               # Deployment scripts
+├── call-log-server.py    # Local markdown call logger
+└── ...
 ```
 
-## Need Help?
+## Documentation
 
-- [Architecture](Documentation/architecture.md)
-- [Client Details](Documentation/clients..md)
-- [Automations](Documentation/automations..md)
-- [Deployment](Documentation/deployment..md)
+- [COORDINATION.md](COORDINATION.md) - Full system overview
+- [README-INSTALL.md](README-INSTALL.md) - Installation guide
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Azure deployment
 
 ---
 *Internal use only - Confidential*

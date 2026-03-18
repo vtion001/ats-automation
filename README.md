@@ -1,119 +1,84 @@
 # ATS Automation System
 
 > **MIGRATED**: Most automations now use CTM Triggers + Salesforce Flow instead of Python/Playwright.
-> See [Documentation/automations.md](Documentation/automations.md) for the revised CTM-native plan.
+> CTM-native automations live in `chrome-extension/clients/[client]/automations/`.
 
 ## Overview
 
-Automation for 6 BPO client companies using CTM native features + Salesforce Flow
+Automation for 6 BPO client companies using CTM native features + Salesforce Flow + AI analysis.
 
 ## Quick Start
 
-### Option 1: Docker (Recommended for easy setup)
-```bash
-# Start AI server
-docker-compose up -d
-
-# View logs
-docker-compose logs -f ai-server
-```
-
-### Option 2: Python directly
-```bash
-# Clone or download this project
-cd ats-automation
-
-# Run deploy script
-./deploy/deploy.sh  # Linux/macOS
-# OR
-.\deploy\deploy.ps1  # Windows
-```
-
-### 2. Configure
-
-Edit `.env`:
-```
-ATS_SERVER_URL=http://your-server-ip:8000
-ATS_API_KEY=your_api_key
-```
-
-### 3. Load Chrome Extension
+### 1. Install Chrome Extension
 
 1. Open `chrome://extensions/`
-2. Enable Developer mode
-3. Click "Load unpacked"
-4. Select `core/chrome_extension/`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked**
+4. Select the `chrome-extension/` folder
 
-### 4. Start Automation
+### 2. Configure Extension
+
+- Click the ATS Automation icon in Chrome toolbar
+- Open **Config** → set your AI Server URL, Salesforce URL, active client
+
+### 3. Start Call Log Server (optional)
 
 ```bash
-# For Flyland (pilot client)
-python main.py start --client flyland
+python3 call-log-server.py &
+open ~/Desktop/ats-call-logs
+```
 
-# List available clients
-python main.py list
+Saves all calls and AI analysis to `~/Desktop/ats-call-logs/call-log-YYYY-MM-DD.md`.
+
+### 4. Auto-Update
+
+```powershell
+# Windows
+.\update.ps1 -AutoUpdate
+
+# macOS/Linux
+./auto-update.sh --install
 ```
 
 ## Clients
 
 | Client | Industry | Automations |
 |--------|----------|-------------|
-| Flyland | Addiction Counseling | 4 |
-| Legacy | BPO Services | 3 |
-| TBT | BPO Services | 4 |
-| Banyan | Addiction Counseling | 2 |
-| Takahami | Medical Billing | 2 |
-| Element | Medical Billing | 2 |
+| Flyland | Addiction Counseling | SF auto-access, auto notes |
+| Legacy | BPO Services | History pull, wrapup sync |
+| TBT | BPO Services | Lead pull, pruning |
+| Banyan | Addiction Counseling | SF popup, auto-tracking |
+| Takahami | Medical Billing | Appeal routing, auto fax |
+| Element | Medical Billing | PDF filler, portal lookup |
 
 ## Project Structure
 
 ```
 ats-automation/
-├── main.py                 # Entry point
-├── requirements.txt        # Dependencies
-├── core/                   # Shared core modules
-│   ├── config_loader.py
-│   ├── browser_manager.py
-│   ├── logger.py
-│   └── chrome_extension/
-├── clients/               # Client-specific modules
-│   ├── flyland/
-│   ├── legacy/
-│   ├── tbt/
-│   ├── banyan/
-│   ├── takami/
-│   └── element/
+├── chrome-extension/        # Chrome extension (Manifest V3)
+│   ├── content-scripts/   # CTM monitor, overlay, tab capture
+│   ├── src/              # Source modules (services, managers, UI)
+│   ├── popup/             # Extension popup
+│   ├── background/         # Service worker
+│   └── clients/           # Client-specific configs & automations
+├── server/                # Azure AI server (FastAPI)
+├── core/                  # Shared Python modules (config, logging)
 ├── deploy/                # Deployment scripts
-└── server/                # Central server (optional)
+├── call-log-server.py     # Local markdown call logger
+├── install-windows.ps1     # Windows installer
+├── auto-update.sh         # macOS/Linux auto-updater
+└── update.ps1             # Windows auto-updater
 ```
 
 ## Documentation
 
-See `docs/` folder for detailed documentation:
-- [Architecture](docs/architecture.md)
-- [Client Details](docs/clients.md)
-- [Automations](docs/automations.md)
-- [Tech Stack](docs/tech-stack.md)
-- [Implementation Plan](docs/implementation-plan.md)
-- [Risks](docs/risks.md)
-- [Deployment](docs/deployment.md)
-
-## Requirements
-
-### For CTM-Native Automation (Primary):
-- CTM account with Enterprise plan (for triggers/platform events)
-- Salesforce account with Flow permissions
-- CTM Lightning Adapter configured
-- Softphone Layout configured in Salesforce
-
-### For Custom Webhooks (Optional):
-- Zapier or Make account (for Google Sheets)
-- Fax API account (for #7)
-- Document generation API (for #11, #16)
-
-### Legacy Python (Only for 3 automations):
-- Python 3.10+ (only for #7, #11, #16 if needed)
-- Chrome/Edge browser
+| Doc | Description |
+|-----|-------------|
+| `COORDINATION.md` | Full system overview, architecture, workflow |
+| `README-INSTALL.md` | Installation guide |
+| `DOCUMENTATION.md` | System documentation |
+| `DEPLOYMENT.md` | Azure deployment guide |
+| `AZURE-SETUP.md` | Azure setup guide |
 
 ## Auto-Update (GitHub Live Sync)
 
@@ -122,49 +87,20 @@ The system continuously monitors GitHub and automatically updates when changes a
 ### Windows
 
 ```powershell
-# Enable GitHub sync (checks every 30 minutes)
-.\update.ps1 -AutoUpdate
-
-# Check every 15 minutes
-.\update.ps1 -AutoUpdate -IntervalMinutes 15
-
-# Check for updates only
-.\update.ps1 -CheckOnly
-
-# Check status
-Get-ScheduledTask -TaskName "ATS Automation GitHub Sync"
-
-# Disable
-Unregister-ScheduledTask -TaskName "ATS Automation GitHub Sync"
+.\update.ps1 -AutoUpdate            # Enable (every 30 min)
+.\update.ps1 -AutoUpdate -IntervalMinutes 15  # Custom interval
+.\update.ps1 -CheckOnly            # Check without updating
 ```
 
 ### macOS / Linux
 
 ```bash
-# Enable GitHub sync (checks every 30 minutes)
-./auto-update.sh --install
-
-# Check every 15 minutes
-./auto-update.sh --install 15
-
-# Check for updates only
-./auto-update.sh --check
-
-# Check status
-./auto-update.sh --status
-
-# Disable
-./auto-update.sh --uninstall
+./auto-update.sh --install          # Enable (every 30 min)
+./auto-update.sh --install 15      # Custom interval
+./auto-update.sh --check           # Check without updating
+./auto-update.sh --status           # Status
+./auto-update.sh --uninstall        # Disable
 ```
-
-### How It Works
-1. Cron/scheduled task runs every X minutes (default: 30)
-2. Compares local HEAD commit with GitHub origin/main
-3. If different → automatically pulls changes
-4. Checks and installs new dependencies if needed
-5. Logs all activity to `update.log`
-
-Update logs: `update.log`
 
 ## Security
 

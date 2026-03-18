@@ -114,7 +114,7 @@ This will:
 1. Open Chrome → `chrome://extensions/`
 2. Enable **Developer mode** (top right)
 3. Click **Load unpacked**
-4. Select: `Desktop/repository/ats-automation/core/chrome_extension/`
+4. Select: `ats-automation/chrome-extension/`
 5. Verify it loads without errors
 
 ---
