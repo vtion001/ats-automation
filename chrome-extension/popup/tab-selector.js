@@ -161,7 +161,27 @@ async function startRecording() {
             return;
         }
         
-        const stream = await chrome.tabCapture.capture({ audio: true, video: false, tabId: selectedTabId });
+        // Switch to target tab first (tabCapture only works on active tab)
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const previousTabId = currentTab?.id;
+        
+        await chrome.tabs.update(selectedTabId, { active: true });
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        const stream = await new Promise((resolve, reject) => {
+            chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                    resolve(stream);
+                }
+            });
+        });
+        
+        // Restore previous tab
+        if (previousTabId) {
+            chrome.tabs.update(previousTabId, { active: true });
+        }
         
         if (!stream) {
             updateStatus('Could not capture tab - permission denied', 'stopped');

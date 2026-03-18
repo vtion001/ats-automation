@@ -68,11 +68,28 @@ async function handleStartCapture(tabId, sendResponse) {
             await stopCapture();
         }
         
-        const stream = await chrome.tabCapture.capture({
-            tabId: tabId,
-            audio: true,
-            video: false
+        // tabCapture.capture() only works on current active tab
+        // Switch to target tab first
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const previousTabId = currentTab?.id;
+        
+        await chrome.tabs.update(tabId, { active: true });
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        const stream = await new Promise((resolve, reject) => {
+            chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                    resolve(stream);
+                }
+            });
         });
+        
+        // Restore previous tab
+        if (previousTabId) {
+            chrome.tabs.update(previousTabId, { active: true });
+        }
         
         if (!stream) {
             sendResponse({ error: 'Could not capture tab' });
