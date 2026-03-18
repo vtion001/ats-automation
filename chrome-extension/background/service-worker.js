@@ -7,6 +7,7 @@ const AUDIO_STORAGE_KEY = 'ats_captured_audio';
 const RECORDING_STATE_KEY = 'ats_recording_state';
 const ANALYSIS_RESULT_KEY = 'ats_analysis_result';
 const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
+const LOCAL_LOG_URL = 'http://localhost:8765';
 const DEFAULT_CLIENT = 'flyland';
 
 let currentCapture = {
@@ -67,6 +68,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 type: 'CALL_DETECTED',
                 payload: message.payload
             }).catch(() => {});
+            // Log call event to markdown
+            logCallEvent({
+                phone: message.payload?.phone || null,
+                direction: message.payload?.direction || 'inbound',
+                client: DEFAULT_CLIENT,
+                event: message.payload?.event || 'call_detected',
+                callerName: message.payload?.callerName || null
+            });
             sendResponse({ success: true });
             return true;
 
@@ -77,6 +86,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     payload: message.payload
                 }).catch(err => {
                     console.error('[BG] Failed to forward SHOW_CALL_ANALYSIS to tab:', err);
+                });
+            }
+            // Log to markdown
+            if (message.payload) {
+                logToMarkdown({
+                    ...message.payload,
+                    client: message.payload.client || DEFAULT_CLIENT
                 });
             }
             sendResponse({ success: true });
@@ -297,6 +313,18 @@ async function handleRecordingStopped(chunks) {
         
         if (result) {
             await storeAnalysisResult(result);
+            
+            // Log to markdown file on desktop (via local relay server)
+            const analysisData = {
+                ...result.analysis,
+                phone: null,
+                client: DEFAULT_CLIENT,
+                direction: 'inbound',
+                duration: result.duration,
+                transcription: result.transcription
+            };
+            logToMarkdown(analysisData);
+            
             showNotification('Analysis Ready', `Score: ${result.analysis?.qualification_score ?? 'N/A'}`);
             
             // Notify popup if open
@@ -388,6 +416,34 @@ async function getAnalysisResult(sendResponse) {
 
 async function clearAnalysisResult() {
     await chrome.storage.local.remove(ANALYSIS_RESULT_KEY);
+}
+
+// ============ Local Log Server ============
+
+async function logToMarkdown(data) {
+    try {
+        await fetch(`${LOCAL_LOG_URL}/api/analysis-result`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+            signal: AbortSignal.timeout(3000)
+        });
+    } catch (e) {
+        console.log('[BG] Markdown log failed (server may not be running):', e.message);
+    }
+}
+
+async function logCallEvent(data) {
+    try {
+        await fetch(`${LOCAL_LOG_URL}/api/call-event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+            signal: AbortSignal.timeout(3000)
+        });
+    } catch (e) {
+        console.log('[BG] Call event log failed:', e.message);
+    }
 }
 
 async function updateRecordingState(isRecording) {
