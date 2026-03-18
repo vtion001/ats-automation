@@ -1,9 +1,13 @@
 /**
  * ATS Automation - Background Service Worker
- * Handles tab audio capture via injected content script, messages, and badge updates
+ * Handles tab audio capture, background recording, and analysis
  */
 
 const AUDIO_STORAGE_KEY = 'ats_captured_audio';
+const RECORDING_STATE_KEY = 'ats_recording_state';
+const ANALYSIS_RESULT_KEY = 'ats_analysis_result';
+const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
+const DEFAULT_CLIENT = 'flyland';
 
 let currentCapture = {
     tabId: null,
@@ -12,7 +16,8 @@ let currentCapture = {
     audioChunks: [],
     recording: false,
     startTime: null,
-    injected: false
+    injected: false,
+    mimeType: null
 };
 
 function getMessageType(message) {
@@ -91,7 +96,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         case 'RECORDING_ERROR':
             currentCapture.recording = false;
+            updateRecordingState(false);
             console.error('[BG] Recording error from content script:', message.error);
+            showNotification('Recording Failed', message.error || 'Unknown error');
             sendResponse({ success: true });
             return true;
         
@@ -106,6 +113,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         case 'HIDE_CALL_OVERLAY':
             forwardToOverlay({ type: 'HIDE_CALL_OVERLAY' }, sender, sendResponse);
+            return true;
+        
+        case 'CAPTURE_STARTED':
+            currentCapture.recording = true;
+            currentCapture.startTime = Date.now();
+            currentCapture.mimeType = message.mimeType || 'audio/webm';
+            updateRecordingState(true);
+            setBadge('#ef4444', 'REC');
+            console.log('[BG] Recording started (background)');
+            sendResponse({ success: true });
+            return true;
+        
+        case 'CAPTURE_STOPPED':
+            console.log('[BG] Capture stopped from content script, chunks:', message.chunks?.length || 0);
+            if (message.chunks?.length > 0) {
+                currentCapture.audioChunks = message.chunks;
+            }
+            handleRecordingStopped(currentCapture.audioChunks);
+            sendResponse({ success: true });
+            return true;
+        
+        case 'GET_ANALYSIS_RESULT':
+            getAnalysisResult(sendResponse);
+            return true;
+        
+        case 'CLEAR_ANALYSIS_RESULT':
+            clearAnalysisResult();
+            sendResponse({ success: true });
             return true;
         
         default:
@@ -137,11 +172,11 @@ async function handleStartCaptureTab(tabId, sendResponse) {
             audioChunks: [],
             recording: false,
             startTime: null,
-            injected: false
+            injected: false,
+            mimeType: null
         };
         
         console.log('[BG] Injecting capture script into tab', tabId);
-        updateStatus('Injecting recorder...');
         
         const results = await chrome.scripting.executeScript({
             target: { tabId: tabId },
@@ -157,7 +192,8 @@ async function handleStartCaptureTab(tabId, sendResponse) {
         currentCapture.startTime = Date.now();
         currentCapture.recording = true;
         
-        setBadge('#ef4444', 'REC');
+        updateRecordingState(true);
+        setBadge('#ef4440', 'REC');
         console.log('[BG] Content script injected, recording started for tab', tabId);
         
         sendResponse({ success: true, tabId: tabId, startTime: currentCapture.startTime });
@@ -207,6 +243,145 @@ async function handleRecordingStopped(chunks) {
     if (chunks.length > 0) {
         currentCapture.audioChunks = chunks;
     }
+    
+    currentCapture.recording = false;
+    updateRecordingState(false);
+    setBadge('#22c55e', 'DONE');
+    
+    const allChunks = currentCapture.audioChunks;
+    const startTime = currentCapture.startTime;
+    
+    currentCapture.audioChunks = [];
+    currentCapture.startTime = null;
+    
+    if (allChunks.length === 0) {
+        console.log('[BG] No chunks to process');
+        showNotification('Recording Complete', 'No audio captured');
+        return;
+    }
+    
+    console.log('[BG] Processing', allChunks.length, 'chunks in background...');
+    showNotification('Recording Complete', 'Processing audio...');
+    
+    try {
+        const result = await processAudioInBackground(allChunks, startTime);
+        
+        if (result) {
+            await storeAnalysisResult(result);
+            showNotification('Analysis Ready', `Score: ${result.analysis?.qualification_score ?? 'N/A'}`);
+            
+            // Notify popup if open
+            try {
+                chrome.runtime.sendMessage({
+                    type: 'ANALYSIS_READY',
+                    result: result
+                });
+            } catch (e) {
+                // Popup might be closed, that's fine
+            }
+        }
+    } catch (e) {
+        console.error('[BG] Background processing error:', e);
+        showNotification('Analysis Failed', e.message);
+    }
+}
+
+async function processAudioInBackground(chunks, startTime) {
+    if (chunks.length === 0) return null;
+    
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+    const reader = new FileReader();
+    
+    const audioBase64 = await new Promise((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+    
+    const base64Data = audioBase64.split(',')[1];
+    const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : null;
+    
+    // Transcribe
+    const transcribeRes = await fetch(`${SERVER_URL}/api/transcribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            audio: base64Data,
+            phone: null,
+            client: DEFAULT_CLIENT,
+            format: 'webm',
+            duration: duration
+        })
+    });
+    
+    if (!transcribeRes.ok) {
+        const err = await transcribeRes.json().catch(() => ({ error: 'Server error' }));
+        throw new Error(err.error || `HTTP ${transcribeRes.status}`);
+    }
+    
+    const transcribeResult = await transcribeRes.json();
+    
+    if (transcribeResult.error) {
+        throw new Error(transcribeResult.error);
+    }
+    
+    return {
+        transcription: transcribeResult.transcription || '',
+        analysis: transcribeResult.analysis || transcribeResult,
+        duration: duration,
+        timestamp: Date.now()
+    };
+}
+
+async function storeAnalysisResult(result) {
+    await chrome.storage.local.set({
+        [ANALYSIS_RESULT_KEY]: {
+            ...result,
+            storedAt: Date.now()
+        }
+    });
+}
+
+async function getAnalysisResult(sendResponse) {
+    try {
+        const result = await chrome.storage.local.get(ANALYSIS_RESULT_KEY);
+        const data = result[ANALYSIS_RESULT_KEY];
+        
+        if (data) {
+            sendResponse({ success: true, result: data });
+        } else {
+            sendResponse({ success: false, error: 'No analysis result' });
+        }
+    } catch (e) {
+        sendResponse({ success: false, error: e.message });
+    }
+}
+
+async function clearAnalysisResult() {
+    await chrome.storage.local.remove(ANALYSIS_RESULT_KEY);
+}
+
+async function updateRecordingState(isRecording) {
+    await chrome.storage.local.set({
+        [RECORDING_STATE_KEY]: {
+            recording: isRecording,
+            startTime: isRecording ? Date.now() : null,
+            updatedAt: Date.now()
+        }
+    });
+}
+
+function showNotification(title, body) {
+    try {
+        chrome.notifications?.create({
+            type: 'basic',
+            iconUrl: 'icons/icon48.png',
+            title: 'ATS Automation',
+            message: `${title}\n${body}`
+        });
+    } catch (e) {
+        console.log('[BG] Notification error:', e);
+    }
 }
 
 async function stopCaptureInternal() {
@@ -217,6 +392,7 @@ async function stopCaptureInternal() {
     currentCapture.recording = false;
     currentCapture.stream = null;
     currentCapture.mediaRecorder = null;
+    updateRecordingState(false);
 }
 
 async function handleStartCaptureMessage(message, sendResponse) {
@@ -291,4 +467,24 @@ async function forwardToOverlay(message, sender, sendResponse) {
     sendResponse({ success: true });
 }
 
+// Restore recording state on startup
+async function restoreState() {
+    try {
+        const state = await chrome.storage.local.get(RECORDING_STATE_KEY);
+        if (state[RECORDING_STATE_KEY]?.recording) {
+            // Previous session was recording but didn't clean up
+            await chrome.storage.local.set({
+                [RECORDING_STATE_KEY]: {
+                    recording: false,
+                    startTime: null,
+                    updatedAt: Date.now()
+                }
+            });
+        }
+    } catch (e) {
+        console.log('[BG] State restore:', e);
+    }
+}
+
+restoreState();
 console.log('[BG] ATS Background Service Worker loaded');

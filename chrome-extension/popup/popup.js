@@ -40,6 +40,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     await runAllServiceChecks(statusManager, !isFirstLoad);
     startServiceAutoRefresh(statusManager);
     
+    // Start recording state monitoring (for background recording indicator)
+    startRecordingMonitor(statusManager);
+    
+    // Listen for analysis results from service worker (background processing)
+    listenForAnalysisResults(testPanel);
+    
     // Bind all events
     bindClientEvents();
     bindToggleEvents(statusManager);
@@ -346,4 +352,89 @@ function bindDebugButton() {
             }
         });
     }
+}
+
+// ============ Recording Monitor ============
+
+let recordingMonitorInterval = null;
+
+async function checkRecordingState(statusManager) {
+    try {
+        // Check service worker recording state
+        const response = await chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATUS' });
+        
+        if (response && response.recording) {
+            // Recording is active
+            statusManager.updateServiceStatus('background', true, 'Active');
+            statusManager.updateServiceStatus('recording', true, 'Recording');
+            return;
+        }
+        
+        // Also check storage state
+        const stateResult = await new Promise(resolve => {
+            chrome.storage.local.get('ats_recording_state', resolve);
+        });
+        
+        if (stateResult?.ats_recording_state?.recording) {
+            statusManager.updateServiceStatus('background', true, 'Active');
+            statusManager.updateServiceStatus('recording', true, 'Recording');
+            return;
+        }
+        
+        // Check if analysis result is waiting
+        const analysisResult = await new Promise(resolve => {
+            chrome.runtime.sendMessage({ type: 'GET_ANALYSIS_RESULT' }, resolve);
+        });
+        
+        if (analysisResult?.result) {
+            statusManager.updateServiceStatus('background', true, 'Analysis Ready');
+            statusManager.updateServiceStatus('recording', true, 'Processing');
+            return;
+        }
+        
+        // No recording active
+        statusManager.updateServiceStatus('background', false);
+        statusManager.updateServiceStatus('recording', false);
+        
+    } catch (e) {
+        console.log('[Popup] Recording check error:', e);
+    }
+}
+
+function startRecordingMonitor(statusManager) {
+    checkRecordingState(statusManager);
+    
+    if (recordingMonitorInterval) clearInterval(recordingMonitorInterval);
+    recordingMonitorInterval = setInterval(() => {
+        checkRecordingState(statusManager);
+    }, 2000);
+    
+    console.log('[Popup] Recording monitor started');
+}
+
+function listenForAnalysisResults(testPanel) {
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.type === 'ANALYSIS_READY' && message.result) {
+            console.log('[Popup] Analysis ready from background:', message.result);
+            
+            // Check if there's an existing analysis result
+            chrome.runtime.sendMessage({ type: 'GET_ANALYSIS_RESULT' }, (response) => {
+                if (response?.result) {
+                    window.ToastManager?.success('Call Analysis Ready!');
+                    
+                    // Show the test panel with the result
+                    const qualResult = document.getElementById('qualResult');
+                    if (qualResult) {
+                        testPanel.displayAnalysisResult(response.result);
+                    }
+                    
+                    // Clear the result after showing
+                    setTimeout(() => {
+                        chrome.runtime.sendMessage({ type: 'CLEAR_ANALYSIS_RESULT' });
+                    }, 5000);
+                }
+            });
+        }
+        return false;
+    });
 }

@@ -112,6 +112,7 @@
             mediaRecorder.ondataavailable = (event) => {
                 if (event.data && event.data.size > 0) {
                     chunks.push(event.data);
+                    // Send chunk directly to service worker (works even if popup is closed)
                     sendChunk(event.data);
                 }
             };
@@ -125,6 +126,17 @@
             mediaRecorder.start(CHUNK_INTERVAL_MS);
             recording = true;
             showIndicator();
+            
+            // Store chunks locally so service worker can retrieve on stop
+            window.__atsChunks = chunks;
+            
+            // Notify service worker that recording started
+            chrome.runtime.sendMessage({
+                type: 'CAPTURE_STARTED',
+                mimeType: mimeType,
+                tabId: null
+            }).catch(() => {});
+            
             sendReady();
             
             console.log('[TabCapture-CS] Recording started, mime:', mimeType);
@@ -152,10 +164,20 @@
             stream = null;
         }
         
+        // Get all accumulated chunks from local storage
+        const chunks = window.__atsChunks || [];
+        
         mediaRecorder = null;
         removeIndicator();
         
-        console.log('[TabCapture-CS] Recording stopped');
+        // Notify service worker with all chunks (works even if popup is closed)
+        chrome.runtime.sendMessage({
+            type: 'CAPTURE_STOPPED',
+            chunks: chunks,
+            mimeType: null
+        }).catch(() => {});
+        
+        console.log('[TabCapture-CS] Recording stopped, chunks:', chunks.length);
     }
     
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

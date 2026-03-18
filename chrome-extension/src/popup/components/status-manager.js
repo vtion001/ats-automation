@@ -5,26 +5,34 @@
 
 class StatusManager {
     constructor() {
-        this.services = ['storage', 'aiServer', 'salesforce', 'background', 'ctm'];
+        this.services = ['storage', 'aiServer', 'salesforce', 'background', 'recording', 'ctm'];
     }
 
     /**
      * Update single service status
      */
-    updateServiceStatus(service, isOnline) {
+    updateServiceStatus(service, isOnline, label) {
         const statusEl = document.getElementById(service + 'Status');
         if (!statusEl) return;
         
         const indicator = statusEl.querySelector('.status-indicator');
-        statusEl.classList.remove('online', 'offline', 'checking');
+        const labelEl = statusEl.querySelector('.service-label');
+        statusEl.classList.remove('online', 'offline', 'checking', 'recording-active');
         indicator.classList.remove('online', 'offline', 'checking');
         
-        if (isOnline) {
+        if (service === 'recording' && isOnline) {
+            statusEl.classList.add('recording-active');
             statusEl.classList.add('online');
             indicator.classList.add('online');
+            if (labelEl) labelEl.textContent = label || 'Active';
+        } else if (isOnline) {
+            statusEl.classList.add('online');
+            indicator.classList.add('online');
+            if (labelEl) labelEl.textContent = label || 'Online';
         } else {
             statusEl.classList.add('offline');
             indicator.classList.add('offline');
+            if (labelEl) labelEl.textContent = '';
         }
     }
 

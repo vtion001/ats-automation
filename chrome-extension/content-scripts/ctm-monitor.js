@@ -117,6 +117,437 @@
     let isInitialized = false;
 
     // =============================================================================
+    // DOM MONITORING STATE
+    // =============================================================================
+    let domObserver = null;
+    let domCheckInterval = null;
+    let lastInboundState = false;
+    let lastOutboundState = false;
+    let currentCallId = null;
+    let callStartTime = null;
+    let recordedChunks = [];
+    let mediaRecorder = null;
+    let recordingStream = null;
+
+    // Monitoring state for status indicator
+    const MONITOR_STATE = {
+        MONITORING: 'monitoring',
+        CALL_ACTIVE: 'call_active',
+        RECORDING: 'recording',
+        PROCESSING: 'processing',
+        IDLE: 'idle',
+        ERROR: 'error'
+    };
+    let currentMonitorState = MONITOR_STATE.IDLE;
+    let monitorStateListeners = [];
+
+    // =============================================================================
+    // MONITOR STATE BROADCASTING
+    // =============================================================================
+    function broadcastMonitorState(state, extra = {}) {
+        currentMonitorState = state;
+        chrome.runtime.sendMessage({
+            type: 'CTM_MONITOR_STATE',
+            payload: {
+                state: state,
+                timestamp: Date.now(),
+                phone: currentCallId ? extractPhoneFromState() : null,
+                ...extra
+            }
+        }).catch(() => {});
+        monitorStateListeners.forEach(cb => {
+            try { cb(state, extra); } catch(e) {}
+        });
+        logInfo('Monitor state: ' + state, extra);
+    }
+
+    function addMonitorStateListener(cb) {
+        monitorStateListeners.push(cb);
+    }
+
+    // =============================================================================
+    // DOM OBSERVER FOR CALL DETECTION
+    // =============================================================================
+    function isElementVisible(el) {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' &&
+               style.visibility !== 'hidden' &&
+               style.opacity !== '0' &&
+               el.offsetParent !== null;
+    }
+
+    function isOnSoftphonePage() {
+        try {
+            const url = window.location.href;
+            const pathname = new URL(url).pathname;
+            return pathname === '/calls/phone' || pathname.endsWith('/calls/phone');
+        } catch(e) {
+            return false;
+        }
+    }
+
+    function getCallerPhoneFromDOM() {
+        const incomingPhone = document.querySelector('#incoming-call-info .info-body');
+        if (incomingPhone && isElementVisible(incomingPhone)) {
+            return cleanPhone(incomingPhone.textContent);
+        }
+        const activePhone = document.querySelector('.calling_number .phone_number');
+        if (activePhone && isElementVisible(activePhone)) {
+            return cleanPhone(activePhone.textContent);
+        }
+        const ringInfo = document.querySelector('.ringing-info .phone-number');
+        if (ringInfo && isElementVisible(ringInfo)) {
+            return cleanPhone(ringInfo.textContent);
+        }
+        return null;
+    }
+
+    function getCallerNameFromDOM() {
+        const incomingName = document.querySelector('#incoming-call-info .info-title');
+        if (incomingName && isElementVisible(incomingName)) {
+            return incomingName.textContent.trim();
+        }
+        const activeName = document.querySelector('.calling_number .full_name');
+        if (activeName && isElementVisible(activeName)) {
+            return activeName.textContent.trim();
+        }
+        return null;
+    }
+
+    function cleanPhone(phone) {
+        if (!phone) return null;
+        return phone.replace(/[^0-9+]/g, '');
+    }
+
+    function extractPhoneFromState() {
+        return getCallerPhoneFromDOM() || currentCallId;
+    }
+
+    function startDOMObserver() {
+        const observer = new MutationObserver(() => {
+            checkDOMCallState();
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class', 'data-status']
+        });
+        domObserver = observer;
+
+        domCheckInterval = setInterval(() => {
+            checkDOMCallState();
+        }, 1000);
+    }
+
+    function stopDOMObserver() {
+        if (domObserver) {
+            domObserver.disconnect();
+            domObserver = null;
+        }
+        if (domCheckInterval) {
+            clearInterval(domCheckInterval);
+            domCheckInterval = null;
+        }
+    }
+
+    function checkDOMCallState() {
+        if (!isOnSoftphonePage()) return;
+
+        const inboundEl = document.querySelector('.agent-status-inbound');
+        const outboundEl = document.querySelector('.agent-status-outbound');
+        const inboundVisible = isElementVisible(inboundEl);
+        const outboundVisible = isElementVisible(outboundEl);
+        const mainStatus = document.querySelector('main[data-status]');
+        const mainStatusVal = mainStatus?.getAttribute('data-status');
+
+        const phone = getCallerPhoneFromDOM();
+        const callerName = getCallerNameFromDOM();
+
+        // Call START detected
+        if (inboundVisible && !lastInboundState) {
+            logInfo('DOM: Inbound call START detected', { phone, callerName });
+            handleCallStart(phone, 'inbound', callerName);
+        } else if (outboundVisible && !lastOutboundState) {
+            logInfo('DOM: Outbound call START detected', { phone, callerName });
+            handleCallStart(phone, 'outbound', callerName);
+        }
+
+        // Call END detected
+        const wasInCall = lastInboundState || lastOutboundState;
+        const isInCall = inboundVisible || outboundVisible;
+        if (wasInCall && !isInCall) {
+            const endState = mainStatusVal === 'ready' || mainStatusVal === 'offline' || !mainStatusVal;
+            if (endState) {
+                logInfo('DOM: Call END detected', { mainStatus: mainStatusVal });
+                handleCallEnd();
+            }
+        }
+
+        lastInboundState = inboundVisible;
+        lastOutboundState = outboundVisible;
+    }
+
+    // =============================================================================
+    // AUTO-RECORD PIPELINE
+    // =============================================================================
+    async function handleCallStart(phone, direction, callerName) {
+        if (currentMonitorState === MONITOR_STATE.RECORDING) {
+            logInfo('Already recording, ignoring call start');
+            return;
+        }
+
+        currentCallId = phone || 'call_' + Date.now();
+        callStartTime = Date.now();
+
+        broadcastMonitorState(MONITOR_STATE.CALL_ACTIVE, {
+            phone: currentCallId,
+            direction,
+            callerName
+        });
+
+        // Auto-start recording
+        await startAutoRecording();
+    }
+
+    async function handleCallEnd() {
+        if (currentMonitorState !== MONITOR_STATE.RECORDING) {
+            broadcastMonitorState(MONITOR_STATE.IDLE);
+            currentCallId = null;
+            return;
+        }
+
+        broadcastMonitorState(MONITOR_STATE.PROCESSING);
+        await stopAutoRecording();
+    }
+
+    async function startAutoRecording() {
+        if (currentMonitorState === MONITOR_STATE.RECORDING) return;
+        if (!chrome.tabCapture) {
+            logWarn('Tab capture not available');
+            return;
+        }
+
+        try {
+            logInfo('Starting auto recording...');
+            recordedChunks = [];
+
+            recordingStream = await chrome.tabCapture.capture({
+                audio: true,
+                video: false
+            });
+
+            if (!recordingStream) {
+                logWarn('Tab capture returned null stream');
+                return;
+            }
+
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : 'audio/webm';
+
+            mediaRecorder = new MediaRecorder(recordingStream, { mimeType });
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.start(1000);
+            broadcastMonitorState(MONITOR_STATE.RECORDING, {
+                phone: currentCallId,
+                duration: 0
+            });
+            logInfo('Recording started');
+
+        } catch(e) {
+            logError('Auto recording failed: ' + e.message);
+            broadcastMonitorState(MONITOR_STATE.ERROR, { error: e.message });
+        }
+    }
+
+    async function stopAutoRecording() {
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+            currentCallId = null;
+            broadcastMonitorState(MONITOR_STATE.IDLE);
+            return;
+        }
+
+        try {
+            mediaRecorder.stop();
+            if (recordingStream) {
+                recordingStream.getTracks().forEach(t => t.stop());
+            }
+
+            await new Promise(r => setTimeout(r, 500));
+
+            if (recordedChunks.length > 0) {
+                const duration = callStartTime ? Math.floor((Date.now() - callStartTime) / 1000) : null;
+                logInfo(`Recording stopped, chunks: ${recordedChunks.length}, duration: ${duration}s`);
+                await processRecording(duration);
+            } else {
+                logWarn('No audio chunks captured');
+            }
+
+        } catch(e) {
+            logError('Stop recording failed: ' + e.message);
+        }
+
+        mediaRecorder = null;
+        recordingStream = null;
+        recordedChunks = [];
+        currentCallId = null;
+        callStartTime = null;
+    }
+
+    async function processRecording(duration) {
+        try {
+            const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+
+            const audioBase64 = await new Promise((resolve, reject) => {
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+
+            const base64Data = audioBase64.split(',')[1];
+            const serverUrl = await getServerUrl();
+
+            logInfo('Sending audio to transcription API...', { size: blob.size, duration });
+
+            const response = await fetch(`${serverUrl}/api/transcribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    audio: base64Data,
+                    phone: getCallerPhoneFromDOM() || null,
+                    client: CONFIG.activeClient,
+                    format: 'webm',
+                    duration: duration
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: 'Server error' }));
+                throw new Error(err.error || `HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (result.error) {
+                logWarn('Transcription failed, showing manual input');
+                showManualTranscriptPrompt(result.transcription || '');
+                return;
+            }
+
+            // Format and display results
+            const phone = getCallerPhoneFromDOM() || currentCallId || 'Unknown';
+            const callerName = getCallerNameFromDOM() || '';
+
+            const analysis = result.analysis || {};
+            const displayResult = {
+                phone: phone,
+                callerName: callerName,
+                transcript: result.transcription || '',
+                summary: analysis.summary || '',
+                salesforceNotes: analysis.salesforce_notes || '',
+                qualificationScore: analysis.qualification_score || 0,
+                suggestedDisposition: analysis.suggested_disposition || 'New',
+                tags: analysis.tags || [],
+                sentiment: analysis.sentiment || 'neutral',
+                detectedState: analysis.detected_state || '',
+                detectedInsurance: analysis.detected_insurance || '',
+                callId: 'dom_' + Date.now(),
+                timestamp: Date.now(),
+                client: CONFIG.activeClient
+            };
+
+            showCallAnalysis(displayResult);
+            handleAccountSpecificActions(analysis);
+
+            chrome.runtime.sendMessage({ type: 'INCREMENT_STAT', payload: { stat: 'calls' } });
+            chrome.runtime.sendMessage({ type: 'INCREMENT_STAT', payload: { stat: 'analysis' } });
+
+            broadcastMonitorState(MONITOR_STATE.IDLE);
+
+        } catch(e) {
+            logError('Process recording failed: ' + e.message);
+            broadcastMonitorState(MONITOR_STATE.ERROR, { error: e.message });
+        }
+    }
+
+    function showManualTranscriptPrompt(existingTranscript) {
+        const overlay = document.getElementById('ats-manual-transcript');
+        if (overlay) overlay.remove();
+
+        const el = document.createElement('div');
+        el.id = 'ats-manual-transcript';
+        el.style.cssText = 'position:fixed;bottom:20px;right:20px;width:320px;background:#1e1e1e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:999999;font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:16px;color:#fff;font-size:13px;';
+        el.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <strong style="font-size:14px;">Call Ended - Enter Transcript</strong>
+                <button id="ats-mt-close" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;">&times;</button>
+            </div>
+            <textarea id="ats-mt-text" placeholder="Paste transcript here..." rows="4" style="width:100%;background:#2a2a2a;border:1px solid #444;border-radius:6px;padding:8px;color:#ccc;font-size:12px;resize:vertical;box-sizing:border-box;">${existingTranscript || ''}</textarea>
+            <button id="ats-mt-submit" style="margin-top:8px;width:100%;padding:10px;background:#22c55e;border:none;border-radius:8px;color:#fff;font-weight:600;cursor:pointer;font-size:13px;">Analyze Transcript</button>
+        `;
+
+        document.body.appendChild(el);
+
+        el.querySelector('#ats-mt-close').addEventListener('click', () => el.remove());
+        el.querySelector('#ats-mt-submit').addEventListener('click', async () => {
+            const transcript = el.querySelector('#ats-mt-text').value.trim();
+            if (!transcript) return;
+
+            el.querySelector('#ats-mt-submit').disabled = true;
+            el.querySelector('#ats-mt-submit').textContent = 'Analyzing...';
+
+            try {
+                const serverUrl = await getServerUrl();
+                const resp = await fetch(`${serverUrl}/api/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        transcription: transcript,
+                        phone: getCallerPhoneFromDOM() || null,
+                        client: CONFIG.activeClient
+                    })
+                });
+
+                if (resp.ok) {
+                    const analysis = await resp.json();
+                    const result = {
+                        phone: getCallerPhoneFromDOM() || 'Unknown',
+                        callerName: getCallerNameFromDOM() || '',
+                        transcript: transcript,
+                        summary: analysis.summary || '',
+                        salesforceNotes: analysis.salesforce_notes || '',
+                        qualificationScore: analysis.qualification_score || 0,
+                        suggestedDisposition: analysis.suggested_disposition || 'New',
+                        tags: analysis.tags || [],
+                        sentiment: analysis.sentiment || 'neutral',
+                        detectedState: analysis.detected_state || '',
+                        detectedInsurance: analysis.detected_insurance || '',
+                        callId: 'dom_' + Date.now(),
+                        timestamp: Date.now(),
+                        client: CONFIG.activeClient
+                    };
+                    showCallAnalysis(result);
+                    handleAccountSpecificActions(analysis);
+                    el.remove();
+                }
+            } catch(e) {
+                logError('Manual transcript analysis failed: ' + e.message);
+            }
+
+            broadcastMonitorState(MONITOR_STATE.IDLE);
+        });
+    }
+
+    // =============================================================================
     // REMOTE LOGGING
     // =============================================================================
     async function remoteLog(level, message, data = {}) {
@@ -364,30 +795,80 @@
     }
 
     // =============================================================================
+    // MESSAGE LISTENER (for service worker communication)
+    // =============================================================================
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        switch (message.type) {
+            case 'PING':
+                sendResponse({
+                    pong: true,
+                    monitorState: currentMonitorState,
+                    phone: currentCallId,
+                    initialized: isInitialized
+                });
+                break;
+            case 'GET_CTM_MONITOR_STATE':
+                sendResponse({
+                    state: currentMonitorState,
+                    phone: currentCallId,
+                    initialized: isInitialized
+                });
+                break;
+            case 'STOP_DOM_MONITORING':
+                stopDOMObserver();
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+                if (recordingStream) {
+                    recordingStream.getTracks().forEach(t => t.stop());
+                }
+                broadcastMonitorState(MONITOR_STATE.IDLE);
+                sendResponse({ success: true });
+                break;
+        }
+        return true;
+    });
+
+    // =============================================================================
     // MONITORING LIFECYCLE
     // =============================================================================
     function startMonitoring() {
         if (isInitialized) return;
-        
-        logInfo('CTM Webhook Monitor starting', { client: CONFIG.activeClient });
+
+        logInfo('CTM DOM Monitor starting', { client: CONFIG.activeClient });
         isInitialized = true;
-        
-        // Poll server for webhook results
+
+        startDOMObserver();
+        broadcastMonitorState(MONITOR_STATE.MONITORING);
+
+        // Reduce webhook polling to occasional backup (every 60s instead of 5s)
+        if (monitorInterval) clearInterval(monitorInterval);
         monitorInterval = setInterval(() => {
-            checkForNewCalls();
-        }, CONFIG.pollInterval);
-        
-        // Check immediately after startup
+            // Only poll if not recording and not in a call
+            if (currentMonitorState === MONITOR_STATE.IDLE ||
+                currentMonitorState === MONITOR_STATE.MONITORING) {
+                checkForNewCalls();
+            }
+        }, 60000);
+
         setTimeout(checkForNewCalls, 2000);
     }
 
     function stopMonitoring() {
+        stopDOMObserver();
         if (monitorInterval) {
             clearInterval(monitorInterval);
             monitorInterval = null;
         }
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+        if (recordingStream) {
+            recordingStream.getTracks().forEach(t => t.stop());
+        }
         isInitialized = false;
-        logInfo('CTM Webhook Monitor stopped', { client: CONFIG.activeClient });
+        broadcastMonitorState(MONITOR_STATE.IDLE);
+        logInfo('CTM DOM Monitor stopped', { client: CONFIG.activeClient });
     }
 
     // =============================================================================

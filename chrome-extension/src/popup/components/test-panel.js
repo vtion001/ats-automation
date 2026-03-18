@@ -339,6 +339,54 @@ class TestPanel {
         }, phone);
     }
 
+    /**
+     * Display analysis result from background recording
+     */
+    displayAnalysisResult(result) {
+        const analysis = result.analysis || result;
+        const transcription = result.transcription || '';
+        
+        const fullResult = {
+            phone: null,
+            callerName: analysis.caller_name || null,
+            tags: analysis.tags || [],
+            sentiment: analysis.sentiment || 'neutral',
+            qualificationScore: analysis.qualification_score || 0,
+            summary: analysis.summary || '',
+            suggestedDisposition: analysis.suggested_disposition || 'New',
+            followUpRequired: analysis.follow_up_required || false,
+            salesforceNotes: analysis.salesforce_notes || '',
+            detectedState: analysis.detected_state || '',
+            detectedInsurance: analysis.detected_insurance || '',
+            callType: analysis.call_type,
+            recommendedDepartment: analysis.recommended_department,
+            testType: 'background-recording',
+            transcript: transcription
+        };
+        
+        // Display in qualification section
+        if (window.qualificationDisplay) {
+            window.qualificationDisplay.display(fullResult);
+        }
+        
+        // Show overlay
+        if (this.overlayUI) {
+            this.overlayUI.showCallAnalysis(fullResult);
+        }
+        
+        // Expand test section
+        const testSection = document.getElementById('testAnalysisSection');
+        if (testSection) testSection.classList.remove('collapsed');
+        
+        this.showTestStatus('Background recording analysis complete!', 'success');
+        
+        // Update stats
+        if (window.StorageService) {
+            window.StorageService.incrementAnalysis?.();
+            window.StorageService.incrementCalls?.();
+        }
+    }
+
     showTestStatus(message, status) {
         const testStatus = document.getElementById('testStatus');
         if (!testStatus) return;

@@ -519,6 +519,20 @@
             animation: pulse 1s infinite;
         }
         
+        .service-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            min-width: 60px;
+        }
+        .service-status.recording-active .status-indicator {
+            background: #ef4444;
+            animation: pulse 1s infinite;
+        }
+        .service-status.recording-active .service-label {
+            color: #ef4444;
+            font-weight: 500;
+        }
+        
         /* Note Count Badge */
         .note-count {
             background: var(--accent);
@@ -903,23 +917,27 @@
         <div class="section-content">
         <div class="service-row">
             <span class="service-name">Storage</span>
-            <span class="service-status" id="storageStatus"><span class="status-indicator"></span></span>
+            <span class="service-status" id="storageStatus"><span class="status-indicator"></span><span class="service-label"></span></span>
         </div>
         <div class="service-row">
             <span class="service-name">AI Server</span>
-            <span class="service-status" id="aiServerStatus"><span class="status-indicator"></span></span>
+            <span class="service-status" id="aiServerStatus"><span class="status-indicator"></span><span class="service-label"></span></span>
         </div>
         <div class="service-row">
             <span class="service-name">Salesforce</span>
-            <span class="service-status" id="salesforceStatus"><span class="status-indicator"></span></span>
+            <span class="service-status" id="salesforceStatus"><span class="status-indicator"></span><span class="service-label"></span></span>
         </div>
         <div class="service-row">
             <span class="service-name">Background</span>
-            <span class="service-status" id="backgroundStatus"><span class="status-indicator"></span></span>
+            <span class="service-status" id="backgroundStatus"><span class="status-indicator"></span><span class="service-label"></span></span>
+        </div>
+        <div class="service-row">
+            <span class="service-name">Recording</span>
+            <span class="service-status" id="recordingStatus"><span class="status-indicator offline"></span><span class="service-label"></span></span>
         </div>
         <div class="service-row">
             <span class="service-name">CTM Monitor</span>
-            <span class="service-status" id="ctmStatus"><span class="status-indicator"></span></span>
+            <span class="service-status" id="ctmStatus"><span class="status-indicator"></span><span class="service-label"></span></span>
         </div>
         </div>
     </div>
