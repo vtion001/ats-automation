@@ -131,6 +131,9 @@
     let mediaRecorder = null;
     let recordingStream = null;
 
+    // Shared chunk storage for MediaRecorder
+    window.__atsChunks = [];
+
     // Monitoring state for status indicator
     const MONITOR_STATE = {
         MONITORING: 'monitoring',
@@ -328,44 +331,56 @@
         if (currentMonitorState === MONITOR_STATE.RECORDING) return;
 
         try {
-            logInfo('Starting auto recording...');
-            
-            // Get this tab's ID for the SW
-            const [tab] = await new Promise(resolve => {
-                chrome.tabs.query({ active: true, currentWindow: true }, resolve);
-            });
+            logInfo('Starting auto recording via getDisplayMedia...');
 
-            if (!tab || !tab.id) {
-                logWarn('Cannot identify current tab');
-                return;
-            }
-
-            const tabId = tab.id;
-
-            // Request SW to capture tab audio and send the stream here
-            const response = await new Promise(resolve => {
-                chrome.runtime.sendMessage({
-                    type: 'REQUEST_TAB_CAPTURE',
-                    tabId: tabId
-                }, resolve);
-            });
-
-            if (!response || !response.stream) {
-                logError('Tab capture not available: ' + (response?.error || 'no stream'));
-                broadcastMonitorState(MONITOR_STATE.ERROR, { error: response?.error || 'no stream' });
-                return;
-            }
-
-            // Create MediaRecorder in this content script (MediaRecorder IS available here)
+            // Clean up any previous recording
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
             }
             if (recordingStream) {
                 recordingStream.getTracks().forEach(t => t.stop());
+                recordingStream = null;
+            }
+            mediaRecorder = null;
+            window.__atsChunks = [];
+
+            // getDisplayMedia() captures this tab's audio directly
+            // Works in content script context (the CTM softphone tab)
+            // Note: This will show Chrome's tab picker - user must select the CTM tab
+            // The picker can be suppressed with systemAudio: true (Chrome 107+)
+            recordingStream = await navigator.mediaDevices.getDisplayMedia({
+                audio: {
+                    // Try to capture system audio first (Chrome 107+)
+                    // Falls back to tab audio
+                    mandatory: {
+                        chromeMediaSource: 'tab',
+                        // If system audio is available, use it
+                        // This works on Chrome 107+ without showing picker for tab selection
+                    }
+                },
+                video: false,
+                selfBrowserSurface: 'include',  // Suppresses picker, captures current tab
+                systemAudio: 'include'           // Include system audio option
+            }).catch(async (err) => {
+                // Fallback: try without systemAudio suppression
+                logInfo('getDisplayMedia with suppression failed, retrying...', { err: err.message });
+                return navigator.mediaDevices.getDisplayMedia({
+                    audio: true,
+                    video: false
+                });
+            });
+
+            if (!recordingStream || !recordingStream.getAudioTracks().length) {
+                logError('No audio track in display stream');
+                if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
+                recordingStream = null;
+                broadcastMonitorState(MONITOR_STATE.ERROR, { error: 'No audio track' });
+                return;
             }
 
-            recordingStream = response.stream;
-            const mimeType = response.mimeType || 'audio/webm';
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : 'audio/webm';
             
             mediaRecorder = new MediaRecorder(recordingStream, { mimeType });
             const chunks = [];
@@ -383,8 +398,8 @@
 
             mediaRecorder.start(1000);
             window.__atsChunks = chunks;
-            
-            logInfo('Auto recording started', { tabId, mimeType });
+
+            logInfo('Auto recording started', { mimeType, tracks: recordingStream.getAudioTracks().length });
             broadcastMonitorState(MONITOR_STATE.RECORDING, {
                 phone: currentCallId,
                 duration: 0
@@ -409,17 +424,17 @@
             const chunks = window.__atsChunks || [];
             
             mediaRecorder.stop();
+            
             if (recordingStream) {
                 recordingStream.getTracks().forEach(t => t.stop());
+                recordingStream = null;
             }
 
             // Small delay to let final chunks arrive
             await new Promise(r => setTimeout(r, 500));
 
             const finalChunks = window.__atsChunks || chunks;
-            
             mediaRecorder = null;
-            recordingStream = null;
 
             if (finalChunks.length > 0) {
                 const duration = callStartTime ? Math.floor((Date.now() - callStartTime) / 1000) : null;
