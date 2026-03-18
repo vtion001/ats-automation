@@ -73,6 +73,7 @@ function selectTab(tabId, allTabs) {
     });
     
     clearResults();
+    document.getElementById('startBtn').classList.remove('hidden');
     updateStatus('Selected: ' + (selectedTabTitle || 'Unknown').substring(0, 35), 'stopped');
 }
 
