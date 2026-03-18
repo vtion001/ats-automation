@@ -106,7 +106,8 @@ const ATS_CONFIG_DEFAULTS = {
     // Server URLs - Pre-configured for Flyland
     aiServerUrl: 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io',
     salesforceUrl: 'https://flyland.my.salesforce.com',
-    ctmUrl: 'https://app.calltrackingmetrics.com'
+    ctmUrl: 'https://app.calltrackingmetrics.com',
+    remoteLogUrl: 'https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io'
 };
 
 // ============================================================================

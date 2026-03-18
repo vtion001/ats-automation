@@ -23,6 +23,7 @@ async function loadConfig() {
     document.getElementById('aiServerUrl').value = result.aiServerUrl || defaults.aiServerUrl;
     document.getElementById('ctmUrl').value = result.ctmUrl || defaults.ctmUrl;
     document.getElementById('ctmSelectors').value = result.ctmSelectors || defaults.ctmSelectors || '.call-status, .incoming-call, .phone-number';
+    document.getElementById('remoteLogUrl').value = result.remoteLogUrl || defaults.remoteLogUrl || '';
 }
 
 function setupEventListeners() {
@@ -39,7 +40,8 @@ function setupEventListeners() {
             salesforceUrl: document.getElementById('salesforceUrl').value,
             aiServerUrl: document.getElementById('aiServerUrl').value,
             ctmUrl: document.getElementById('ctmUrl').value,
-            ctmSelectors: document.getElementById('ctmSelectors').value
+            ctmSelectors: document.getElementById('ctmSelectors').value,
+            remoteLogUrl: document.getElementById('remoteLogUrl').value.trim()
         };
 
         try {
