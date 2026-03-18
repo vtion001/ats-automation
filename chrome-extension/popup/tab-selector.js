@@ -72,9 +72,8 @@ function selectTab(tabId, allTabs) {
         item.classList.toggle('active', parseInt(item.dataset.id) === tabId);
     });
     
-    document.getElementById('startBtn').classList.remove('hidden');
     clearResults();
-    updateStatus(`Selected: ${selectedTabTitle.substring(0, 35)}...`, 'stopped');
+    updateStatus('Selected: ' + (selectedTabTitle || 'Unknown').substring(0, 35), 'stopped');
 }
 
 function clearResults() {
@@ -226,7 +225,7 @@ async function startRecording() {
     } catch (e) {
         console.error('[TabCapture] Start error:', e);
         if (e.message.startsWith('CLICK_ICON_FIRST:')) {
-            updateStatus('Click the ATS icon on the CTM tab first!', 'stopped');
+            updateStatus('STEP 1: Click the ATS icon in Chrome toolbar ON the CTM tab. STEP 2: Come back here and click Start Recording.', 'stopped');
         } else {
             updateStatus('Error: ' + e.message, 'stopped');
         }
