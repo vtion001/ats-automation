@@ -463,9 +463,20 @@
                 sentiment: analysis.sentiment || 'neutral',
                 detectedState: analysis.detected_state || '',
                 detectedInsurance: analysis.detected_insurance || '',
+                detectedSoberDays: analysis.detected_sober_days || null,
+                callType: analysis.call_type || '',
+                recommendedDepartment: analysis.recommended_department || '',
+                scoringBreakdown: analysis.scoring_breakdown || {},
+                qaScore: result.qa_score || null,
+                qaData: result.qa || null,
+                audioBlob: URL.createObjectURL(blob),
+                audioSize: blob.size,
+                audioDuration: duration,
                 callId: 'dom_' + Date.now(),
                 timestamp: Date.now(),
-                client: CONFIG.activeClient
+                client: CONFIG.activeClient,
+                source: 'dom_monitoring',
+                analysis: analysis
             };
 
             showCallAnalysis(displayResult);
@@ -473,6 +484,17 @@
 
             chrome.runtime.sendMessage({ type: 'INCREMENT_STAT', payload: { stat: 'calls' } });
             chrome.runtime.sendMessage({ type: 'INCREMENT_STAT', payload: { stat: 'analysis' } });
+
+            // Notify the extension popup (tab-selector) with the full result
+            try {
+                chrome.runtime.sendMessage({
+                    type: 'DOM_ANALYSIS_READY',
+                    payload: displayResult
+                });
+                logInfo('Sent DOM_ANALYSIS_READY to popup');
+            } catch(e) {
+                logWarn('Failed to notify popup: ' + e.message);
+            }
 
             broadcastMonitorState(MONITOR_STATE.IDLE);
 

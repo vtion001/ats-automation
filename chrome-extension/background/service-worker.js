@@ -166,6 +166,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: true });
             return true;
 
+        case 'DOM_ANALYSIS_READY':
+            storeAnalysisResult(message.payload || message);
+            try {
+                chrome.runtime.sendMessage({
+                    type: 'ANALYSIS_READY',
+                    result: message.payload || message
+                });
+            } catch(e) {}
+            sendResponse({ success: true });
+            return true;
+
         case 'CTM_MONITOR_STATE':
             ctmMonitorState = {
                 state: message.payload?.state || 'unknown',
