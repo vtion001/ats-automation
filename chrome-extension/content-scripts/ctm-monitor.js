@@ -413,8 +413,15 @@
 
     async function stopAutoRecording() {
         if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+            if (recordingStream) {
+                recordingStream.getTracks().forEach(t => t.stop());
+                recordingStream = null;
+            }
+            mediaRecorder = null;
+            window.__atsChunks = [];
             broadcastMonitorState(MONITOR_STATE.IDLE);
             currentCallId = null;
+            callStartTime = null;
             return;
         }
 

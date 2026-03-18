@@ -88,7 +88,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     console.error('[BG] Failed to forward SHOW_CALL_ANALYSIS to tab:', err);
                 });
             }
-            // Log to markdown
             if (message.payload) {
                 logToMarkdown({
                     ...message.payload,
@@ -96,7 +95,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 });
             }
             sendResponse({ success: true });
-            return true;
+            return;
         
         case 'REQUEST_TAB_CAPTURE':
             handleRequestTabCapture(message.tabId, sendResponse);
@@ -665,20 +664,14 @@ async function handleSaveCallFiles(payload) {
     
     const analysis_ = analysis || {};
     
-    // Save MP3 recording (WebM audio)
+    // Save audio recording using data URL (blob URLs can become invalid in SW)
     if (audioBase64) {
         try {
-            const audioData = atob(audioBase64);
-            const audioBuffer = new Uint8Array(audioData.length);
-            for (let i = 0; i < audioData.length; i++) {
-                audioBuffer[i] = audioData.charCodeAt(i);
-            }
-            const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
-            const audioUrl = URL.createObjectURL(audioBlob);
+            const dataUrl = `data:audio/webm;base64,${audioBase64}`;
             
             await new Promise((resolve, reject) => {
                 chrome.downloads.download({
-                    url: audioUrl,
+                    url: dataUrl,
                     filename: `ATS_Recordings/${prefix}.webm`,
                     saveAs: false
                 }, (downloadId) => {
@@ -698,12 +691,11 @@ async function handleSaveCallFiles(payload) {
     // Save transcript + analysis as markdown
     try {
         const md = generateCallMarkdown({ phone, callerName, transcription, analysis: analysis_, duration, timestamp, client, prefix });
-        const blob = new Blob([md], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
+        const dataUrl = `data:text/markdown;charset=utf-8,${encodeURIComponent(md)}`;
         
         await new Promise((resolve, reject) => {
             chrome.downloads.download({
-                url: url,
+                url: dataUrl,
                 filename: `ATS_Recordings/${prefix}_analysis.md`,
                 saveAs: false
             }, (downloadId) => {

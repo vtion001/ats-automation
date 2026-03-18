@@ -606,7 +606,7 @@
         showError,
         showData,
         showNotification,
-        hide,
+        hide: hideOverlay,
         create: createOverlay
     };
 })();
