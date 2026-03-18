@@ -74,27 +74,23 @@
     async function startRecording() {
         if (recording) return;
         
+        if (typeof chrome === 'undefined' || !chrome.tabCapture) {
+            console.error('[TabCapture-CS] chrome.tabCapture not available');
+            sendError('tabCapture API not available in this context');
+            return;
+        }
+        
         try {
             console.log('[TabCapture-CS] Requesting tab capture...');
             
-            stream = await new Promise((resolve, reject) => {
-                chrome.tabCapture.capture(
-                    { audio: {
-                        mandatory: {
-                            chromeMediaSource: 'tab',
-                            chromeMediaSourceId: 'tab'
-                        }
-                    }, video: false },
-                    (s) => {
-                        if (chrome.runtime.lastError) {
-                            reject(new Error(chrome.runtime.lastError.message));
-                        } else if (!s) {
-                            reject(new Error('No stream returned'));
-                        } else {
-                            resolve(s);
-                        }
+            stream = await chrome.tabCapture.capture({
+                audio: {
+                    mandatory: {
+                        chromeMediaSource: 'tab',
+                        chromeMediaSourceId: 'tab'
                     }
-                );
+                },
+                video: false
             });
             
             if (!stream || !stream.getAudioTracks().length) {

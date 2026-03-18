@@ -13,6 +13,8 @@ let isRecording = false;
 let recordingStartTime = null;
 let timerInterval = null;
 let recordedChunks = [];
+let recordingStoppedPromise = null;
+let recordingStoppedResolve = null;
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -201,9 +203,21 @@ async function stopRecording() {
     setWorkingUI(true);
     
     try {
-        const response = await chrome.runtime.sendMessage({
-            type: 'STOP_CAPTURE_TAB'
-        });
+        // Set up promise to wait for chunks from RECORDING_STOPPED message
+        recordingStoppedPromise = new Promise(resolve => { recordingStoppedResolve = resolve; });
+        const timeoutId = setTimeout(() => {
+            if (recordingStoppedResolve) {
+                recordingStoppedResolve(recordedChunks);
+                recordingStoppedResolve = null;
+                recordingStoppedPromise = null;
+            }
+        }, 5000);
+        
+        await chrome.runtime.sendMessage({ type: 'STOP_CAPTURE_TAB' });
+        
+        // Wait for chunks to arrive from content script
+        recordedChunks = await recordingStoppedPromise;
+        clearTimeout(timeoutId);
         
         isRecording = false;
         setRecordingUI(false);
@@ -646,6 +660,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     if (type === 'RECORDING_STOPPED') {
         recordedChunks = message.chunks || recordedChunks;
+        if (recordingStoppedResolve) {
+            recordingStoppedResolve(recordedChunks);
+            recordingStoppedResolve = null;
+            recordingStoppedPromise = null;
+        }
         return false;
     }
     

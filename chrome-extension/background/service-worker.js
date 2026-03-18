@@ -236,6 +236,7 @@ async function handleStartCaptureTab(tabId, sendResponse) {
         
         const results = await chrome.scripting.executeScript({
             target: { tabId: tabId },
+            world: 'ISOLATED',
             files: ['content-scripts/tab-audio-capture.js']
         });
         
