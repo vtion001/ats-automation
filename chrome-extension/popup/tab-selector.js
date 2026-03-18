@@ -157,6 +157,12 @@ async function startRecording() {
     }
     
     clearResults();
+    
+    if (isRecording) {
+        updateStatus('Already recording', 'recording');
+        return;
+    }
+    
     updateStatus('Starting...', 'stopped');
     
     try {

@@ -261,99 +261,128 @@ async function handleStartCaptureTab(tabId, sendResponse) {
             target: { tabId: tabId },
             world: 'ISOLATED',
             func: (targetTabId) => {
-                if (window.__atsRecorder) return { error: 'already_recording' };
-                window.__atsRecorder = true;
+                // Guard: prevent double-injection
+                if (window.__atsRecorder === 'starting') return { error: 'startup_in_progress' };
+                if (window.__atsRecorder && typeof window.__atsRecorder.stop === 'function') return { error: 'already_recording' };
                 
-                function startRecording(stream) {
-                    const audioTracks = stream.getAudioTracks();
-                    if (audioTracks.length === 0) {
-                        stream.getTracks().forEach(t => t.stop());
-                        window.__atsRecorder = null;
-                        chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: 'No audio track in stream' }).catch(() => {});
-                        return;
-                    }
+                // Return a Promise so executeScript waits for getDisplayMedia to actually succeed or fail
+                return new Promise((resolve) => {
+                    window.__atsRecorder = 'starting';
                     
-                    // Store stream so SW can stop it later
-                    window.__atsStream = stream;
-                    chrome.runtime.sendMessage({ type: 'STREAM_READY', hasAudio: true }).catch(() => {});
-                    
-                    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                        ? 'audio/webm;codecs=opus'
-                        : 'audio/webm';
-                    
-                    const chunks = [];
-                    
-                    let recorder;
-                    try {
-                        recorder = new MediaRecorder(stream, { mimeType });
-                    } catch(e) {
-                        // Fallback to basic webm
-                        try {
-                            recorder = new MediaRecorder(stream);
-                        } catch(e2) {
-                            stream.getTracks().forEach(t => t.stop());
-                            window.__atsRecorder = null;
+                    function cleanup() {
+                        if (window.__atsStream) {
+                            window.__atsStream.getTracks().forEach(t => { try { t.stop(); } catch(e) {} });
                             window.__atsStream = null;
-                            chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: 'MediaRecorder not supported: ' + e2.message }).catch(() => {});
-                            return;
                         }
+                        window.__atsRecorder = null;
                     }
                     
-                    recorder.ondataavailable = (e) => {
-                        if (e.data && e.data.size > 0) {
-                            chunks.push(e.data);
-                            chrome.runtime.sendMessage({ type: 'AUDIO_CHUNK', chunk: e.data }).catch(() => {});
+                    function fail(msg) {
+                        cleanup();
+                        chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: msg }).catch(() => {});
+                        resolve({ error: msg });
+                    }
+                    
+                    function startRecording(stream) {
+                        const audioTracks = stream.getAudioTracks();
+                        console.log('[INJECTED] Audio tracks:', audioTracks.length, 'readyState:', audioTracks[0]?.readyState);
+                        console.log('[INJECTED] Track settings:', JSON.stringify(audioTracks[0]?.getSettings?.() || audioTracks[0]?.label || 'none'));
+                        
+                        if (audioTracks.length === 0) { fail('No audio track in stream'); return; }
+                        if (audioTracks[0].readyState === 'ended') { fail('Audio track already ended'); return; }
+                        
+                        window.__atsStream = stream;
+                        
+                        const mimeTypes = [
+                            'audio/webm;codecs=opus',
+                            'audio/webm',
+                            'audio/ogg;codecs=opus',
+                            'audio/mp4'
+                        ];
+                        const supported = mimeTypes.filter(t => MediaRecorder.isTypeSupported(t));
+                        console.log('[INJECTED] Supported:', supported.join(', ') || 'none');
+                        
+                        let recorder = null;
+                        for (const mimeType of supported) {
+                            try { recorder = new MediaRecorder(stream, { mimeType }); break; } catch(e) {}
+                        }
+                        if (!recorder) {
+                            try { recorder = new MediaRecorder(stream); }
+                            catch(e) { fail('MediaRecorder not supported'); return; }
+                        }
+                        
+                        const chunks = [];
+                        recorder.ondataavailable = (e) => {
+                            if (e.data && e.data.size > 0) {
+                                chunks.push(e.data);
+                                chrome.runtime.sendMessage({ type: 'AUDIO_CHUNK', chunk: e.data }).catch(() => {});
+                            }
+                        };
+                        recorder.onerror = (e) => fail('Recorder error: ' + e.error);
+                        
+                        try { recorder.start(1000); }
+                        catch(e) { fail('start() failed: ' + e.message); return; }
+                        
+                        window.__atsRecorderChunks = chunks;
+                        window.__atsRecorder = recorder;
+                        
+                        // Show indicator
+                        try {
+                            const el = document.createElement('div');
+                            el.id = 'ats-recording-indicator';
+                            el.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;background:#ef4444;color:white;padding:6px 12px;border-radius:20px;font-family:-apple-system,sans-serif;font-size:12px;font-weight:600;';
+                            el.textContent = '● ATS Recording';
+                            document.body.appendChild(el);
+                            window.__atsRecorderEl = el;
+                        } catch(e) {}
+                        
+                        chrome.runtime.sendMessage({ type: 'STREAM_READY', hasAudio: true }).catch(() => {});
+                        chrome.runtime.sendMessage({ type: 'CAPTURE_STARTED', mimeType: recorder.mimeType }).catch(() => {});
+                        resolve({ success: true, mimeType: recorder.mimeType });
+                    }
+                    
+                    // Wait for CAPTURE_STARTED (success) or RECORDING_ERROR (failure), with timeout
+                    let resolved = false;
+                    const timeout = setTimeout(() => {
+                        if (!resolved) { resolved = true; fail('Capture timeout'); }
+                    }, 15000);
+                    
+                    const listener = (msg) => {
+                        if (msg.type === 'CAPTURE_STARTED') {
+                            if (resolved) return;
+                            resolved = true;
+                            clearTimeout(timeout);
+                            chrome.runtime.onMessage.removeListener(listener);
+                        }
+                        if (msg.type === 'RECORDING_ERROR') {
+                            if (resolved) return;
+                            resolved = true;
+                            clearTimeout(timeout);
+                            chrome.runtime.onMessage.removeListener(listener);
                         }
                     };
+                    chrome.runtime.onMessage.addListener(listener);
                     
-                    recorder.onerror = (e) => {
-                        chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: String(e.error) }).catch(() => {});
-                    };
-                    
-                    recorder.start(1000);
-                    window.__atsRecorderChunks = chunks;
-                    window.__atsRecorder = recorder;
-                    
-                    // Show indicator
-                    try {
-                        const el = document.createElement('div');
-                        el.id = 'ats-recording-indicator';
-                        el.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;background:#ef4444;color:white;padding:6px 12px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(239,68,68,0.4);pointer-events:none;';
-                        el.innerHTML = '<span style="width:8px;height:8px;background:white;border-radius:50%;display:inline-block;animation:pulse 1s infinite"></span> ATS Recording';
-                        const st = document.createElement('style');
-                        st.textContent = '@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}';
-                        document.head.appendChild(st);
-                        document.body.appendChild(el);
-                        window.__atsRecorderEl = el;
-                    } catch(e) {}
-                    
-                    chrome.runtime.sendMessage({ type: 'CAPTURE_STARTED', mimeType: recorder.mimeType }).catch(() => {});
-                }
-                
-                // Try getDisplayMedia — selfBrowserSurface captures the tab where this script runs
-                // systemAudio captures all system audio (includes CTM call audio through speakers/headphones)
-                navigator.mediaDevices.getDisplayMedia({
-                    audio: true,
-                    video: false,
-                    selfBrowserSurface: 'include',
-                    systemAudio: 'include'
-                }).then((stream) => {
-                    startRecording(stream);
-                }).catch((err) => {
-                    // Fallback: try without systemAudio suppression
                     navigator.mediaDevices.getDisplayMedia({
                         audio: true,
                         video: false,
-                        selfBrowserSurface: 'include'
-                    }).then((stream) => {
-                        startRecording(stream);
-                    }).catch((err2) => {
-                        window.__atsRecorder = null;
-                        chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: err2.message || err.message || 'Capture not supported' }).catch(() => {});
+                        selfBrowserSurface: 'include',
+                        systemAudio: 'include'
+                    }).then(startRecording).catch((err) => {
+                        if (resolved) return;
+                        navigator.mediaDevices.getDisplayMedia({
+                            audio: true,
+                            video: false,
+                            selfBrowserSurface: 'include'
+                        }).then(startRecording).catch((err2) => {
+                            if (resolved) return;
+                            resolved = true;
+                            clearTimeout(timeout);
+                            chrome.runtime.onMessage.removeListener(listener);
+                            fail(err2.message || err.message || 'Capture not supported');
+                        });
                     });
                 });
-                
-                return { success: true };
             },
             args: [tabId]
         });
@@ -363,8 +392,13 @@ async function handleStartCaptureTab(tabId, sendResponse) {
             return;
         }
         
-        if (results[0]?.error === 'already_recording') {
-            sendResponse({ error: 'Already recording in this tab' });
+        const resultError = results[0]?.error;
+        if (resultError === 'already_recording' || resultError === 'startup_in_progress') {
+            sendResponse({ error: 'Already starting a recording in this tab' });
+            return;
+        }
+        if (resultError) {
+            sendResponse({ error: resultError });
             return;
         }
         
