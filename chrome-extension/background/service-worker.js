@@ -199,6 +199,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ pong: true });
             return true;
         
+        case 'SAVE_CALL_FILES':
+            handleSaveCallFiles(message.payload);
+            sendResponse({ success: true });
+            return true;
+        
         default:
             sendResponse({ error: 'Unknown message type' });
             return true;
@@ -232,16 +237,91 @@ async function handleStartCaptureTab(tabId, sendResponse) {
             mimeType: null
         };
         
-        console.log('[BG] Injecting capture script into tab', tabId);
+        console.log('[BG] Starting tab capture for tab', tabId);
         
+        // Capture audio from the service worker (where chrome.tabCapture is always available)
+        const stream = await chrome.tabCapture.capture({
+            audio: {
+                mandatory: {
+                    chromeMediaSource: 'tab',
+                    chromeMediaSourceId: String(tabId)
+                }
+            },
+            video: false
+        });
+        
+        if (!stream || !stream.getAudioTracks().length) {
+            sendResponse({ error: 'No audio track in stream' });
+            return;
+        }
+        
+        currentCapture.stream = stream;
+        
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : 'audio/webm';
+        currentCapture.mimeType = mimeType;
+        
+        // Create a blob URL from the stream so the injected script can use MediaRecorder
+        const streamUrl = URL.createObjectURL(stream);
+        
+        // Inject the recorder script that will create MediaRecorder from the stream URL
         const results = await chrome.scripting.executeScript({
             target: { tabId: tabId },
             world: 'ISOLATED',
-            files: ['content-scripts/tab-audio-capture.js']
+            func: (url, mime) => {
+                if (window.__atsRecorder) return { error: 'already_recording' };
+                window.__atsRecorder = true;
+                
+                const audio = new Audio(url);
+                audio.autoplay = true;
+                
+                const recorder = new MediaRecorder(audio.captureStream ? audio.captureStream() : new MediaStream([
+                    ...(audio.srcObject ? audio.srcObject.getAudioTracks() : [])
+                ]), { mimeType: mime });
+                
+                const chunks = [];
+                
+                recorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) {
+                        chunks.push(e.data);
+                        chrome.runtime.sendMessage({ type: 'AUDIO_CHUNK', chunk: e.data }).catch(() => {});
+                    }
+                };
+                
+                recorder.onerror = (e) => {
+                    chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: String(e.error) }).catch(() => {});
+                };
+                
+                recorder.start(1000);
+                window.__atsRecorderChunks = chunks;
+                window.__atsRecorder = recorder;
+                
+                // Show indicator
+                const el = document.createElement('div');
+                el.id = 'ats-recording-indicator';
+                el.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;background:#ef4444;color:white;padding:6px 12px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(239,68,68,0.4);';
+                el.innerHTML = '<span style="width:8px;height:8px;background:white;border-radius:50%;display:inline-block;animation:pulse 1s infinite"></span> ATS Recording';
+                const style = document.createElement('style');
+                style.textContent = '@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}';
+                document.head.appendChild(style);
+                document.body.appendChild(el);
+                window.__atsRecorderEl = el;
+                
+                chrome.runtime.sendMessage({ type: 'CAPTURE_STARTED', mimeType: mime }).catch(() => {});
+            },
+            args: [streamUrl, mimeType]
         });
         
         if (!results || results.length === 0) {
-            sendResponse({ error: 'Failed to inject content script' });
+            sendResponse({ error: 'Failed to inject recorder script' });
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            return;
+        }
+        
+        if (results[0]?.error === 'already_recording') {
+            sendResponse({ error: 'Already recording in this tab' });
+            if (stream) stream.getTracks().forEach(t => t.stop());
             return;
         }
         
@@ -251,7 +331,7 @@ async function handleStartCaptureTab(tabId, sendResponse) {
         
         updateRecordingState(true);
         setBadge('#ef4440', 'REC');
-        console.log('[BG] Content script injected, recording started for tab', tabId);
+        console.log('[BG] Recording started for tab', tabId);
         
         sendResponse({ success: true, tabId: tabId, startTime: currentCapture.startTime });
         
@@ -265,22 +345,38 @@ async function handleStartCaptureTab(tabId, sendResponse) {
 
 async function handleStopCaptureTab(sendResponse) {
     try {
-        if (!currentCapture.recording && currentCapture.audioChunks.length === 0) {
-            sendResponse({ success: true, chunks: [], error: 'Not recording' });
-            return;
-        }
-        
         const tabId = currentCapture.tabId;
         
+        // Stop the stream tracks from the service worker side
+        if (currentCapture.stream) {
+            currentCapture.stream.getTracks().forEach(t => t.stop());
+            currentCapture.stream = null;
+        }
+        
+        // Try to inject a stop function to clean up the tab's MediaRecorder and indicator
         if (tabId && currentCapture.injected) {
             try {
-                await chrome.tabs.sendMessage(tabId, { type: 'STOP_RECORDING' });
+                await chrome.scripting.executeScript({
+                    target: { tabId: tabId },
+                    world: 'ISOLATED',
+                    func: () => {
+                        if (window.__atsRecorder && window.__atsRecorder.state !== 'inactive') {
+                            window.__atsRecorder.stop();
+                        }
+                        if (window.__atsRecorderEl) {
+                            window.__atsRecorderEl.remove();
+                            window.__atsRecorderEl = null;
+                        }
+                        window.__atsRecorder = null;
+                    }
+                });
             } catch (e) {
-                console.log('[BG] Could not send stop to content script:', e.message);
+                console.log('[BG] Could not inject stop script:', e.message);
             }
         }
         
-        await stopCaptureInternal();
+        currentCapture.recording = false;
+        updateRecordingState(false);
         
         setBadge('#22c55e', 'OK');
         console.log('[BG] Capture stopped, chunks:', currentCapture.audioChunks.length);
@@ -565,6 +661,128 @@ async function forwardToOverlay(message, sender, sendResponse) {
 }
 
 // Restore recording state on startup
+async function handleSaveCallFiles(payload) {
+    if (!payload) return;
+    
+    const { phone, callerName, audioBase64, transcription, analysis, duration, timestamp, client } = payload;
+    
+    const date = new Date(timestamp || Date.now());
+    const dateStr = date.toISOString().slice(0, 10);
+    const timeStr = date.toISOString().slice(11, 19).replace(/:/g, '-');
+    const phoneSlug = phone ? `_${phone.replace(/[^0-9]/g, '')}` : '';
+    const safeName = callerName ? `_${callerName.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+    const prefix = `${dateStr}_${timeStr}${safeName}${phoneSlug}`;
+    
+    const analysis_ = analysis || {};
+    
+    // Save MP3 recording (WebM audio)
+    if (audioBase64) {
+        try {
+            const audioData = atob(audioBase64);
+            const audioBuffer = new Uint8Array(audioData.length);
+            for (let i = 0; i < audioData.length; i++) {
+                audioBuffer[i] = audioData.charCodeAt(i);
+            }
+            const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            await new Promise((resolve, reject) => {
+                chrome.downloads.download({
+                    url: audioUrl,
+                    filename: `ATS_Recordings/${prefix}.webm`,
+                    saveAs: false
+                }, (downloadId) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(downloadId);
+                    }
+                });
+            });
+            console.log('[BG] Recording saved to Downloads/ATS_Recordings/');
+        } catch(e) {
+            console.log('[BG] Could not save audio:', e.message);
+        }
+    }
+    
+    // Save transcript + analysis as markdown
+    try {
+        const md = generateCallMarkdown({ phone, callerName, transcription, analysis: analysis_, duration, timestamp, client, prefix });
+        const blob = new Blob([md], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        
+        await new Promise((resolve, reject) => {
+            chrome.downloads.download({
+                url: url,
+                filename: `ATS_Recordings/${prefix}_analysis.md`,
+                saveAs: false
+            }, (downloadId) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                    resolve(downloadId);
+                }
+            });
+        });
+        console.log('[BG] Analysis saved to Downloads/ATS_Recordings/');
+    } catch(e) {
+        console.log('[BG] Could not save analysis:', e.message);
+    }
+}
+
+function generateCallMarkdown({ phone, callerName, transcription, analysis, duration, timestamp, client, prefix }) {
+    const date = timestamp ? new Date(timestamp).toLocaleString() : new Date().toLocaleString();
+    const a = analysis || {};
+    const score = a.qualification_score ?? 0;
+    const scoreClass = score >= 70 ? 'Hot Lead' : score >= 40 ? 'Warm Lead' : 'Cold Lead';
+    
+    let md = `# Call Analysis — ${date}\n\n`;
+    md += `| Field | Value |\n`;
+    md += `|--------|-------|\n`;
+    md += `| Phone | ${phone || 'N/A'} |\n`;
+    md += `| Caller | ${callerName || 'Unknown'} |\n`;
+    md += `| Client | ${client || 'N/A'} |\n`;
+    md += `| Date | ${date} |\n`;
+    md += `| Duration | ${duration ? `${duration}s` : 'N/A'} |\n\n`;
+    
+    md += `## Lead Qualification\n\n`;
+    md += `| Metric | Value |\n`;
+    md += `|--------|-------|\n`;
+    md += `| Score | **${score}** (${scoreClass}) |\n`;
+    md += `| Sentiment | ${a.sentiment || 'N/A'} |\n`;
+    md += `| Disposition | ${a.suggested_disposition || 'N/A'} |\n`;
+    md += `| State | ${a.detected_state || 'N/A'} |\n`;
+    md += `| Insurance | ${a.detected_insurance || 'N/A'} |\n`;
+    md += `| Call Type | ${a.call_type || 'N/A'} |\n`;
+    
+    if (a.tags && a.tags.length > 0) {
+        md += `\n## Tags\n\n`;
+        md += a.tags.map(t => `- ${t}`).join('\n') + '\n';
+    }
+    
+    if (a.summary) {
+        md += `\n## Summary\n\n${a.summary}\n`;
+    }
+    
+    if (transcription) {
+        md += `\n## Transcript\n\n${transcription}\n`;
+    }
+    
+    if (a.salesforce_notes) {
+        md += `\n## Salesforce Notes\n\n${a.salesforce_notes}\n`;
+    }
+    
+    if (a.scoring_breakdown) {
+        md += `\n## Scoring Breakdown\n\n`;
+        for (const [key, val] of Object.entries(a.scoring_breakdown)) {
+            md += `- **${key}**: ${val}\n`;
+        }
+    }
+    
+    md += `\n---\n*Generated by ATS Automation*\n`;
+    return md;
+}
+
 async function restoreState() {
     try {
         const state = await chrome.storage.local.get(RECORDING_STATE_KEY);
