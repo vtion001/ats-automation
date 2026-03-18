@@ -133,30 +133,39 @@ if (Test-Path ".env.example") {
     }
 }
 
-# Offer to set up auto-update
+# Set up GitHub Auto-Sync (automatically checks for updates)
 Write-Host ""
-Write-Host "Auto-Update Setup:" -ForegroundColor Cyan
-$autoUpdate = Read-Host "Would you like to set up automatic daily updates? (y/n)"
-if ($autoUpdate -eq "y" -or $autoUpdate -eq "Y") {
-    $schedule = Read-Host "What time (24h format, default: 8)?"
-    if (-not $schedule) { $schedule = "8:00" }
-    Write-Host "Setting up auto-update at $schedule..." -ForegroundColor Yellow
-    & "$installPath\update.ps1" -AutoUpdate -Schedule $schedule
+Write-Host "Setting up GitHub Auto-Sync..." -ForegroundColor Cyan
+
+if ($gitCmd) {
+    # Set up scheduled task to check GitHub every 30 minutes
+    & "$installPath\update.ps1" -AutoUpdate -IntervalMinutes 30
+    Write-Host "GitHub Auto-Sync enabled!" -ForegroundColor Green
+} else {
+    Write-Host "GitHub not installed - auto-sync disabled" -ForegroundColor Yellow
+    Write-Host "Install Git to enable auto-sync: winget install Git.Git" -ForegroundColor White
 }
 
 # Chrome Extension
 Write-Host ""
-Write-Host "Chrome Extension Installation:" -ForegroundColor Cyan
-Write-Host "1. Open Chrome and navigate to chrome://extensions/" -ForegroundColor White
-Write-Host "2. Enable 'Developer mode' (top right)" -ForegroundColor White  
+Write-Host "======================================" -ForegroundColor Cyan
+Write-Host "Installation Complete!" -ForegroundColor Green
+Write-Host "======================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "GitHub Auto-Sync: ENABLED (checks every 30 min)" -ForegroundColor Green
+Write-Host ""
+Write-Host "Chrome Extension:" -ForegroundColor Cyan
+Write-Host "1. Open Chrome: chrome://extensions/" -ForegroundColor White
+Write-Host "2. Enable 'Developer mode'" -ForegroundColor White
 Write-Host "3. Click 'Load unpacked'" -ForegroundColor White
 Write-Host "4. Select: $installPath\chrome-extension" -ForegroundColor White
-
 Write-Host ""
-Write-Host "Server Installation:" -ForegroundColor Cyan
-Write-Host "1. Configure .env with your OPENROUTER_API_KEY" -ForegroundColor White
+Write-Host "Configure:" -ForegroundColor Cyan
+Write-Host "1. Edit .env with your OPENROUTER_API_KEY" -ForegroundColor White
 Write-Host "2. Run: python server\main.py" -ForegroundColor White
-Write-Host "3. Or deploy to Azure Container Apps" -ForegroundColor White
-
 Write-Host ""
-Write-Host "Installation complete!" -ForegroundColor Green
+Write-Host "Auto-Sync Commands:" -ForegroundColor Cyan
+Write-Host "  Check status: Get-ScheduledTask -TaskName 'ATS Automation GitHub Sync'" -ForegroundColor White
+Write-Host "  Check updates: .\update.ps1 -CheckOnly" -ForegroundColor White
+Write-Host "  Disable sync: Unregister-ScheduledTask -TaskName 'ATS Automation GitHub Sync'" -ForegroundColor White
+Write-Host ""
