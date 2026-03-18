@@ -267,15 +267,19 @@
         const mainStatus = document.querySelector('main[data-status]');
         const mainStatusVal = mainStatus?.getAttribute('data-status');
 
+        // Only consider it a real call if the softphone is in an active state
+        // data-status values: "offline" (logged out), "ready" (logged in, idle), "busy" (on call), "ringing" (receiving)
+        const isActiveCallState = mainStatusVal === 'busy' || mainStatusVal === 'ringing';
+
         const phone = getCallerPhoneFromDOM();
         const callerName = getCallerNameFromDOM();
 
-        // Call START detected
-        if (inboundVisible && !lastInboundState) {
-            logInfo('DOM: Inbound call START detected', { phone, callerName });
+        // Call START detected — only if inbound/outbound element is visible AND softphone is in active state
+        if (inboundVisible && !lastInboundState && isActiveCallState) {
+            logInfo('DOM: Inbound call START detected', { phone, callerName, status: mainStatusVal });
             handleCallStart(phone, 'inbound', callerName);
-        } else if (outboundVisible && !lastOutboundState) {
-            logInfo('DOM: Outbound call START detected', { phone, callerName });
+        } else if (outboundVisible && !lastOutboundState && isActiveCallState) {
+            logInfo('DOM: Outbound call START detected', { phone, callerName, status: mainStatusVal });
             handleCallStart(phone, 'outbound', callerName);
         }
 
@@ -837,6 +841,12 @@
 
 
     async function checkForNewCalls() {
+        // Don't poll results if no active call — prevents stale data from triggering overlay
+        const mainStatus = document.querySelector('main[data-status]');
+        const mainStatusVal = mainStatus?.getAttribute('data-status');
+        const isActiveCallState = mainStatusVal === 'busy' || mainStatusVal === 'ringing';
+        if (!isActiveCallState) return;
+
         const data = await fetchWebhookResults();
         
         if (!data) return;
