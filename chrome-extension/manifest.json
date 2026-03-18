@@ -11,7 +11,8 @@
     "desktopCapture",
     "tabCapture"
   ],
-  "host_permissions": [
+    "host_permissions": [
+    "*://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io/*",
     "*://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/*",
     "*://*.calltrackingmetrics.com/*",
     "*://*.my.salesforce.com/*",
@@ -53,6 +54,7 @@
         "*://*.calltrackingmetrics.com/*"
       ],
       "js": [
+        "content-scripts/console-interceptor.js",
         "src/lib/core.js",
         "src/shared/constants/index.js",
         "src/shared/utils/index.js",
@@ -82,6 +84,7 @@
         "*://*.lightning.force.com/*"
       ],
       "js": [
+        "content-scripts/console-interceptor.js",
         "src/lib/core.js",
         "src/shared/constants/index.js",
         "src/shared/utils/index.js",
@@ -104,6 +107,7 @@
         "*://*.zoho.com/*"
       ],
       "js": [
+        "content-scripts/console-interceptor.js",
         "src/lib/core.js",
         "src/shared/constants/index.js",
         "src/shared/utils/index.js",

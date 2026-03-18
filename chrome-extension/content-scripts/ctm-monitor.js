@@ -112,8 +112,6 @@
         activeClient: 'flyland'     // Default client
     };
     
-    let REMOTE_LOG_URL = null;  // Set dynamically from config
-
     let monitorInterval = null;
     let lastCallId = null;
     let isInitialized = false;
@@ -141,15 +139,6 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(logEntry)
             }).catch(() => {});
-            
-            // Also send to remote log URL if configured (for real-time monitoring)
-            if (REMOTE_LOG_URL) {
-                fetch(`${REMOTE_LOG_URL}/api/logs/${CONFIG.activeClient}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(logEntry)
-                }).catch(() => {});
-            }
             
             // Also log locally for debugging
             const logFn = level === 'error' ? console.error : 
@@ -189,13 +178,8 @@
                 CONFIG.activeClient = result.activeClient;
             }
             
-            if (result.remoteLogUrl) {
-                REMOTE_LOG_URL = result.remoteLogUrl;
-            }
-            
             logInfo('Config loaded', { 
-                client: CONFIG.activeClient, 
-                remoteLogUrl: REMOTE_LOG_URL || 'disabled'
+                client: CONFIG.activeClient
             });
             
         } catch (e) {

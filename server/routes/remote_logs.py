@@ -12,14 +12,19 @@ router = APIRouter(prefix="/api", tags=["remote_logs"])
 
 class LogEntry(BaseModel):
     source: Optional[str] = "ctm"
+    script: Optional[str] = None
     level: Optional[str] = "log"
     message: Optional[str] = ""
     timestamp: Optional[str] = None
     url: Optional[str] = None
     client: Optional[str] = None
+    data: Optional[Any] = None
 
     class Config:
         extra = "allow"
+
+
+from typing import Any
 
 
 @router.get("/logs")

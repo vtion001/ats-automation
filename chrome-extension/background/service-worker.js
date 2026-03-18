@@ -1,6 +1,7 @@
 /**
  * ATS Background Service Worker
  * Handles messaging between content scripts and native automation
+ * Also intercepts console output and forwards to remote log viewer.
  */
 
 // Default configuration - Pre-configured for Flyland
@@ -25,6 +26,118 @@ const ATS_STORAGE_KEYS = {
     QUALIFICATION: 'ats_qualification',
     CACHE: 'ats_cache'
 };
+
+// =============================================================================
+// CONSOLE INTERCEPTOR - Forward service worker console to remote log viewer
+// =============================================================================
+const _origConsole = {
+    log: console.log.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console),
+    debug: console.debug.bind(console),
+    info: console.info.bind(console)
+};
+
+let _remoteLogUrl = null;
+let _remoteLogUrlCachedAt = 0;
+const CACHE_TTL_MS = 30000;
+
+async function _getRemoteLogUrl() {
+    const now = Date.now();
+    if (_remoteLogUrl && (now - _remoteLogUrlCachedAt) < CACHE_TTL_MS) {
+        return _remoteLogUrl;
+    }
+    try {
+        const result = await chrome.storage.local.get(['remoteLogUrl']);
+        if (result.remoteLogUrl) {
+            _remoteLogUrl = result.remoteLogUrl.replace(/\/$/, '');
+            _remoteLogUrlCachedAt = now;
+        }
+    } catch (e) {
+        _origConsole.error('[AGS] Error getting remote log URL:', e);
+    }
+    return _remoteLogUrl;
+}
+
+async function _forwardToRemote(entry) {
+    const url = await _getRemoteLogUrl();
+    if (!url) return;
+
+    try {
+        const client = ATS_CONFIG.activeClient || 'flyland';
+        fetch(`${url}/api/logs/${client}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(entry)
+        }).catch(() => {});
+    } catch (e) {
+        _origConsole.error('[AGS] Remote log forward failed:', e);
+    }
+}
+
+async function _sendConsoleToRemote(level, args) {
+    const url = await _getRemoteLogUrl();
+    if (!url) return;
+
+    try {
+        const client = ATS_CONFIG.activeClient || 'flyland';
+        const messageText = args.map(String).join(' ');
+        const structuredData = args.find(a => typeof a === 'object' && a !== null);
+
+        const entry = {
+            source: 'extension',
+            script: 'service-worker',
+            level: level,
+            message: messageText,
+            timestamp: new Date().toISOString(),
+            client: client,
+            data: structuredData || null
+        };
+
+        fetch(`${url}/api/logs/${client}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(entry)
+        }).catch(() => {});
+    } catch (e) {}
+}
+
+function _interceptConsole(level) {
+    return function(...args) {
+        _origConsole[level](...args);
+        _sendConsoleToRemote(level, args);
+    };
+}
+
+console.log = _interceptConsole('log');
+console.warn = _interceptConsole('warn');
+console.error = _interceptConsole('error');
+console.debug = _interceptConsole('debug');
+console.info = _interceptConsole('info');
+
+// Listen for remote log URL changes
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.remoteLogUrl) {
+        _remoteLogUrl = changes.remoteLogUrl.newValue ? changes.remoteLogUrl.newValue.replace(/\/$/, '') : null;
+        _remoteLogUrlCachedAt = Date.now();
+    }
+    if (changes.activeClient) {
+        ATS_CONFIG.activeClient = changes.activeClient.newValue || 'flyland';
+    }
+});
+
+// =============================================================================
+// CONSOLE INTERCEPT HANDLER - Receive from content script interceptors
+// =============================================================================
+function handleConsoleIntercept(message) {
+    if (!message.entry || message.entry._fromInterceptor) return;
+    
+    const entry = message.entry;
+    _origConsole.log(
+        `[RemoteLog][${entry.level.toUpperCase()}] ${entry.message} (${entry.script} @ ${entry.url || 'N/A'})`
+    );
+    _forwardToRemote(entry);
+}
 
 // Load config on startup
 loadConfig();
@@ -136,6 +249,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('[AGS Background] Received message:', message.type || message.action);
 
     switch (message.type || message.action) {
+        case 'CONSOLE_INTERCEPT':
+            handleConsoleIntercept(message);
+            break;
         case 'SET_BADGE':
             if (message.color) {
                 chrome.action.setBadgeBackgroundColor({ color: message.color });

@@ -25,10 +25,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 select,button{padding:6px 12px;border:1px solid #30363d;background:#0d1117;color:#c9d1d9;border-radius:6px;cursor:pointer}
 button:hover{background:#21262d}.log-container{height:calc(100vh-120px);overflow-y:auto;padding:10px}
 .log-entry{padding:10px 12px;margin:4px 0;background:#161b22;border-radius:6px;border-left:3px solid #30363d}
-.log-entry.warn{border-left-color:#d29922}.log-entry.error{border-left-color:#f85149}.log-entry.info{border-left-color:#58a6ff}
+.log-entry.warn{border-left-color:#d29922}.log-entry.error{border-left-color:#f85149}.log-entry.info{border-left-color:#58a6ff}.log-entry.debug{border-left-color:#8b949e}
 .time{color:#484f58;font-size:11px;margin-right:10px}.source{font-weight:bold;margin-right:10px;padding:2px 8px;border-radius:4px;font-size:11px}
 .source.ctm{background:#a371f7}.source.extension{background:#388bfd}.source.server{background:#3fb950}
-.level{margin-right:10px;font-size:11px;padding:2px 6px;border-radius:4px}.level.error{background:#f85149}.level.warn{background:#d29922;color:#000}.level.info{background:#58a6ff;color:#000}
+.script{margin-right:10px;font-size:10px;color:#8b949e;font-style:italic}.url{margin-right:10px;font-size:10px;color:#58a6ff}
+.level{margin-right:10px;font-size:11px;padding:2px 6px;border-radius:4px}.level.error{background:#f85149}.level.warn{background:#d29922;color:#000}.level.info{background:#58a6ff;color:#000}.level.debug{background:#484f58}
 .message{color:#c9d1d9;word-break:break-all}.data{margin-top:8px;padding:8px;background:#0d1117;border-radius:4px;font-size:11px;color:#8b949e;white-space:pre-wrap;max-height:100px;overflow-y:auto}
 .no-logs{text-align:center;padding:60px;color:#484f58}.badge{display:inline-block;padding:2px 8px;background:#238636;border-radius:4px;font-size:10px;margin-left:10px}
 .live{color:#3fb950;font-size:10px;margin-left:10px}.url-box{background:#0d1117;padding:10px 15px;font-size:12px;border-radius:6px;margin-left:auto}
@@ -38,7 +39,7 @@ button:hover{background:#21262d}.log-container{height:calc(100vh-120px);overflow
 <div class="header"><h1>📡 ATS Remote Log Viewer <span class="live pulse">● LIVE</span><span class="ai-status" id="aiStatus">checking AI server...</span></h1><div class="stats" id="stats">0 logs</div></div>
 <div class="controls">
 <select id="fs"><option value="">All Sources</option><option value="ctm">CTM</option><option value="extension">Extension</option><option value="server">Server</option></select>
-<select id="fl"><option value="">All Levels</option><option value="log">Log</option><option value="info">Info</option><option value="warn">Warning</option><option value="error">Error</option></select>
+<select id="fl"><option value="">All Levels</option><option value="log">Log</option><option value="info">Info</option><option value="debug">Debug</option><option value="warn">Warning</option><option value="error">Error</option></select>
 <select id="fc"><option value="">All Clients</option><option value="flyland">Flyland</option><option value="banyan">Banyan</option><option value="element">Element</option><option value="takami">Takami</option><option value="tbt">TBT</option></select>
 <button onclick="clearLogs()">Clear</button>
 <div class="url-box">Backend: <span id="ep">-</span></div>
@@ -75,6 +76,8 @@ function render(){
     return`<div class="log-entry ${l.level||'log'}">
       <span class="time">${t}</span>
       <span class="source ${l.source||'?'}">${l.source||'?'}</span>
+      ${l.script?'<span class="script">'+l.script+'</span>':''}
+      ${l.url?'<span class="url">'+l.url.substring(0,60)+'</span>':''}
       ${l.level?'<span class="level '+l.level+'">'+l.level+'</span>':''}
       ${l.client?'<span class="badge">'+l.client+'</span>':''}
       <span class="message">${l.message||''}</span>
