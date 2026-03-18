@@ -5,7 +5,7 @@ CTM Webhook endpoint
 from fastapi import APIRouter
 from models.requests import CTMWebhookRequest
 from services import webhook_storage
-from services.ai_service import ai_service
+from services.ai_service import ai_service, compute_transcription_qa
 from utils.phone_utils import clean_phone
 import logging
 import requests
@@ -67,6 +67,9 @@ async def ctm_webhook(request: CTMWebhookRequest):
 
         logger.info(f"CTM Webhook - Phone: {phone}, Transcript length: {len(transcript)}")
 
+        qa_result = compute_transcription_qa(transcript, request.duration)
+        logger.info(f"QA Score: {qa_result['overall_qa_score']} ({qa_result['quality_grade']})")
+
         if transcript and len(transcript) > 10:
             analysis = await ai_service.analyze(transcript, phone, request.client)
 
@@ -84,6 +87,7 @@ async def ctm_webhook(request: CTMWebhookRequest):
                 "suggested_disposition": analysis.get("suggested_disposition", "New"),
                 "follow_up_required": analysis.get("follow_up_required", False),
                 "ai_analyzed": True,
+                "qa": qa_result,
             }
 
             logger.info(f"CTM Webhook analysis complete: {analysis.get('qualification_score', 0)}")

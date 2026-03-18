@@ -234,13 +234,13 @@ if ($depsInstalled) {
     Write-Host "Dependencies installed!" -ForegroundColor Green
 }
 
-# Create .env file
+# Create .env file (only needed if running server locally)
 if (Test-Path ".env.example") {
     if (-not (Test-Path ".env")) {
         Copy-Item ".env.example" ".env"
         Write-Host ""
-        Write-Host "IMPORTANT: Edit .env with your API keys!" -ForegroundColor Yellow
-        Write-Host "  notepad.exe .env" -ForegroundColor White
+        Write-Host "NOTE: .env is only needed if running the server locally." -ForegroundColor Gray
+        Write-Host "      The Chrome Extension is configured to use the Azure server by default." -ForegroundColor Gray
     }
 }
 
@@ -264,13 +264,15 @@ Write-Host ""
 Write-Host "Location: $installPath" -ForegroundColor White
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor Cyan
-Write-Host "  1. Edit .env with your OPENROUTER_API_KEY" -ForegroundColor White
-Write-Host "  2. Load Chrome Extension:" -ForegroundColor White
+Write-Host "  1. Load Chrome Extension:" -ForegroundColor White
 Write-Host "     - Open: chrome://extensions/" -ForegroundColor White
 Write-Host "     - Enable: Developer mode" -ForegroundColor White
 Write-Host "     - Click: Load unpacked" -ForegroundColor White
 Write-Host "     - Select: $installPath\chrome-extension" -ForegroundColor White
-Write-Host "  3. Run server: python server\main.py" -ForegroundColor White
+Write-Host ""
+Write-Host "  2. Azure AI Server is pre-configured!" -ForegroundColor Green
+Write-Host "     The extension automatically connects to the Azure server." -ForegroundColor Gray
+Write-Host "     No local .env setup needed." -ForegroundColor Gray
 Write-Host ""
 
 if ($gitCmd) {

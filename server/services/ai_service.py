@@ -2,6 +2,7 @@
 AI Service - OpenRouter API calls with retry logic
 """
 
+import re
 import requests
 import logging
 from typing import Optional
@@ -74,6 +75,96 @@ Decision rules:
 {kb_context}
 
 Respond ONLY with valid JSON."""
+
+
+def compute_transcription_qa(transcript: str, duration: int = None) -> dict:
+    """Compute QA/quality scores for a transcription.
+
+    Returns a dict with:
+    - overall_qa_score: 0-100 weighted quality score
+    - word_count: total words
+    - speech_rate_wpm: words per minute (if duration known)
+    - silence_ratio: ratio of pauses/fillers indicating poor audio
+    - completeness_score: 0-100 based on expected call elements
+    - clarity_issues: list of detected clarity problems
+    """
+    if not transcript or len(transcript.strip()) < 5:
+        return {
+            "overall_qa_score": 0,
+            "word_count": 0,
+            "speech_rate_wpm": 0,
+            "silence_ratio": 1.0,
+            "completeness_score": 0,
+            "clarity_issues": ["No transcript available"],
+            "quality_grade": "F",
+        }
+
+    words = transcript.split()
+    word_count = len(words)
+
+    silence_patterns = [r"\b(um|uh|ah|er)\b", r"\.{2,}", r"\b\?\?\?\b", r"\[\s*\]", r"\(\s*\)"]
+    silence_count = sum(len(re.findall(p, transcript.lower())) for p in silence_patterns)
+    silence_ratio = silence_count / max(word_count, 1)
+
+    speech_rate_wpm = 0
+    if duration and duration > 0:
+        speech_rate_wpm = round(word_count / (duration / 60))
+
+    completeness_score = 0
+    has_question = "?" in transcript
+    has_answer = len(words) > 20
+    has_name = bool(re.search(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b", transcript))
+    has_phone = bool(re.search(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b", transcript))
+
+    completeness_score += 30 if word_count >= 50 else (word_count / 50 * 30)
+    completeness_score += 15 if has_question else 0
+    completeness_score += 15 if has_answer else 0
+    completeness_score += 20 if has_name else 0
+    completeness_score += 20 if has_phone else 0
+    completeness_score = min(100, completeness_score)
+
+    clarity_issues = []
+    if silence_ratio > 0.15:
+        clarity_issues.append(f"High silence/filler ratio ({silence_ratio:.0%})")
+    if speech_rate_wpm > 180:
+        clarity_issues.append("Very fast speech detected")
+    if speech_rate_wpm > 0 and speech_rate_wpm < 60:
+        clarity_issues.append("Very slow or fragmented speech")
+    if word_count < 20:
+        clarity_issues.append("Very short transcription")
+    if re.search(r"\[\s*inaudible\s*\]", transcript, re.I):
+        clarity_issues.append("Inaudible segments detected")
+    if re.search(r"\[\s*unintelligible\s*\]", transcript, re.I):
+        clarity_issues.append("Unintelligible segments detected")
+    if transcript.count("...") > 3:
+        clarity_issues.append("Multiple truncated segments")
+
+    qa_score = 100
+    qa_score -= min(30, silence_ratio * 100)
+    qa_score -= 20 if completeness_score < 40 else (0 if completeness_score > 70 else 10)
+    qa_score -= len(clarity_issues) * 5
+    qa_score = max(0, min(100, qa_score))
+
+    if qa_score >= 85:
+        grade = "A"
+    elif qa_score >= 70:
+        grade = "B"
+    elif qa_score >= 55:
+        grade = "C"
+    elif qa_score >= 40:
+        grade = "D"
+    else:
+        grade = "F"
+
+    return {
+        "overall_qa_score": qa_score,
+        "word_count": word_count,
+        "speech_rate_wpm": speech_rate_wpm,
+        "silence_ratio": round(silence_ratio, 3),
+        "completeness_score": round(completeness_score, 1),
+        "clarity_issues": clarity_issues,
+        "quality_grade": grade,
+    }
 
 
 class AIService:
@@ -174,7 +265,7 @@ class AIService:
         client: str = "flyland",
     ) -> dict:
         """Determine Salesforce action"""
-        kb_context = await get_kb_context(client)
+        kb_context = get_kb_context(client)
 
         tags = analysis.get("tags", [])
         sentiment = analysis.get("sentiment", "neutral")
