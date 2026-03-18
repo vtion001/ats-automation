@@ -288,9 +288,12 @@ if ($gitCmd) {
 
 # Configure Remote Log URL for Chrome Extension
 Write-Host ""
-if ($RemoteLogUrl) {
-    Write-Host "Configuring Remote Log URL..." -ForegroundColor Cyan
-    Write-Host "  URL: $RemoteLogUrl" -ForegroundColor Gray
+$defaultLogUrl = "https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io"
+if (-not $RemoteLogUrl) {
+    $RemoteLogUrl = $defaultLogUrl
+}
+
+Write-Host "Remote Log URL: $RemoteLogUrl" -ForegroundColor Cyan
     
     # Create a temporary JS file to set the remote log URL
     $jsContent = @"
