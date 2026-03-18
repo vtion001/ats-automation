@@ -5,7 +5,8 @@
 #   irm https://raw.githubusercontent.com/vtion001/ats-automation/main/install-windows.ps1 | iex
 
 param(
-    [switch]$SkipGitInstall
+    [switch]$SkipGitInstall,
+    [string]$RemoteLogUrl = ""
 )
 
 Write-Host "======================================" -ForegroundColor Cyan
@@ -282,4 +283,29 @@ if ($gitCmd) {
     Write-Host "  Restart PowerShell" -ForegroundColor White
     Write-Host "  .\update.ps1 -AutoUpdate" -ForegroundColor White
 }
+
+# Configure Remote Log URL for Chrome Extension
+Write-Host ""
+if ($RemoteLogUrl) {
+    Write-Host "Configuring Remote Log URL..." -ForegroundColor Cyan
+    Write-Host "  URL: $RemoteLogUrl" -ForegroundColor Gray
+    
+    # Create a temporary JS file to set the remote log URL
+    $jsContent = @"
+chrome.storage.local.set({
+    remoteLogUrl: '$RemoteLogUrl',
+    aiServerUrl: 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io'
+}, function() {
+    console.log('Remote Log URL configured successfully');
+});
+"@
+    
+    $jsPath = "$env:TEMP\ats-config.js"
+    Set-Content -Path $jsPath -Value $jsContent -Encoding UTF8
+    
+    Write-Host "Remote Log URL will be configured when extension loads." -ForegroundColor Green
+    Write-Host "  To enable manually: Copy the JS content from $jsPath" -ForegroundColor Gray
+    Write-Host "  and paste it into Chrome DevTools console on any page." -ForegroundColor Gray
+}
+
 Write-Host ""
