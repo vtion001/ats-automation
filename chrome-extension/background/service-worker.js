@@ -1,814 +1,157 @@
 /**
- * ATS Background Service Worker
- * Handles messaging between content scripts and native automation
- * Also intercepts console output and forwards to remote log viewer.
+ * ATS Automation - Background Service Worker
+ * Handles tab audio capture, messages, and badge updates
  */
 
-// Default configuration - Pre-configured for Flyland
-const ATS_CONFIG = {
-    activeClient: 'flyland',
-    automationEnabled: true,
-    autoSearchSF: true,
-    transcriptionEnabled: true,
-    aiAnalysisEnabled: true,
-    saveMarkdown: true,
-    aiServerUrl: 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io',
-    salesforceUrl: 'https://flyland.my.salesforce.com',
-    ctmUrl: 'https://app.calltrackingmetrics.com',
-    remoteLogUrl: 'https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io'
+// Tab capture state
+let currentCapture = {
+    tabId: null,
+    stream: null,
+    mediaRecorder: null,
+    audioChunks: [],
+    recording: false
 };
 
-let callLog = [];
-
-const ATS_STORAGE_KEYS = {
-    CONFIG: 'ats_config',
-    STATS: 'ats_stats',
-    NOTES_PREFIX: 'ats_notes_',
-    QUALIFICATION: 'ats_qualification',
-    CACHE: 'ats_cache'
-};
-
-// =============================================================================
-// CONSOLE INTERCEPTOR - Forward service worker console to remote log viewer
-// =============================================================================
-const _origConsole = {
-    log: console.log.bind(console),
-    warn: console.warn.bind(console),
-    error: console.error.bind(console),
-    debug: console.debug.bind(console),
-    info: console.info.bind(console)
-};
-
-let _remoteLogUrl = null;
-let _remoteLogUrlCachedAt = 0;
-const CACHE_TTL_MS = 30000;
-
-async function _getRemoteLogUrl() {
-    const now = Date.now();
-    if (_remoteLogUrl && (now - _remoteLogUrlCachedAt) < CACHE_TTL_MS) {
-        return _remoteLogUrl;
-    }
-    try {
-        const result = await chrome.storage.local.get(['remoteLogUrl']);
-        if (result.remoteLogUrl) {
-            _remoteLogUrl = result.remoteLogUrl.replace(/\/$/, '');
-            _remoteLogUrlCachedAt = now;
-        }
-    } catch (e) {
-        _origConsole.error('[AGS] Error getting remote log URL:', e);
-    }
-    return _remoteLogUrl;
-}
-
-async function _forwardToRemote(entry) {
-    const url = await _getRemoteLogUrl();
-    if (!url) return;
-
-    try {
-        const client = ATS_CONFIG.activeClient || 'flyland';
-        fetch(`${url}/api/logs/${client}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(entry)
-        }).catch(() => {});
-    } catch (e) {
-        _origConsole.error('[AGS] Remote log forward failed:', e);
-    }
-}
-
-async function _sendConsoleToRemote(level, args) {
-    const url = await _getRemoteLogUrl();
-    if (!url) return;
-
-    try {
-        const client = ATS_CONFIG.activeClient || 'flyland';
-        const messageText = args.map(String).join(' ');
-        const structuredData = args.find(a => typeof a === 'object' && a !== null);
-
-        const entry = {
-            source: 'extension',
-            script: 'service-worker',
-            level: level,
-            message: messageText,
-            timestamp: new Date().toISOString(),
-            client: client,
-            data: structuredData || null
-        };
-
-        fetch(`${url}/api/logs/${client}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(entry)
-        }).catch(() => {});
-    } catch (e) {}
-}
-
-function _interceptConsole(level) {
-    return function(...args) {
-        _origConsole[level](...args);
-        _sendConsoleToRemote(level, args);
-    };
-}
-
-console.log = _interceptConsole('log');
-console.warn = _interceptConsole('warn');
-console.error = _interceptConsole('error');
-console.debug = _interceptConsole('debug');
-console.info = _interceptConsole('info');
-
-// Listen for remote log URL changes
-chrome.storage.onChanged.addListener((changes) => {
-    if (changes.remoteLogUrl) {
-        _remoteLogUrl = changes.remoteLogUrl.newValue ? changes.remoteLogUrl.newValue.replace(/\/$/, '') : null;
-        _remoteLogUrlCachedAt = Date.now();
-    }
-    if (changes.activeClient) {
-        ATS_CONFIG.activeClient = changes.activeClient.newValue || 'flyland';
-    }
-});
-
-// =============================================================================
-// CONSOLE INTERCEPT HANDLER - Receive from content script interceptors
-// =============================================================================
-function handleConsoleIntercept(message) {
-    if (!message.entry || message.entry._fromInterceptor) return;
-    
-    const entry = message.entry;
-    _origConsole.log(
-        `[RemoteLog][${entry.level.toUpperCase()}] ${entry.message} (${entry.script} @ ${entry.url || 'N/A'})`
-    );
-    _forwardToRemote(entry);
-}
-
-// Load config on startup
-loadConfig();
-
-// Initialize remoteLogUrl with default if not set
-async function ensureRemoteLogUrl() {
-    try {
-        const result = await chrome.storage.local.get('remoteLogUrl');
-        if (!result.remoteLogUrl) {
-            await chrome.storage.local.set({
-                remoteLogUrl: 'https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io'
-            });
-            _remoteLogUrl = 'https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io';
-        } else {
-            _remoteLogUrl = result.remoteLogUrl.replace(/\/$/, '');
-        }
-        _origConsole.log('[AGS] Remote log URL initialized:', _remoteLogUrl);
-    } catch (e) {
-        _origConsole.error('[AGS] Error initializing remote log URL:', e);
-    }
-}
-ensureRemoteLogUrl();
-
-// Increment stat counter
-async function incrementStat(statName) {
-    try {
-        const key = ATS_STORAGE_KEYS.STATS;
-        const result = await chrome.storage.local.get(key);
-        let stats = result[key] || { calls: 0, searches: 0, analysis: 0 };
-        
-        if (stats[statName] !== undefined) {
-            stats[statName]++;
-        } else {
-            stats[statName] = 1;
-        }
-        
-        await chrome.storage.local.set({ [key]: stats });
-        console.log(`[AGS] Incremented ${statName}:`, stats);
-    } catch (error) {
-        console.error('[AGS] Error incrementing stat:', error);
-    }
-}
-
-// Load config from chrome.storage
-async function loadConfig() {
-    try {
-        const keys = ['activeClient', 'automationEnabled', 'autoSearchSF', 'transcriptionEnabled', 
-                     'aiAnalysisEnabled', 'saveMarkdown', 'salesforceUrl', 'aiServerUrl',
-                     'remoteLogUrl', 'ats_config'];
-        const stored = await chrome.storage.local.get(keys);
-        
-        // Check for new config format first
-        if (stored.ats_config) {
-            const config = stored.ats_config;
-            if (config.activeClient) ATS_CONFIG.activeClient = config.activeClient;
-            if (config.automationEnabled !== undefined) ATS_CONFIG.automationEnabled = config.automationEnabled;
-            if (config.autoSearchSF !== undefined) ATS_CONFIG.autoSearchSF = config.autoSearchSF;
-            if (config.transcriptionEnabled !== undefined) ATS_CONFIG.transcriptionEnabled = config.transcriptionEnabled;
-            if (config.aiAnalysisEnabled !== undefined) ATS_CONFIG.aiAnalysisEnabled = config.aiAnalysisEnabled;
-            if (config.saveMarkdown !== undefined) ATS_CONFIG.saveMarkdown = config.saveMarkdown;
-            if (config.salesforceUrl) ATS_CONFIG.salesforceUrl = config.salesforceUrl;
-            if (config.aiServerUrl) ATS_CONFIG.aiServerUrl = config.aiServerUrl;
-        }
-        
-        // Legacy support - check individual keys
-        if (stored.salesforceUrl) ATS_CONFIG.salesforceUrl = stored.salesforceUrl;
-        if (stored.aiServerUrl) ATS_CONFIG.aiServerUrl = stored.aiServerUrl;
-        if (stored.activeClient) ATS_CONFIG.activeClient = stored.activeClient;
-        if (stored.remoteLogUrl) ATS_CONFIG.remoteLogUrl = stored.remoteLogUrl;
-        
-        // Initialize storage with defaults if not set
-        if (!stored.aiServerUrl) {
-            await chrome.storage.local.set({ aiServerUrl: 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io' });
-        }
-        if (!stored.salesforceUrl) {
-            await chrome.storage.local.set({ salesforceUrl: 'https://flyland.my.salesforce.com' });
-        }
-        if (!stored.remoteLogUrl) {
-            const defaultUrl = 'https://ats-log-viewer.ashyocean-acabefe6.eastus.azurecontainerapps.io';
-            await chrome.storage.local.set({ remoteLogUrl: defaultUrl });
-            ATS_CONFIG.remoteLogUrl = defaultUrl;
-        }
-        
-        console.log('[AGS] Config loaded:', ATS_CONFIG);
-    } catch (error) {
-        console.error('[AGS] Error loading config:', error);
-    }
-}
-
-// Handle extension icon click - open as floating window if enabled
-chrome.action.onClicked.addListener(async (tab) => {
-    try {
-        const result = await chrome.storage.local.get('popupFloatEnabled');
-        
-        if (result.popupFloatEnabled) {
-            const windows = await chrome.windows.getAll();
-            const existingWindow = windows.find(w => 
-                w.type === 'popup' && 
-                w.url && 
-                w.url.includes('popup.html')
-            );
-            
-            if (existingWindow) {
-                await chrome.windows.update(existingWindow.id, { focused: true });
-            } else {
-                await chrome.windows.create({
-                    url: chrome.runtime.getURL('popup/popup.html'),
-                    type: 'popup',
-                    width: 400,
-                    height: 700,
-                    focused: true
-                });
-            }
-        } else {
-            // Default behavior - let Chrome handle the popup
-            // This won't work with onClicked, so we open the popup page directly
-            await chrome.windows.create({
-                url: chrome.runtime.getURL('popup/popup.html'),
-                type: 'popup',
-                width: 400,
-                height: 700,
-                focused: true
-            });
-        }
-    } catch (error) {
-        console.error('[AGS] Error handling click:', error);
-    }
-});
-
-// Remove duplicate function at end of file
-
-// Message handler
+// Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('[AGS Background] Received message:', message.type || message.action);
-
-    switch (message.type || message.action) {
-        case 'CONSOLE_INTERCEPT':
-            handleConsoleIntercept(message);
-            break;
-        case 'SET_BADGE':
-            if (message.color) {
-                chrome.action.setBadgeBackgroundColor({ color: message.color });
-            }
-            if (message.text) {
-                chrome.action.setBadgeText({ text: message.text });
-            } else {
-                chrome.action.setBadgeText({ text: '' });
-            }
-            break;
-        case 'CTM_CALL_EVENT':
-        case 'CALL_EVENT':
-            handleCallEvent(message.payload || message.data);
-            // Increment calls count
-            incrementStat('calls');
-            break;
-        case 'CTM_CALL_DETECTED':
-            handleCallDetected(message.payload || message.data);
-            break;
-        case 'SEARCH_SALESFORCE':
-            handleSearchSalesforce(message.payload || message.data);
-            // Increment searches count
-            incrementStat('searches');
-            break;
-        case 'TRANSCRIPTION_COMPLETE':
-            handleTranscriptionComplete(message.payload || message.data);
-            // Increment analysis count
-            incrementStat('analysis');
-            break;
-        case 'SF_RECORD_DATA':
-            handleSfRecordData(message.payload || message.data);
-            break;
-        case 'ATS_ACTION':
-            handleAtsAction(message.payload || message.data);
-            break;
-        case 'CLIENT_CHANGED':
-            handleClientChanged(message.client);
-            break;
-        case 'GET_CONFIG':
-            sendResponse(ATS_CONFIG);
-            break;
-        case 'PING':
-            sendResponse({ pong: true, status: 'ok' });
-            break;
-        case 'TRIGGER_AUTOMATION':
-            handleTriggerAutomation(message.payload, sender.tab?.id);
-            sendResponse({ success: true });
-            break;
-        case 'SHOW_CALL_ANALYSIS':
-            handleShowCallAnalysis(message.payload);
-            break;
-        case 'INCREMENT_STAT':
-            if (message.payload && message.payload.stat) {
-                incrementStat(message.payload.stat);
-            }
-            break;
-        case 'APPLY_CTM_TAG':
-            handleApplyCtmTag(message.payload);
-            break;
-        case 'GET_DESKTOP_SOURCES':
-            handleGetDesktopSources(message.payload).then(sources => {
-                sendResponse({ success: true, sources: sources });
-            }).catch(error => {
-                sendResponse({ success: false, error: error.message });
+    console.log('[BG] Message received:', message.type);
+    
+    switch (message.type) {
+        case 'START_TAB_CAPTURE':
+            handleStartCapture(message.tabId, sendResponse);
+            return true;
+            
+        case 'STOP_TAB_CAPTURE':
+            handleStopCapture(sendResponse);
+            return true;
+            
+        case 'GET_CAPTURE_STATUS':
+            sendResponse({
+                recording: currentCapture.recording,
+                tabId: currentCapture.tabId
             });
             return true;
-        case 'START_AUDIO_CAPTURE':
-            // Forward to content script for actual capture (requires user gesture context)
-            handleStartAudioCapture(message.payload, sender.tab?.id).then(result => {
-                sendResponse(result);
-            }).catch(error => {
-                sendResponse({ success: false, error: error.message });
-            });
+            
+        case 'SET_BADGE':
+            handleSetBadge(message.color, message.text);
+            sendResponse({ success: true });
+            return true;
+            
+        case 'CALL_DETECTED':
+            // Forward to popup if open
+            chrome.runtime.sendMessage({
+                type: 'CALL_DETECTED',
+                payload: message.payload
+            }).catch(() => {});
+            sendResponse({ success: true });
+            return true;
+            
+        default:
+            sendResponse({ error: 'Unknown message type' });
             return true;
     }
-
-    return true;
 });
 
-async function handleClientChanged(client) {
-    console.log('[AGS] Client changed to:', client);
-    ATS_CONFIG.activeClient = client;
-}
-
-async function handleCallEvent(payload) {
-    console.log('[AGS] Call event:', payload);
-
-    if (payload.event === 'call_started') {
-        callLog.push({
-            phone: payload.phoneNumber,
-            callerName: payload.callerName,
-            startTime: payload.timestamp,
-            status: payload.status
-        });
-
-        showOverlayNotification(`Incoming call: ${payload.phoneNumber || 'Unknown'}`);
-    } else if (payload.event === 'call_ended') {
-        if (callLog.length > 0) {
-            const lastCall = callLog[callLog.length - 1];
-            lastCall.endTime = payload.timestamp;
-            lastCall.duration = payload.timestamp - lastCall.startTime;
-        }
-    }
-}
-
-async function handleShowCallAnalysis(payload) {
-    console.log('[AGS] Showing call analysis:', payload);
-    
-    const result = payload;
-    
-    // Show overlay notification
-    showOverlayNotification(`Call analyzed: ${result.phone || 'Unknown'}`);
-    
-    // Send to all open popup windows
-    chrome.runtime.sendMessage({
-        type: 'CALL_ANALYSIS_RESULT',
-        payload: result
-    }).catch(() => {
-        // Popup might not be open, that's ok
-    });
-    
-    // Also update call log
-    callLog.push({
-        phone: result.phone,
-        callerName: result.callerName,
-        startTime: result.timestamp || Date.now(),
-        status: 'analyzed',
-        analysis: result
-    });
-}
-
-async function handleApplyCtmTag(payload) {
-    const { tag, phone } = payload;
-    console.log('[AGS] Applying CTM tag:', { tag, phone });
-    
-    // Forward to CTM tab to apply tag via DOM
+// Start capturing audio from tab
+async function handleStartCapture(tabId, sendResponse) {
     try {
-        const tabs = await chrome.tabs.query({ url: '*://*.calltrackingmetrics.com/*' });
+        // Stop any existing capture
+        if (currentCapture.recording) {
+            await stopCapture();
+        }
         
-        if (tabs.length > 0) {
-            chrome.tabs.sendMessage(tabs[0].id, {
-                type: 'APPLY_TAG',
-                payload: { tag, phone }
-            });
-        }
-    } catch (e) {
-        console.error('[AGS] Failed to apply tag:', e);
-    }
-}
-
-async function handleTriggerAutomation(payload, tabId) {
-    console.log('[AGS] Triggering automation:', payload);
-    
-    const { phone, callerName, transcript, status } = payload;
-    
-    // Get AI server URL
-    const result = await chrome.storage.local.get('aiServerUrl');
-    const serverUrl = result.aiServerUrl || 'http://localhost:8000';
-    
-    // Prepare automation request
-    const automationData = {
-        phone: phone,
-        callerName: callerName || 'Unknown',
-        transcript: transcript || '',
-        status: status || 'completed',
-        timestamp: payload.timestamp
-    };
-    
-    console.log('[AGS] Sending to automation server:', serverUrl);
-    
-    // Try to send to automation server
-    try {
-        const response = await fetch(`${serverUrl}/api/analyze`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(automationData)
+        // Get tab stream
+        const stream = await chrome.tabCapture.capture({
+            tabId: tabId,
+            audio: true,
+            video: false
         });
         
-        if (response.ok) {
-            const result = await response.json();
-            console.log('[AGS] Automation result:', result);
-            
-            // Show notification
-            showOverlayNotification(`Automation complete for ${phone}`);
-        } else {
-            console.error('[AGS] Automation failed:', response.status);
-            showOverlayNotification(`Automation failed for ${phone}`);
-        }
-    } catch (error) {
-        console.error('[AGS] Automation error:', error);
-        showOverlayNotification(`Automation error for ${phone}`);
-    }
-}
-
-async function handleSearchSalesforce(payload) {
-    const { phone } = payload;
-    if (!phone) {
-        console.error('[AGS] No phone number provided');
-        return;
-    }
-
-    // Ensure we have a Salesforce URL configured
-    if (!ATS_CONFIG.salesforceUrl) {
-        console.error('[AGS] Salesforce URL not configured. Please configure in popup.');
-        showOverlayNotification('⚠️ Salesforce URL not configured. Open extension settings.');
-        return;
-    }
-
-    console.log('[AGS] Searching Salesforce for:', phone);
-    console.log('[AGS] Using Salesforce URL:', ATS_CONFIG.salesforceUrl);
-
-    try {
-        const searchUrl = `${ATS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${encodeURIComponent(phone)}`;
-        
-        const tabs = await chrome.tabs.query({ url: '*://*.salesforce.com/*' });
-        
-        if (tabs.length > 0) {
-            await chrome.tabs.update(tabs[0].id, { url: searchUrl, active: true });
-            console.log('[AGS] Updated existing SF tab');
-        } else {
-            await chrome.tabs.create({ url: searchUrl });
-            console.log('[AGS] Created new SF tab');
-        }
-
-        showOverlayNotification(`Searching Salesforce for: ${phone}`);
-
-    } catch (error) {
-        console.error('[AGS] Error searching Salesforce:', error);
-        showOverlayNotification('⚠️ Error opening Salesforce');
-    }
-}
-
-async function handleTranscriptionComplete(payload) {
-    console.log('[AGS] Transcription complete:', payload);
-    
-    callLog.push({
-        phone: payload.phone,
-        callerName: payload.callerName,
-        transcription: payload.markdown,
-        timestamp: payload.timestamp
-    });
-
-    showOverlayNotification('Transcription saved! Processing with AI...');
-
-    processWithAI(payload);
-}
-
-async function processWithAI(payload) {
-    if (!ATS_CONFIG.aiAnalysisEnabled) {
-        console.log('[AGS] AI Analysis disabled');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${ATS_CONFIG.aiServerUrl}/api/analyze`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                transcription: payload.markdown,
-                phone: payload.phone,
-                client: ATS_CONFIG.activeClient
-            })
-        });
-
-        if (response.ok) {
-            const result = await response.json();
-            console.log('[AGS] AI Analysis result:', result);
-            
-            showOverlayNotification('AI Analysis complete!');
-            
-            await chrome.tabs.query({ url: '*://*.salesforce.com/*' }, (tabs) => {
-                if (tabs.length > 0) {
-                    chrome.tabs.sendMessage(tabs[0].id, {
-                        type: 'AI_ANALYSIS_RESULT',
-                        payload: result
-                    });
-                }
-            });
-        } else {
-            console.log('[AGS] AI server not available');
-        }
-    } catch (error) {
-        console.log('[AGS] AI server not running');
-    }
-}
-
-async function showOverlayNotification(message) {
-    try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        
-        if (tab && tab.id) {
-            chrome.tabs.sendMessage(tab.id, {
-                type: 'SHOW_NOTIFICATION',
-                payload: { message }
-            });
-        }
-    } catch (error) {
-        console.error('[AGS] Error showing notification:', error);
-    }
-}
-
-async function handleGetDesktopSources(payload) {
-    return new Promise((resolve, reject) => {
-        if (!chrome.desktopCapture) {
-            reject(new Error('Desktop capture not available'));
+        if (!stream) {
+            sendResponse({ error: 'Could not capture tab' });
             return;
         }
-
-        chrome.desktopCapture.getSources({
-            types: payload?.types || ['tab', 'window'],
-            thumbnailSize: payload?.thumbnailSize || { width: 150, height: 150 }
-        }, (sources) => {
-            if (chrome.runtime.lastError) {
-                reject(chrome.runtime.lastError);
-                return;
-            }
-            // Return simplified source info
-            const simplifiedSources = sources.map(source => ({
-                id: source.id,
-                name: source.name,
-                thumbnail: source.thumbnail ? source.thumbnail.toDataURL() : null
-            }));
-            resolve(simplifiedSources);
-        });
-    });
-}
-
-async function handleStartAudioCapture(payload, tabId) {
-    console.log('[AGS] START_AUDIO_CAPTURE received, tabId:', tabId);
-    
-    // Forward to the content script to handle the actual capture
-    // The content script has the AudioCaptureService and user gesture context
-    if (tabId) {
-        try {
-            // Send to content script - it will handle the capture
-            await chrome.tabs.sendMessage(tabId, {
-                type: 'START_AUDIO_CAPTURE',
-                payload: payload
-            });
-            return { success: true, message: 'Capture initiated' };
-        } catch (error) {
-            console.error('[AGS] Error forwarding to content script:', error);
-            return { success: false, error: error.message };
-        }
-    }
-    
-    return { success: false, error: 'No tab ID available' };
-}
-
-async function handleSfRecordData(payload) {
-    console.log('[AGS] SF Record data:', payload);
-}
-
-// Handle CTM call detected - trigger auto-analyze
-async function handleCallDetected(payload) {
-    console.log('[AGS] Call detected - auto-analyze:', payload);
-    
-    const { phoneNumber, callerName, status, autoAnalyze, serverUrl } = payload;
-    
-    if (!autoAnalyze || !phoneNumber) {
-        console.log('[AGS] Auto-analyze disabled or no phone number');
-        return;
-    }
-    
-    // Get configuration
-    const config = await getConfig();
-    
-    // Show notification that analysis is starting
-    showOverlayNotification(`Call detected from ${phoneNumber} - Starting AI analysis...`);
-    
-    // For now, we show the call info in the popup
-    // The full analysis would need transcription which comes after the call
-    // Or we can use the CTM call info directly
-    
-    // Open popup with call info
-    openPopupWithCallInfo({
-        phone: phoneNumber,
-        callerName: callerName,
-        status: status,
-        autoAnalyzed: true
-    });
-}
-
-// Open popup overlay with call information
-async function openPopupWithCallInfo(callInfo) {
-    try {
-        // Send message to open overlay with call info
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
-        if (tab && tab.id) {
-            chrome.tabs.sendMessage(tab.id, {
-                type: 'SHOW_CALL_INFO',
-                payload: callInfo
-            });
-        }
-        
-        console.log('[AGS] Popup opened with call info:', callInfo);
-        
-    } catch (error) {
-        console.error('[AGS] Error opening popup:', error);
-    }
-}
-
-async function handleAtsAction(payload) {
-    console.log('[AGS] Action triggered:', payload);
-    
-    const { action, data } = payload;
-    
-    switch (action) {
-        case 'search_sf':
-            handleSearchSalesforce({ phone: data.phone });
-            break;
-        case 'copy_note':
-            copyToClipboard(data.note);
-            break;
-        case 'insert_reply':
-            insertReply(data.reply);
-            break;
-        case 'fill-salesforce':
-            await handleFillSalesforce(data);
-            break;
-        case 'new-lead':
-        case 'existing-lead':
-            // These are handled by SalesforceActionService
-            handleSalesforceAction(action, data);
-            break;
-    }
-}
-
-async function copyToClipboard(text) {
-    try {
-        await navigator.clipboard.writeText(text);
-    } catch (error) {
-        console.error('[AGS] Error copying to clipboard:', error);
-    }
-}
-
-async function insertReply(text) {
-    try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab && tab.id) {
-            chrome.tabs.sendMessage(tab.id, {
-                type: 'INSERT_TEXT',
-                text
-            });
-        }
-    } catch (error) {
-        console.error('[AGS] Error inserting reply:', error);
-    }
-}
-
-// Handle Fill Salesforce button click
-async function handleFillSalesforce(data) {
-    console.log('[AGS] Fill Salesforce triggered:', data);
-    
-    const phone = data.phone;
-    const analysis = data.analysis || {};
-    const action = data.action || 'log_call';
-    
-    if (!phone) {
-        console.error('[AGS] No phone number provided for fill salesforce');
-        return;
-    }
-    
-    try {
-        // First, search for the contact
-        const searchUrl = `${ATS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${phone.replace(/\D/g, '')}`;
-        
-        // Open Salesforce search in new tab
-        const tab = await chrome.tabs.create({ url: searchUrl, active: true });
-        
-        // Wait for page to load
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Get the form type
-        const formType = action === 'new_task' ? 'NewTask' : 'LogCall';
-        
-        // Try to find contact and open form
-        await fillSalesforceForm(tab.id, formType, analysis);
-        
-    } catch (error) {
-        console.error('[AGS] Error in fill salesforce:', error);
-    }
-}
-
-// Fill the Salesforce form
-async function fillSalesforceForm(tabId, formType, analysis) {
-    console.log('[AGS] Filling Salesforce form:', formType);
-    
-    try {
-        // Inject content script to fill the form
-        await chrome.tabs.sendMessage(tabId, {
-            type: 'FILL_SALESFORME_FORM',
-            payload: {
-                formType: formType,
-                data: {
-                    subject: analysis.call_subject || analysis.recommended_department || 'Inbound Call',
-                    description: analysis.salesforce_notes || analysis.callNotes || analysis.summary || '',
-                    callNotes: analysis.call_notes || '',
-                    phone: analysis.phone || ''
-                }
-            }
+        // Set up media recorder
+        const mediaRecorder = new MediaRecorder(stream, {
+            mimeType: 'audio/webm;codecs=opus'
         });
         
-        console.log('[AGS] Form fill message sent');
+        currentCapture = {
+            tabId: tabId,
+            stream: stream,
+            mediaRecorder: mediaRecorder,
+            audioChunks: [],
+            recording: true
+        };
         
-    } catch (error) {
-        console.error('[AGS] Error filling form:', error);
+        // Collect audio data
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                currentCapture.audioChunks.push(event.data);
+            }
+        };
+        
+        // Start recording
+        mediaRecorder.start(1000);
+        
+        // Set badge
+        setBadge('#ef4444', 'REC');
+        
+        console.log('[BG] Started capturing tab', tabId);
+        
+        sendResponse({ success: true, tabId: tabId });
+        
+    } catch (e) {
+        console.error('[BG] Capture error:', e);
+        sendResponse({ error: e.message });
     }
 }
 
-// Handle new-lead / existing-lead actions
-async function handleSalesforceAction(action, data) {
-    console.log('[AGS] Salesforce action:', action, data);
-    
-    const phone = data.phone;
-    const analysis = data.analysis || {};
-    
-    // Get the action type from analysis
-    const actionType = analysis.action || 'log_call';
-    
-    if (!phone) {
-        console.error('[AGS] No phone number for Salesforce action');
-        return;
+// Stop capturing
+async function handleStopCapture(sendResponse) {
+    try {
+        await stopCapture();
+        setBadge('#22c55e', 'OK');
+        sendResponse({ success: true });
+    } catch (e) {
+        sendResponse({ error: e.message });
+    }
+}
+
+async function stopCapture() {
+    if (currentCapture.mediaRecorder && currentCapture.recording) {
+        currentCapture.mediaRecorder.stop();
     }
     
-    // Search for contact first
-    const searchUrl = `${ATS_CONFIG.salesforceUrl}/lightning/setup/Search/home?ws=%2Fsearch%2F%3FsearchType%3D2%26q%3D${phone.replace(/\D/g, '')}`;
+    if (currentCapture.stream) {
+        currentCapture.stream.getTracks().forEach(track => track.stop());
+    }
     
-    // Open search in new tab
-    const tab = await chrome.tabs.create({ url: searchUrl, active: true });
+    currentCapture = {
+        tabId: null,
+        stream: null,
+        mediaRecorder: null,
+        audioChunks: [],
+        recording: false
+    };
     
-    console.log('[AGS] Opened Salesforce search for:', phone);
+    console.log('[BG] Stopped capturing');
 }
+
+// Set badge
+function setBadge(color, text) {
+    try {
+        chrome.action.setBadgeBackgroundColor({ color: color });
+        chrome.action.setBadgeText({ text: text });
+    } catch (e) {
+        console.log('[BG] Badge error:', e);
+    }
+}
+
+// Handle badge setting from content scripts
+function handleSetBadge(color, text) {
+    setBadge(color, text);
+}
+
+console.log('[BG] ATS Background Service Worker loaded');

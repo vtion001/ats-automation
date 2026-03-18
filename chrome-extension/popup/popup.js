@@ -315,6 +315,12 @@ function bindConfigButton() {
     ge('configBtn')?.addEventListener('click', () => {
         window.open(chrome.runtime.getURL('config/config.html'), '_blank');
     });
+    
+    // Tab capture button - opens tab selector
+    ge('tabCaptureBtn')?.addEventListener('click', async () => {
+        // Open tab selector in new window
+        window.open(chrome.runtime.getURL('popup/tab-selector.html'), '_blank', 'width=450,height=600');
+    });
 }
 
 // Debug button to test overlay
