@@ -20,7 +20,7 @@ function getMessageType(message) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const msgType = getMessageType(message);
-    console.log('[BG] Message received:', msgType);
+    console.log('[BG] Message received:', msgType, 'from tab:', sender.tab?.id);
     
     switch (msgType) {
         case 'START_TAB_CAPTURE':
@@ -53,6 +53,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 type: 'CALL_DETECTED',
                 payload: message.payload
             }).catch(() => {});
+            sendResponse({ success: true });
+            return true;
+
+        case 'SHOW_CALL_ANALYSIS':
+            if (sender.tab?.id) {
+                chrome.tabs.sendMessage(sender.tab.id, {
+                    type: 'SHOW_CALL_ANALYSIS',
+                    payload: message.payload
+                }).catch(err => {
+                    console.error('[BG] Failed to forward SHOW_CALL_ANALYSIS to tab:', err);
+                });
+            }
             sendResponse({ success: true });
             return true;
             

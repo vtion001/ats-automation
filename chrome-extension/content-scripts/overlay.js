@@ -345,6 +345,104 @@
         document.head.appendChild(style);
     }
 
+    function showCallAnalysisOverlay(payload) {
+        createOverlay();
+        const content = document.querySelector(`#${OVERLAY_ID} .ats-overlay-content`);
+
+        const phone = payload.phone || '';
+        const callerName = payload.caller_name || payload.callerName || '';
+        const analysis = payload.analysis || {};
+        const score = analysis.qualification_score ?? payload.qualification_score ?? 0;
+        const sentiment = analysis.sentiment || payload.sentiment || 'neutral';
+        const summary = analysis.summary || payload.summary || '';
+        const tags = analysis.tags || payload.tags || [];
+        const disposition = analysis.suggested_disposition || payload.suggested_disposition || 'New';
+        const notes = analysis.salesforce_notes || payload.salesforce_notes || '';
+        const state = analysis.detected_state || payload.state || '';
+        const insurance = analysis.detected_insurance || payload.insurance || '';
+        const transcript = analysis.full_transcription || payload.transcript || payload.transcription || '';
+
+        const scoreClass = score >= 70 ? 'hot-lead' : score >= 40 ? 'follow-up' : 'unqualified';
+        const scoreLabel = score >= 70 ? 'Hot Lead' : score >= 40 ? 'Warm Lead' : 'Cold Lead';
+        const scoreColor = score >= 70 ? '#ff5722' : score >= 40 ? '#f59e0b' : '#9e9e9e';
+
+        let html = `
+            <div style="padding: 14px 16px; background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%); border-bottom: 1px solid #3d3d3d;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 44px; height: 44px; background: ${scoreColor}; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff;">
+                        ${score}
+                    </div>
+                    <div>
+                        <div style="font-size: 16px; font-weight: 700; color: #fff;">${scoreLabel}</div>
+                        <div style="font-size: 12px; color: #888;">${sentiment.charAt(0).toUpperCase() + sentiment.slice(1)} sentiment</div>
+                    </div>
+                    ${phone ? `<div style="margin-left: auto; font-size: 14px; color: #aaa; font-family: monospace;">${escapeHtml(phone)}</div>` : ''}
+                </div>
+            </div>
+            <div style="padding: 14px 16px;">
+        `;
+
+        if (tags.length > 0) {
+            html += `<div style="margin-bottom: 12px;">
+                <div style="font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 6px;">Tags</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    ${tags.map(tag => `<span class="ats-tag ${tag}">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+            </div>`;
+        }
+
+        if (state || insurance) {
+            html += `<div style="margin-bottom: 12px; display: flex; gap: 16px; font-size: 13px;">
+                ${state ? `<div><span style="color: #666;">State:</span> <span style="color: #fff;">${escapeHtml(state)}</span></div>` : ''}
+                ${insurance ? `<div><span style="color: #666;">Insurance:</span> <span style="color: #fff;">${escapeHtml(insurance)}</span></div>` : ''}
+            </div>`;
+        }
+
+        if (summary) {
+            html += `<div style="margin-bottom: 12px;">
+                <div style="font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 6px;">Summary</div>
+                <div style="font-size: 13px; color: #ccc; line-height: 1.4;">${escapeHtml(summary)}</div>
+            </div>`;
+        }
+
+        if (transcript) {
+            html += `<div style="margin-bottom: 12px;">
+                <div style="font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 6px;">Transcript</div>
+                <div class="ats-transcription">${escapeHtml(transcript)}</div>
+            </div>`;
+        }
+
+        if (notes) {
+            html += `<div style="margin-bottom: 12px;">
+                <div style="font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 6px;">Salesforce Notes</div>
+                <div style="background: rgba(49, 130, 206, 0.15); padding: 10px; border-radius: 6px; font-size: 12px; color: #ccc; line-height: 1.4; border: 1px solid rgba(49, 130, 206, 0.2); margin-bottom: 8px;">${escapeHtml(notes)}</div>
+                <button class="ats-copy-notes-btn" id="ats-copy-notes" style="background: #2d2d2d; border: 1px solid #444; color: #aaa; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    Copy Notes
+                </button>
+            </div>`;
+        }
+
+        html += `
+                <div style="font-size: 12px; color: #666; text-align: center; padding-top: 10px; border-top: 1px solid #333;">
+                    Disposition: <span style="color: #fff;">${escapeHtml(disposition)}</span>
+                </div>
+            </div>
+        `;
+
+        content.innerHTML = html;
+
+        const copyBtn = document.getElementById('ats-copy-notes');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(notes).then(() => {
+                    const orig = copyBtn.textContent;
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyBtn.textContent = orig; }, 1500);
+                });
+            });
+        }
+    }
+
     function showData(data) {
         createOverlay();
         const content = document.querySelector(`#${OVERLAY_ID} .ats-overlay-content`);
@@ -447,8 +545,10 @@
             case 'SHOW_CALL_IN_PROGRESS':
                 showCallInProgress(message.payload.phoneNumber, message.payload.callerName);
                 break;
+            case 'SHOW_CALL_ANALYSIS':
+                showCallAnalysisOverlay(message.payload);
+                break;
             case 'START_AUDIO_CAPTURE':
-                // Trigger audio capture via message to background or call monitor
                 console.log('[ATS] START_AUDIO_CAPTURE received in overlay.js');
                 break;
             case 'AI_ANALYSIS_RESULT':
