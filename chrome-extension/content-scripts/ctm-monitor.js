@@ -391,9 +391,26 @@
     }
 
     // =============================================================================
+    // URL VALIDATION - Only run on the live softphone page
+    // =============================================================================
+    const CTM_SOFTPHONE_PATH = '/calls/phone';
+    
+    function isOnSoftphonePage() {
+        const url = window.location.href;
+        const pathname = new URL(url).pathname;
+        return pathname === CTM_SOFTPHONE_PATH || pathname.endsWith('/calls/phone');
+    }
+
+    // =============================================================================
     // INITIALIZATION
     // =============================================================================
     async function init() {
+        // Only run on the CTM live softphone page (/calls/phone)
+        if (!isOnSoftphonePage()) {
+            console.log('[ATS] Not on CTM softphone page (/calls/phone), skipping monitor');
+            return;
+        }
+        
         await loadConfig();
         
         logInfo('CTM Monitor initializing', { 

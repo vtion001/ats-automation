@@ -37,7 +37,11 @@
     
     function isCTMPage() {
         const hostname = window.location.hostname;
-        return hostname.includes('calltrackingmetrics') || hostname.includes('ctm');
+        const pathname = new URL(window.location.href).pathname;
+        
+        // Must be on CTM AND be the live softphone page (/calls/phone)
+        return (hostname.includes('calltrackingmetrics') || hostname.includes('ctm'))
+            && (pathname === '/calls/phone' || pathname.endsWith('/calls/phone'));
     }
     
     function startCallMonitoring() {

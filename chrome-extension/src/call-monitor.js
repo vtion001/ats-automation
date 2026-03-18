@@ -121,8 +121,15 @@ class CallMonitor {
     }
 }
 
-// Auto-start when page loads
+// Auto-start when page loads (only on softphone page)
 document.addEventListener('DOMContentLoaded', () => {
+    // Only run on the CTM live softphone page (/calls/phone)
+    const pathname = new URL(window.location.href).pathname;
+    if (pathname !== '/calls/phone' && !pathname.endsWith('/calls/phone')) {
+        console.log('[CallMonitor] Not on softphone page, skipping');
+        return;
+    }
+    
     const monitor = new CallMonitor();
     monitor.start();
     
