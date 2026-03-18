@@ -20,16 +20,16 @@
 
 ## Recent Changes (append-only)
 ```
-2026-03-18 16:30 - session-1 (OpenCode) - main
-  Files: background/service-worker.js, popup/tab-selector.js, popup/tab-selector.html
-  Changes: 
-    - Fixed message key mismatch (action: -> type:) in tab-selector.js
-    - Service worker now stores audio blob as base64 in chrome.storage.local
-    - Added GET_CAPTURED_AUDIO and CLEAR_CAPTURED_AUDIO message handlers
-    - Added full pipeline: record -> fetch audio -> POST /api/transcribe -> analyze -> display results
-    - Added manual transcript input fallback if transcription fails
-    - Added analysis results display with score badge, tags, summary, transcript, SF notes
-  Server: /api/transcribe endpoint already exists (faster-whisper base model)
+2026-03-18 17:55 - session-1 (OpenCode) - main
+  Files: server/routes/transcribe.py, server/routes/remote_logs.py, server/core/app.py, chrome-extension/background/service-worker.js, chrome-extension/popup/tab-selector.js, chrome-extension/popup/tab-selector.html
+  Changes:
+    - Fixed server /api/transcribe endpoint (base64 audio -> faster-whisper -> analyze)
+    - Fixed transcribe.py: proper import, route order, error handling
+    - Fixed remote_logs.py: added missing 'Any' import
+    - Tab Record: capture -> storage -> transcribe -> analyze -> display results
+    - Fallback: manual transcript input if transcription fails
+    - Results display: score badge, tags, summary, transcript, SF notes
+  Server: v16 deployed, /api/transcribe working
 ```
 
 ## Pending / In Progress

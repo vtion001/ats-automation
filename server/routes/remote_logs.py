@@ -4,7 +4,7 @@ Remote log aggregation endpoint - receives and serves logs from CTM monitors
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from services import remote_log_storage
 
 router = APIRouter(prefix="/api", tags=["remote_logs"])
