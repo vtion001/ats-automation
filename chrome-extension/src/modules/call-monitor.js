@@ -122,20 +122,32 @@ class CallMonitor {
     async checkWebhookResults(phoneNumber) {
         try {
             const serverUrl = this.aiService.serverUrl;
-            const response = await fetch(serverUrl + '/api/webhook-results?phone=' + phoneNumber, {
+            const response = await fetch(serverUrl + '/api/webhook-results?phone=' + encodeURIComponent(phoneNumber), {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' }
             });
             
             if (response.ok) {
-                const result = await response.json();
-                if (result.analysis) {
+                const data = await response.json();
+                
+                // Handle the response format - could be direct result or wrapped in results array
+                let result = null;
+                
+                if (data.results && data.results.length > 0) {
+                    // Results are in an array, find by phone
+                    result = data.results.find(r => r.phone === phoneNumber);
+                } else if (data.phone === phoneNumber || data.analysis) {
+                    // Direct result format
+                    result = data;
+                }
+                
+                if (result && result.analysis) {
                     ATS.logger.info('[Webhook] Analysis received:', result.analysis.tags || []);
                     return result;
                 }
             }
         } catch (e) {
-            ATS.logger.debug('[Webhook] Poll no result:', e.message);
+            ATS.logger.debug('[Webhook] Poll error:', e.message);
         }
         return null;
     }
