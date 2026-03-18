@@ -1,6 +1,0 @@
-{
-  "system": "turboscribe",
-  "client": "element",
-  "watch_folder": "~/Downloads/TurboScribe",
-  "notes": "Element uses TurboScribe - read transcript exports as NLP input"
-}
