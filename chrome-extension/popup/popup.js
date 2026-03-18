@@ -150,17 +150,23 @@ async function runAllServiceChecks(statusManager, skipStatus = false) {
                 const isOnline = results.ctmMonitor;
                 const label = StatusService.getCTMStatusText(results.ctmStatus);
                 statusManager.updateServiceStatus(s, isOnline, label);
+            } else if (s === 'salesforce') {
+                const sfResult = results.salesforce;
+                const isOnline = sfResult.connected;
+                const label = StatusService.getSalesforceStatusText(sfResult);
+                statusManager.updateServiceStatus(s, isOnline, label);
             } else {
                 statusManager.updateServiceStatus(s, results[s]);
             }
         });
         
-        // Update main status
-        const allPassed = services.every(s => s === 'ctm' ? results.ctmMonitor : results[s]);
-        statusManager.updateMainStatus(allPassed);
+        // Core services that must pass for main status to be "Ready"
+        const coreServices = ['storage', 'aiServer', 'background'];
+        const corePassed = coreServices.every(s => results[s]);
+        statusManager.updateMainStatus(corePassed);
         
         if (!skipStatus) {
-            statusManager.showStatus(allPassed ? 'Ready' : 'Issues detected', allPassed);
+            statusManager.showStatus(corePassed ? 'Ready' : 'Issues detected', corePassed);
         }
         
     } catch(e) {
@@ -293,18 +299,27 @@ function bindTestButtons(testPanel) {
         
         try {
             const results = await StatusService.runAllTests();
-            const services = ['storage', 'aiServer', 'salesforce', 'background', 'ctm'];
             
-            // Update each service status (handle ctm separately)
+            // Update each service status
+            const services = ['storage', 'aiServer', 'salesforce', 'background', 'ctm'];
             services.forEach(s => {
-                const status = s === 'ctm' ? results.ctmMonitor : results[s];
-                window.StatusManager.updateServiceStatus(s, status);
+                if (s === 'ctm') {
+                    const label = StatusService.getCTMStatusText(results.ctmStatus);
+                    window.StatusManager.updateServiceStatus(s, results.ctmMonitor, label);
+                } else if (s === 'salesforce') {
+                    const sfResult = results.salesforce;
+                    const label = StatusService.getSalesforceStatusText(sfResult);
+                    window.StatusManager.updateServiceStatus(s, sfResult.connected, label);
+                } else {
+                    window.StatusManager.updateServiceStatus(s, results[s]);
+                }
             });
             
-            // Check if all passed
-            const allPassed = services.every(s => s === 'ctm' ? results.ctmMonitor : results[s]);
-            window.StatusManager.showStatus(allPassed ? 'All services online!' : 'Issues detected', allPassed);
-            window.StatusManager.updateMainStatus(allPassed);
+            // Core services that must pass: storage, aiServer, background
+            const coreServices = ['storage', 'aiServer', 'background'];
+            const corePassed = coreServices.every(s => results[s]);
+            window.StatusManager.showStatus(corePassed ? 'Core services online!' : 'Core issues detected', corePassed);
+            window.StatusManager.updateMainStatus(corePassed);
             window.StatusManager.updateStats();
         } catch(e) { window.ToastManager.error('Test failed: ' + e.message); }
     });
@@ -365,12 +380,16 @@ let recordingMonitorInterval = null;
 
 async function checkRecordingState(statusManager) {
     try {
-        // Check service worker recording state
-        const response = await chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATUS' });
+        // Check service worker recording state (with timeout for cold SW)
+        const response = await new Promise(resolve => {
+            const timeout = setTimeout(() => resolve(null), 3000);
+            chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATUS' }, (r) => {
+                clearTimeout(timeout);
+                resolve(r);
+            });
+        });
         
         if (response && response.recording) {
-            // Recording is active
-            statusManager.updateServiceStatus('background', true, 'Active');
             statusManager.updateServiceStatus('recording', true, 'Recording');
             return;
         }
@@ -381,24 +400,25 @@ async function checkRecordingState(statusManager) {
         });
         
         if (stateResult?.ats_recording_state?.recording) {
-            statusManager.updateServiceStatus('background', true, 'Active');
             statusManager.updateServiceStatus('recording', true, 'Recording');
             return;
         }
         
         // Check if analysis result is waiting
         const analysisResult = await new Promise(resolve => {
-            chrome.runtime.sendMessage({ type: 'GET_ANALYSIS_RESULT' }, resolve);
+            const timeout = setTimeout(() => resolve(null), 3000);
+            chrome.runtime.sendMessage({ type: 'GET_ANALYSIS_RESULT' }, (r) => {
+                clearTimeout(timeout);
+                resolve(r);
+            });
         });
         
         if (analysisResult?.result) {
-            statusManager.updateServiceStatus('background', true, 'Analysis Ready');
             statusManager.updateServiceStatus('recording', true, 'Processing');
             return;
         }
         
         // No recording active
-        statusManager.updateServiceStatus('background', false);
         statusManager.updateServiceStatus('recording', false);
         
     } catch (e) {

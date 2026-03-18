@@ -29,23 +29,28 @@ const StatusService = {
             const result = await StorageService.get('salesforceUrl');
             const sfUrl = result.salesforceUrl;
             if (!sfUrl) {
-                return false;
+                return { configured: false, status: 'not_configured', connected: false };
             }
             const response = await fetch(`${sfUrl}/services/data/`, { 
                 method: 'GET', 
                 signal: AbortSignal.timeout(5000),
                 credentials: 'include'
             });
-            return response.ok || response.status === 401;
+            return { configured: true, status: response.ok || response.status === 401 ? 'connected' : 'error', connected: response.ok || response.status === 401 };
         } catch(e) {
             console.log('[StatusService] Salesforce test failed:', e.message);
-            return false;
+            return { configured: false, status: 'not_configured', connected: false };
         }
     },
 
     async testBackground() {
         return new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+                resolve(false);
+            }, 8000);
+
             chrome.runtime.sendMessage({ action: 'PING' }, (response) => {
+                clearTimeout(timeout);
                 resolve(response && response.pong === true);
             });
         });
@@ -58,13 +63,18 @@ const StatusService = {
             });
 
             if (tabs.length === 0) {
-                return { status: 'no_tab', connected: false, tabId: null };
+                return { status: 'no_tab', connected: false, tabId: null, reason: 'no_ctm_tab' };
             }
 
             const tabId = tabs[0].id;
 
             const result = await new Promise(resolve => {
+                const timeout = setTimeout(() => {
+                    resolve({ error: 'timeout' });
+                }, 5000);
+
                 chrome.tabs.sendMessage(tabId, { type: 'GET_CTM_MONITOR_STATE' }, (response) => {
+                    clearTimeout(timeout);
                     if (chrome.runtime.lastError) {
                         resolve({ error: chrome.runtime.lastError.message });
                     } else {
@@ -87,15 +97,16 @@ const StatusService = {
                     connected: result.initialized || false,
                     tabId: tabId,
                     phone: result.phone || null,
-                    state: result.state
+                    state: result.state,
+                    reason: 'ctm_tab_open'
                 };
             }
 
-            return { status: 'no_response', connected: false, tabId: tabId };
+            return { status: 'no_response', connected: false, tabId: tabId, reason: 'no_monitor_response' };
 
         } catch(e) {
             console.log('[StatusService] CTM test error:', e.message);
-            return { status: 'error', connected: false, error: e.message };
+            return { status: 'error', connected: false, error: e.message, reason: 'exception' };
         }
     },
 
@@ -103,20 +114,23 @@ const StatusService = {
         const results = {
             storage: false,
             aiServer: false,
-            salesforce: false,
+            salesforce: { configured: false, status: 'not_configured', connected: false },
             background: false,
             ctmMonitor: false,
-            ctmStatus: null
+            ctmStatus: null,
+            ctmReason: null
         };
 
         results.storage = await StorageService.testStorage();
         results.aiServer = await this.testAIServer();
-        results.salesforce = await this.testSalesforce();
+        const sfResult = await this.testSalesforce();
+        results.salesforce = sfResult;
         results.background = await this.testBackground();
         
         const ctmResult = await this.testCTM();
         results.ctmMonitor = ctmResult.connected;
         results.ctmStatus = ctmResult.status;
+        results.ctmReason = ctmResult.reason || ctmResult.error || null;
 
         return results;
     },
@@ -131,11 +145,17 @@ const StatusService = {
             case 'connected': return 'Connected';
             case 'opening': return 'Opening CTM...';
             case 'tab_open': return 'Tab open';
-            case 'no_tab': return 'No CTM tab';
+            case 'no_tab': return 'Open CTM tab';
             case 'no_response': return 'No response';
             case 'error': return 'Error';
             default: return 'Not connected';
         }
+    },
+
+    getSalesforceStatusText(result) {
+        if (!result.configured) return 'Not configured';
+        if (result.status === 'connected') return 'Connected';
+        return 'Error';
     },
 };
 
