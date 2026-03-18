@@ -3,22 +3,28 @@
  * Handles tab audio capture, messages, and badge updates
  */
 
-// Tab capture state
+const AUDIO_STORAGE_KEY = 'ats_captured_audio';
+
 let currentCapture = {
     tabId: null,
     stream: null,
     mediaRecorder: null,
     audioChunks: [],
-    recording: false
+    recording: false,
+    startTime: null
 };
 
-// Handle messages from content scripts and popup
+function getMessageType(message) {
+    return message.type || message.action;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('[BG] Message received:', message.type);
+    const msgType = getMessageType(message);
+    console.log('[BG] Message received:', msgType);
     
-    switch (message.type) {
+    switch (msgType) {
         case 'START_TAB_CAPTURE':
-            handleStartCapture(message.tabId, sendResponse);
+            handleStartCapture(message.tabId || message.payload?.tabId, sendResponse);
             return true;
             
         case 'STOP_TAB_CAPTURE':
@@ -28,8 +34,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'GET_CAPTURE_STATUS':
             sendResponse({
                 recording: currentCapture.recording,
-                tabId: currentCapture.tabId
+                tabId: currentCapture.tabId,
+                startTime: currentCapture.startTime
             });
+            return true;
+            
+        case 'GET_CAPTURED_AUDIO':
+            getCapturedAudio(sendResponse);
+            return true;
+            
+        case 'CLEAR_CAPTURED_AUDIO':
+            clearCapturedAudio();
+            sendResponse({ success: true });
             return true;
             
         case 'SET_BADGE':
@@ -38,7 +54,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return true;
             
         case 'CALL_DETECTED':
-            // Forward to popup if open
             chrome.runtime.sendMessage({
                 type: 'CALL_DETECTED',
                 payload: message.payload
@@ -52,15 +67,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
-// Start capturing audio from tab
 async function handleStartCapture(tabId, sendResponse) {
     try {
-        // Stop any existing capture
         if (currentCapture.recording) {
             await stopCapture();
         }
         
-        // Get tab stream
         const stream = await chrome.tabCapture.capture({
             tabId: tabId,
             audio: true,
@@ -72,35 +84,32 @@ async function handleStartCapture(tabId, sendResponse) {
             return;
         }
         
-        // Set up media recorder
-        const mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'audio/webm;codecs=opus'
-        });
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : 'audio/webm';
+        
+        const mediaRecorder = new MediaRecorder(stream, { mimeType });
         
         currentCapture = {
             tabId: tabId,
             stream: stream,
             mediaRecorder: mediaRecorder,
             audioChunks: [],
-            recording: true
+            recording: true,
+            startTime: Date.now()
         };
         
-        // Collect audio data
         mediaRecorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
                 currentCapture.audioChunks.push(event.data);
             }
         };
         
-        // Start recording
         mediaRecorder.start(1000);
-        
-        // Set badge
         setBadge('#ef4444', 'REC');
-        
         console.log('[BG] Started capturing tab', tabId);
         
-        sendResponse({ success: true, tabId: tabId });
+        sendResponse({ success: true, tabId: tabId, startTime: currentCapture.startTime });
         
     } catch (e) {
         console.error('[BG] Capture error:', e);
@@ -108,38 +117,116 @@ async function handleStartCapture(tabId, sendResponse) {
     }
 }
 
-// Stop capturing
 async function handleStopCapture(sendResponse) {
     try {
-        await stopCapture();
+        const result = await stopCapture();
         setBadge('#22c55e', 'OK');
-        sendResponse({ success: true });
+        sendResponse({ success: true, ...result });
     } catch (e) {
         sendResponse({ error: e.message });
     }
 }
 
 async function stopCapture() {
-    if (currentCapture.mediaRecorder && currentCapture.recording) {
-        currentCapture.mediaRecorder.stop();
-    }
-    
-    if (currentCapture.stream) {
-        currentCapture.stream.getTracks().forEach(track => track.stop());
-    }
-    
-    currentCapture = {
-        tabId: null,
-        stream: null,
-        mediaRecorder: null,
-        audioChunks: [],
-        recording: false
-    };
-    
-    console.log('[BG] Stopped capturing');
+    return new Promise((resolve) => {
+        if (!currentCapture.mediaRecorder) {
+            resolve({ hasAudio: false });
+            return;
+        }
+        
+        currentCapture.mediaRecorder.onstop = async () => {
+            let hasAudio = false;
+            
+            if (currentCapture.audioChunks.length > 0) {
+                const blob = new Blob(currentCapture.audioChunks, { type: 'audio/webm' });
+                
+                if (blob.size > 0) {
+                    hasAudio = true;
+                    
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        const base64 = reader.result.split(',')[1];
+                        
+                        await chrome.storage.local.set({
+                            [AUDIO_STORAGE_KEY]: {
+                                data: base64,
+                                mimeType: 'audio/webm',
+                                tabId: currentCapture.tabId,
+                                startTime: currentCapture.startTime,
+                                duration: currentCapture.startTime ? Math.round((Date.now() - currentCapture.startTime) / 1000) : 0,
+                                timestamp: Date.now()
+                            }
+                        });
+                        
+                        console.log('[BG] Audio stored, size:', blob.size, 'bytes');
+                    };
+                    reader.readAsDataURL(blob);
+                }
+            }
+            
+            if (currentCapture.stream) {
+                currentCapture.stream.getTracks().forEach(track => track.stop());
+            }
+            
+            currentCapture = {
+                tabId: null,
+                stream: null,
+                mediaRecorder: null,
+                audioChunks: [],
+                recording: false,
+                startTime: null
+            };
+            
+            console.log('[BG] Stopped capturing, hasAudio:', hasAudio);
+            resolve({ hasAudio });
+        };
+        
+        if (currentCapture.recording) {
+            currentCapture.mediaRecorder.stop();
+        } else {
+            if (currentCapture.stream) {
+                currentCapture.stream.getTracks().forEach(track => track.stop());
+            }
+            currentCapture = {
+                tabId: null,
+                stream: null,
+                mediaRecorder: null,
+                audioChunks: [],
+                recording: false,
+                startTime: null
+            };
+            resolve({ hasAudio: false });
+        }
+    });
 }
 
-// Set badge
+async function getCapturedAudio(sendResponse) {
+    try {
+        const result = await chrome.storage.local.get(AUDIO_STORAGE_KEY);
+        const audioData = result[AUDIO_STORAGE_KEY];
+        
+        if (audioData && audioData.data) {
+            sendResponse({
+                success: true,
+                audio: audioData.data,
+                mimeType: audioData.mimeType,
+                tabId: audioData.tabId,
+                startTime: audioData.startTime,
+                duration: audioData.duration,
+                timestamp: audioData.timestamp
+            });
+        } else {
+            sendResponse({ success: false, error: 'No audio captured' });
+        }
+    } catch (e) {
+        sendResponse({ success: false, error: e.message });
+    }
+}
+
+async function clearCapturedAudio() {
+    await chrome.storage.local.remove(AUDIO_STORAGE_KEY);
+}
+
 function setBadge(color, text) {
     try {
         chrome.action.setBadgeBackgroundColor({ color: color });
@@ -149,7 +236,6 @@ function setBadge(color, text) {
     }
 }
 
-// Handle badge setting from content scripts
 function handleSetBadge(color, text) {
     setBadge(color, text);
 }

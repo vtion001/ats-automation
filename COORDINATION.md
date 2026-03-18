@@ -20,9 +20,16 @@
 
 ## Recent Changes (append-only)
 ```
-2026-03-18 16:00 - session-1 (OpenCode) - main
-  Files: popup/tab-selector.html, popup/tab-selector.js, popup/popup.html
-  Changes: Tab Audio Capture theme alignment - removed all emojis, added SVG icons, added recording timer + pulsing dot indicator, enterprise theme (#1e3a5f, #3182ce)
+2026-03-18 16:30 - session-1 (OpenCode) - main
+  Files: background/service-worker.js, popup/tab-selector.js, popup/tab-selector.html
+  Changes: 
+    - Fixed message key mismatch (action: -> type:) in tab-selector.js
+    - Service worker now stores audio blob as base64 in chrome.storage.local
+    - Added GET_CAPTURED_AUDIO and CLEAR_CAPTURED_AUDIO message handlers
+    - Added full pipeline: record -> fetch audio -> POST /api/transcribe -> analyze -> display results
+    - Added manual transcript input fallback if transcription fails
+    - Added analysis results display with score badge, tags, summary, transcript, SF notes
+  Server: /api/transcribe endpoint already exists (faster-whisper base model)
 ```
 
 ## Pending / In Progress
