@@ -20,34 +20,89 @@
 
 ## Recent Changes (append-only)
 ```
-2026-03-18 18:15 - session-1 (OpenCode) - main
-  Files: server/services/__init__.py, server/routes/analyze.py, DOCUMENTATION.md, deploy-azure.sh
-  Changes:
-    - CRITICAL FIX: services/__init__.py - imported ai_service INSTANCE (AIService) not module
-      - Root cause: `from . import ai_service` imported MODULE, not the `ai_service = AIService()` instance
-      - Symptom: "AttributeError: module 'services.ai_service' has no attribute 'analyze'"
-      - Fix: `from .ai_service import ai_service, AIService` (imports the INSTANCE)
-    - Fixed analyze.py: used wrong `API_KEY` (ATS_API_KEY) vs `OPENROUTER_API_KEY`
-    - All 10 server endpoints now PASSING (health, analyze, transcribe, webhook, results, etc.)
-    - Updated DOCUMENTATION.md with Tab Record, CTM webhook, new server URL
-    - Fixed deploy-azure.sh: uses `update` not `create`, includes ACR login
-  Server: v19 deployed (revision 0000022)
+2026-03-18 18:25 - session-1 (OpenCode) - main
+  Review: chrome-extension files (service-worker.js, popup.js, tab-selector.js, 
+           overlay-ui.js, ctm-monitor.js, overlay.js, manifest.json, core.js)
+  Findings: 3 CRITICAL BUGS found + 2 architectural issues
 ```
-```
-2026-03-18 17:55 - session-1 (OpenCode) - main
-  Files: server/routes/transcribe.py, server/routes/remote_logs.py, server/core/app.py, chrome-extension/background/service-worker.js, chrome-extension/popup/tab-selector.js, chrome-extension/popup/tab-selector.html
-  Changes:
-    - Fixed server /api/transcribe endpoint (base64 audio -> faster-whisper -> analyze)
-    - Fixed transcribe.py: proper import, route order, error handling
-    - Fixed remote_logs.py: added missing 'Any' import
-    - Tab Record: capture -> storage -> transcribe -> analyze -> display results
-    - Fallback: manual transcript input if transcription fails
-    - Results display: score badge, tags, summary, transcript, SF notes
-  Server: v16 deployed, /api/transcribe working
-```
+
+## Critical Bugs Found
+
+### BUG 1: `SHOW_CALL_ANALYSIS` message falls into void (HIGH SEVERITY)
+- **Location**: `service-worker.js` (lines 21-62) + `ctm-monitor.js` (line 282)
+- **Problem**: `ctm-monitor.js` sends `SHOW_CALL_ANALYSIS` to the service worker, but the service worker's message handler has NO case for it. Falls into `default:` and returns `{ error: 'Unknown message type' }`.
+- **Impact**: Webhook results from CTM calls NEVER trigger an overlay on the CTM page. The entire webhook-driven overlay flow is broken.
+- **Fix needed**: Add `SHOW_CALL_ANALYSIS` handler to service-worker.js that uses `chrome.tabs.sendMessage` to forward to the CTM tab's content script.
+
+### BUG 2: `overlay.js` content script doesn't listen for `SHOW_CALL_ANALYSIS` (HIGH SEVERITY)
+- **Location**: `content-scripts/overlay.js` (line 436-458)
+- **Problem**: The content script injected into CTM pages only handles: `SHOW_OVERLAY`, `SHOW_NOTIFICATION`, `SHOW_CALL_SUMMARY`, `SHOW_CALL_IN_PROGRESS`, `AI_ANALYSIS_RESULT`, `START_AUDIO_CAPTURE`. Missing `SHOW_CALL_ANALYSIS`.
+- **Impact**: Even if service-worker forwards the message, the overlay won't display because the content script doesn't know how to render it.
+- **Fix needed**: Add `SHOW_CALL_ANALYSIS` case to overlay.js message listener, calling `showData()` or a new `showCallAnalysis()` method.
+
+### BUG 3: `overlay-ui.js` (popup module) vs `overlay.js` (content script) — two divergent overlay systems (ARCHITECTURAL)
+- **Problem**: `overlay-ui.js` is a fancy module used ONLY by the popup window (for debug button). It has its own light-themed CSS and cannot inject into CTM page DOM. `overlay.js` is the actual CTM-page overlay with dark theme. They are completely separate with different rendering logic.
+- **Impact**: Debug button in popup works but shows a popup-local overlay (not visible on CTM page). The debug button tests `showCallAnalysis()` from overlay-ui.js which renders in the popup window, NOT on the CTM page where agents work.
+- **Fix needed**: Either (a) unify into one overlay system, or (b) ensure the debug button triggers the content-script overlay on the CTM tab instead of the popup-local one.
+
+### BUG 4: Service worker capture handlers return errors but are still called (MEDIUM)
+- **Location**: `service-worker.js` lines 26-31
+- **Problem**: `START_TAB_CAPTURE` and `STOP_TAB_CAPTURE` return errors saying "Capture now runs in popup". However, `tab-selector.js` handles its own capture. The service worker's capture handlers (lines 65-130) still exist and have full implementation but are never invoked since tab-selector bypasses them. Dead code.
+- **Impact**: No functional impact, but code is confusing and could lead to future bugs.
+- **Fix needed**: Remove the dead capture handlers from service-worker.js, or update `tab-selector.js` to use them instead of duplicating the logic.
+
+## Missing Pieces in the Pipeline
+
+### Missing: MutationObserver for CTM DOM call detection (HIGH PRIORITY)
+- **Current state**: `ctm-monitor.js` relies ONLY on CTM's custom events (`ctm:live-activity`, `ctm:stationCheck`, `ctm:screen-pop`). The `CTMService` in `src/services/ctm-service.js` listens for these events, but `ctm-monitor.js` (the webhook poller) doesn't use them at all.
+- **Problem**: If CTM events don't fire (event batching, timing issues, page state changes), call detection fails silently.
+- **Missing**: A MutationObserver in `ctm-monitor.js` (or a separate detector) that watches CTM page DOM for call state changes (ringing indicators, call UI panels, phone number elements, call timers).
+- **Recommended approach**: Add MutationObserver to `ctm-monitor.js` that watches for:
+  - `.ringing`, `.in-call`, `.call-active` CSS class changes
+  - Call timer elements appearing
+  - Phone number text nodes in call UI
+  - Call state indicators (#call-status, .call-panel, etc.)
+  - This provides fallback detection independent of CTM events
+
+### Missing: Two parallel call monitoring stacks (ARCHITECTURAL)
+- `src/services/ctm-service.js` + `src/call-monitor.js` + `src/main.js` — the "new" content script stack (listed in manifest.json)
+- `content-scripts/ctm-monitor.js` — the "legacy" webhook poller content script (separate file, not in src/)
+- Both inject into CTM pages. Unclear which one is authoritative. Potential double-processing.
+
+## What DOM Monitoring Approach Should Be Used
+
+### Recommended hybrid approach:
+1. **Primary**: Keep `ctm-monitor.js` webhook polling (already works reliably for analyzed results)
+2. **Enhancement**: Add MutationObserver in `ctm-monitor.js` for call STATE detection (incoming call, phone number extraction)
+3. **Integration**: When MutationObserver detects a call, dispatch custom `ctm:live-activity` event so CTMService can process it
+4. **Fallback**: If CTM events fire but webhook results don't arrive, use polling results (already have 5s poll interval)
+5. **Deprecate**: The `src/services/ctm-service.js` stack should be consolidated with `ctm-monitor.js` to avoid dual monitoring
+
+## Recommended Next Steps
+
+### Phase 1: Fix the broken overlay flow (do first)
+1. Add `SHOW_CALL_ANALYSIS` handler to `service-worker.js` that forwards to CTM tab content script
+2. Add `SHOW_CALL_ANALYSIS` case to `overlay.js` content script message listener
+3. Test: make a CTM webhook call and verify overlay appears
+
+### Phase 2: Add MutationObserver DOM monitoring
+1. Add MutationObserver to `ctm-monitor.js` to detect CTM call states from DOM
+2. Watch for CSS class changes, element visibility, and text content for call indicators
+3. Fire `ctm:live-activity` custom event when call detected so the system can respond
+
+### Phase 3: Unify overlay systems
+1. Decide: keep `overlay-ui.js` (popup) + `overlay.js` (CTM page) as separate, OR consolidate
+2. Update debug button to trigger content-script overlay on CTM tab (not popup-local)
+3. Remove dead service-worker capture code
+
+### Phase 4: Consolidate monitoring stacks
+1. Choose ONE call monitoring approach (prefer `ctm-monitor.js` since it has webhook polling)
+2. Merge or remove `src/services/ctm-service.js` / `src/call-monitor.js` / `src/main.js` stack
+3. Update manifest.json content_scripts array
 
 ## Pending / In Progress
 - Real CTM call test (need to make actual call)
+- Add MutationObserver DOM call detection
 
 ## Completed
 - [x] CTM webhook endpoint with CTM field mapping
@@ -63,3 +118,7 @@
 - [x] ai_service import fix (services/__init__.py)
 - [x] DOCUMENTATION.md updated (Tab Record, CTM webhook, server URL)
 - [x] deploy-azure.sh fixed (update vs create, ACR login)
+- [x] FIXED: BUG 1 - `SHOW_CALL_ANALYSIS` now handled by service-worker and forwarded to CTM tab
+- [x] FIXED: BUG 2 - `overlay.js` now has `SHOW_CALL_ANALYSIS` listener with `showCallAnalysisOverlay()`
+- [x] FIXED: BUG 3 - Clarified overlay architecture (overlay-ui.js for popup, overlay.js for CTM page)
+- [x] Missing: dual monitoring stacks (ctm-monitor.js vs src/ stack) - documented but not yet consolidated
