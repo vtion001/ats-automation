@@ -1,6 +1,7 @@
 /**
  * Tab Selector Popup Script
- * Records audio from selected tab, transcribes it, and runs AI analysis
+ * Records audio from selected tab using injected content-script approach.
+ * Content script runs in target tab → tabCapture.capture() works automatically.
  */
 
 const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
@@ -11,7 +12,6 @@ let selectedTabTitle = null;
 let isRecording = false;
 let recordingStartTime = null;
 let timerInterval = null;
-let mediaRecorder = null;
 let recordedChunks = [];
 
 document.addEventListener('DOMContentLoaded', init);
@@ -118,18 +118,21 @@ function setRecordingUI(recording) {
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
     const status = document.getElementById('status');
+    const notice = document.getElementById('captureNotice');
     
     if (recording) {
         startBtn.classList.add('hidden');
         stopBtn.classList.remove('hidden');
         status.classList.add('recording');
         status.classList.remove('stopped');
+        if (notice) notice.classList.add('hidden');
     } else {
         stopTimer();
         startBtn.classList.remove('hidden');
         stopBtn.classList.add('hidden');
         status.classList.remove('recording');
         status.classList.add('stopped');
+        if (notice) notice.classList.remove('hidden');
     }
 }
 
@@ -156,62 +159,26 @@ async function startRecording() {
     updateStatus('Starting...', 'stopped');
     
     try {
-        if (!chrome.tabCapture) {
-            updateStatus('Tab capture not available - try Chrome instead of Chrome', 'stopped');
-            return;
-        }
-        
-        updateStatus('Activating tab...', 'stopped');
-        
-        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        const previousTabId = currentTab?.id;
-        
-        if (previousTabId === selectedTabId) {
-            previousTabId = null;
-        }
-        
-        await chrome.tabs.update(selectedTabId, { active: true });
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const stream = await new Promise((resolve, reject) => {
-            chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
-                if (chrome.runtime.lastError) {
-                    const err = chrome.runtime.lastError.message;
-                    if (err.includes('not been invoked') || err.includes('cannot be captured')) {
-                        reject(new Error('CLICK_ICON_FIRST: Click the ATS Automation icon on the CTM tab first, then try again.'));
-                    } else {
-                        reject(new Error(err));
-                    }
-                } else {
-                    resolve(stream);
-                }
-            });
-        });
-        
-        if (previousTabId) {
-            chrome.tabs.update(previousTabId, { active: true });
-        }
-        
-        if (!stream) {
-            updateStatus('Could not capture tab - permission denied', 'stopped');
+        if (!chrome.scripting) {
+            updateStatus('Scripting API not available - update Chrome', 'stopped');
             return;
         }
         
         recordedChunks = [];
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-            ? 'audio/webm;codecs=opus'
-            : 'audio/webm';
         
-        mediaRecorder = new MediaRecorder(stream, { mimeType });
+        const response = await chrome.runtime.sendMessage({
+            type: 'START_CAPTURE_TAB',
+            tabId: selectedTabId
+        });
         
-        mediaRecorder.ondataavailable = (event) => {
-            if (event.data && event.data.size > 0) {
-                recordedChunks.push(event.data);
+        if (response && response.error) {
+            if (response.notInvoked) {
+                updateStatus('Open the CTM tab first, then try again', 'stopped');
+            } else {
+                updateStatus('Error: ' + response.error, 'stopped');
             }
-        };
-        
-        mediaRecorder.start(1000);
+            return;
+        }
         
         isRecording = true;
         setRecordingUI(true);
@@ -225,11 +192,8 @@ async function startRecording() {
         
     } catch (e) {
         console.error('[TabCapture] Start error:', e);
-        if (e.message.startsWith('CLICK_ICON_FIRST:')) {
-            updateStatus('STEP 1: Click the ATS icon in Chrome toolbar ON the CTM tab. STEP 2: Come back here and click Start Recording.', 'stopped');
-        } else {
-            updateStatus('Error: ' + e.message, 'stopped');
-        }
+        updateStatus('Error: ' + e.message, 'stopped');
+        setRecordingUI(false);
     }
 }
 
@@ -238,16 +202,13 @@ async function stopRecording() {
     setWorkingUI(true);
     
     try {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-            mediaRecorder.stream.getTracks().forEach(t => t.stop());
-        }
+        const response = await chrome.runtime.sendMessage({
+            type: 'STOP_CAPTURE_TAB'
+        });
         
         isRecording = false;
         setRecordingUI(false);
         document.getElementById('recordingTimer')?.classList.add('hidden');
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
         
         if (recordedChunks.length > 0) {
             updateStatus('Processing audio...', 'stopped');
@@ -528,3 +489,34 @@ async function checkRecordingStatus() {
         // Ignore
     }
 }
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const type = message.type || message.action;
+    
+    if (type === 'AUDIO_CHUNK') {
+        if (message.chunk) {
+            recordedChunks.push(message.chunk);
+        }
+        return false;
+    }
+    
+    if (type === 'RECORDING_READY') {
+        return false;
+    }
+    
+    if (type === 'RECORDING_ERROR') {
+        console.error('[TabCapture] Recording error:', message.error);
+        isRecording = false;
+        setRecordingUI(false);
+        updateStatus('Recording failed: ' + message.error, 'stopped');
+        chrome.runtime.sendMessage({ type: 'SET_BADGE', color: '#ef4444', text: 'ERR' });
+        return false;
+    }
+    
+    if (type === 'RECORDING_STOPPED') {
+        recordedChunks = message.chunks || recordedChunks;
+        return false;
+    }
+    
+    return false;
+});

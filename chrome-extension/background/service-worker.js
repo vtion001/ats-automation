@@ -1,17 +1,18 @@
 /**
  * ATS Automation - Background Service Worker
- * Handles tab audio capture, messages, and badge updates
+ * Handles tab audio capture via injected content script, messages, and badge updates
  */
 
 const AUDIO_STORAGE_KEY = 'ats_captured_audio';
 
 let currentCapture = {
     tabId: null,
-    stream: null,
     mediaRecorder: null,
+    stream: null,
     audioChunks: [],
     recording: false,
-    startTime: null
+    startTime: null,
+    injected: false
 };
 
 function getMessageType(message) {
@@ -24,22 +25,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     switch (msgType) {
         case 'START_TAB_CAPTURE':
-            sendResponse({ error: 'Capture now runs in popup, not service worker' });
+            handleStartCaptureMessage(message, sendResponse);
             return true;
             
         case 'STOP_TAB_CAPTURE':
-            sendResponse({ success: false, error: 'Capture now runs in popup' });
+            handleStopCaptureMessage(message, sendResponse);
             return true;
             
         case 'GET_CAPTURE_STATUS':
-            sendResponse({ recording: false, tabId: null, startTime: null });
+            sendResponse({ recording: currentCapture.recording, tabId: currentCapture.tabId, startTime: currentCapture.startTime });
             return true;
             
         case 'GET_CAPTURED_AUDIO':
-            sendResponse({ success: false, error: 'No audio captured via service worker' });
+            getCapturedAudio(sendResponse);
             return true;
             
         case 'CLEAR_CAPTURED_AUDIO':
+            clearCapturedAudio();
             sendResponse({ success: true });
             return true;
             
@@ -67,161 +69,154 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
             sendResponse({ success: true });
             return true;
-            
+        
+        case 'START_CAPTURE_TAB':
+            handleStartCaptureTab(message.tabId, sendResponse);
+            return true;
+        
+        case 'STOP_CAPTURE_TAB':
+            handleStopCaptureTab(sendResponse);
+            return true;
+        
+        case 'AUDIO_CHUNK':
+            if (message.chunk) {
+                currentCapture.audioChunks.push(message.chunk);
+            }
+            sendResponse({ received: true });
+            return true;
+        
+        case 'RECORDING_READY':
+            sendResponse({ success: true });
+            return true;
+        
+        case 'RECORDING_ERROR':
+            currentCapture.recording = false;
+            console.error('[BG] Recording error from content script:', message.error);
+            sendResponse({ success: true });
+            return true;
+        
+        case 'RECORDING_STOPPED':
+            handleRecordingStopped(message.chunks || []);
+            sendResponse({ success: true });
+            return true;
+        
         default:
             sendResponse({ error: 'Unknown message type' });
             return true;
     }
 });
 
-async function handleStartCapture(tabId, sendResponse) {
+async function handleStartCaptureTab(tabId, sendResponse) {
     try {
         if (currentCapture.recording) {
-            await stopCapture();
+            await stopCaptureInternal();
         }
         
-        // tabCapture.capture() only works on current active tab
-        // Switch to target tab first
-        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        const previousTabId = currentTab?.id;
-        
-        await chrome.tabs.update(tabId, { active: true });
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        const stream = await new Promise((resolve, reject) => {
-            chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                } else {
-                    resolve(stream);
-                }
-            });
-        });
-        
-        // Restore previous tab
-        if (previousTabId) {
-            chrome.tabs.update(previousTabId, { active: true });
-        }
-        
-        if (!stream) {
-            sendResponse({ error: 'Could not capture tab' });
+        if (!tabId) {
+            sendResponse({ error: 'No tab ID provided' });
             return;
         }
         
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-            ? 'audio/webm;codecs=opus'
-            : 'audio/webm';
-        
-        const mediaRecorder = new MediaRecorder(stream, { mimeType });
+        if (!chrome.scripting) {
+            sendResponse({ error: 'Scripting API not available' });
+            return;
+        }
         
         currentCapture = {
             tabId: tabId,
-            stream: stream,
-            mediaRecorder: mediaRecorder,
+            mediaRecorder: null,
+            stream: null,
             audioChunks: [],
-            recording: true,
-            startTime: Date.now()
+            recording: false,
+            startTime: null,
+            injected: false
         };
         
-        mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                currentCapture.audioChunks.push(event.data);
-            }
-        };
+        console.log('[BG] Injecting capture script into tab', tabId);
+        updateStatus('Injecting recorder...');
         
-        mediaRecorder.start(1000);
+        const results = await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['content-scripts/tab-audio-capture.js']
+        });
+        
+        if (!results || results.length === 0) {
+            sendResponse({ error: 'Failed to inject content script' });
+            return;
+        }
+        
+        currentCapture.injected = true;
+        currentCapture.startTime = Date.now();
+        currentCapture.recording = true;
+        
         setBadge('#ef4444', 'REC');
-        console.log('[BG] Started capturing tab', tabId);
+        console.log('[BG] Content script injected, recording started for tab', tabId);
         
         sendResponse({ success: true, tabId: tabId, startTime: currentCapture.startTime });
         
     } catch (e) {
-        console.error('[BG] Capture error:', e);
-        sendResponse({ error: e.message });
+        console.error('[BG] Start capture error:', e);
+        const errMsg = e.message || String(e);
+        const notInvoked = errMsg.includes('not allowed') || errMsg.includes('Cannot access');
+        sendResponse({ error: errMsg, notInvoked });
     }
 }
 
-async function handleStopCapture(sendResponse) {
+async function handleStopCaptureTab(sendResponse) {
     try {
-        const result = await stopCapture();
-        setBadge('#22c55e', 'OK');
-        sendResponse({ success: true, ...result });
-    } catch (e) {
-        sendResponse({ error: e.message });
-    }
-}
-
-async function stopCapture() {
-    return new Promise((resolve) => {
-        if (!currentCapture.mediaRecorder) {
-            resolve({ hasAudio: false });
+        if (!currentCapture.recording && currentCapture.audioChunks.length === 0) {
+            sendResponse({ success: true, chunks: [], error: 'Not recording' });
             return;
         }
         
-        currentCapture.mediaRecorder.onstop = async () => {
-            let hasAudio = false;
-            
-            if (currentCapture.audioChunks.length > 0) {
-                const blob = new Blob(currentCapture.audioChunks, { type: 'audio/webm' });
-                
-                if (blob.size > 0) {
-                    hasAudio = true;
-                    
-                    const reader = new FileReader();
-                    reader.onloadend = async () => {
-                        const base64 = reader.result.split(',')[1];
-                        
-                        await chrome.storage.local.set({
-                            [AUDIO_STORAGE_KEY]: {
-                                data: base64,
-                                mimeType: 'audio/webm',
-                                tabId: currentCapture.tabId,
-                                startTime: currentCapture.startTime,
-                                duration: currentCapture.startTime ? Math.round((Date.now() - currentCapture.startTime) / 1000) : 0,
-                                timestamp: Date.now()
-                            }
-                        });
-                        
-                        console.log('[BG] Audio stored, size:', blob.size, 'bytes');
-                    };
-                    reader.readAsDataURL(blob);
-                }
-            }
-            
-            if (currentCapture.stream) {
-                currentCapture.stream.getTracks().forEach(track => track.stop());
-            }
-            
-            currentCapture = {
-                tabId: null,
-                stream: null,
-                mediaRecorder: null,
-                audioChunks: [],
-                recording: false,
-                startTime: null
-            };
-            
-            console.log('[BG] Stopped capturing, hasAudio:', hasAudio);
-            resolve({ hasAudio });
-        };
+        const tabId = currentCapture.tabId;
         
-        if (currentCapture.recording) {
-            currentCapture.mediaRecorder.stop();
-        } else {
-            if (currentCapture.stream) {
-                currentCapture.stream.getTracks().forEach(track => track.stop());
+        if (tabId && currentCapture.injected) {
+            try {
+                await chrome.tabs.sendMessage(tabId, { type: 'STOP_RECORDING' });
+            } catch (e) {
+                console.log('[BG] Could not send stop to content script:', e.message);
             }
-            currentCapture = {
-                tabId: null,
-                stream: null,
-                mediaRecorder: null,
-                audioChunks: [],
-                recording: false,
-                startTime: null
-            };
-            resolve({ hasAudio: false });
         }
-    });
+        
+        await stopCaptureInternal();
+        
+        setBadge('#22c55e', 'OK');
+        console.log('[BG] Capture stopped, chunks:', currentCapture.audioChunks.length);
+        
+        const chunks = currentCapture.audioChunks;
+        currentCapture.audioChunks = [];
+        
+        sendResponse({ success: true, chunks: chunks });
+        
+    } catch (e) {
+        console.error('[BG] Stop capture error:', e);
+        sendResponse({ error: e.message, chunks: [] });
+    }
+}
+
+async function handleRecordingStopped(chunks) {
+    if (chunks.length > 0) {
+        currentCapture.audioChunks = chunks;
+    }
+}
+
+async function stopCaptureInternal() {
+    if (currentCapture.stream) {
+        currentCapture.stream.getTracks().forEach(track => track.stop());
+    }
+    
+    currentCapture.recording = false;
+    currentCapture.stream = null;
+    currentCapture.mediaRecorder = null;
+}
+
+async function handleStartCaptureMessage(message, sendResponse) {
+    sendResponse({ error: 'Use START_CAPTURE_TAB instead' });
+}
+
+async function handleStopCaptureMessage(message, sendResponse) {
+    sendResponse({ error: 'Use STOP_CAPTURE_TAB instead' });
 }
 
 async function getCapturedAudio(sendResponse) {
@@ -262,6 +257,10 @@ function setBadge(color, text) {
 
 function handleSetBadge(color, text) {
     setBadge(color, text);
+}
+
+function updateStatus(msg) {
+    console.log('[BG]', msg);
 }
 
 console.log('[BG] ATS Background Service Worker loaded');
