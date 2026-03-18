@@ -745,7 +745,7 @@ async function handleSaveCallFiles(payload) {
             // For large audio (>500KB base64 ≈ ~400KB actual), create blob URL in tab
             // Data URLs have size limits in downloads API
             if (approxBytes > 512 * 1024) {
-                const tabId = await getCTMTabId();
+                const tabId = await getActiveTabId();
                 if (tabId) {
                     const [blobUrl] = await chrome.scripting.executeScript({
                         target: { tabId },
