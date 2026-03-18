@@ -1,227 +1,202 @@
 /**
- * CTM Service - CallTrackingMetrics Softphone Monitor
- * Detects CTM softphone calls using specific DOM elements only.
- * 
- * Monitored CTM softphone elements:
- * - main.pick-outbound (data-status attribute reflects call state)
- * - .banner[data-type="answer"] (incoming call banner)
- * - .info-body (caller number in banner)
- * - .info-title (caller name in banner)
- * - .agent-status-inbound, .agent-status-connecting (call state visibility)
- * 
- * All other page elements are IGNORED to prevent false positives.
+ * CTM Service - Auto-detects calls from both Softphone and Webpage
+ * Monitors both the softphone embed and the call log table
  */
 
 class CTMService {
     constructor() {
-        this.monitorInterval = null;
-        this.observer = null;
-        this.callActive = false;
+        this.isMonitoring = false;
         this.lastPhoneNumber = null;
-        this.lastBannerHash = null;
-        this.currentCallData = null;
-
-        this.CTM_CALL_STATES = ['inbound', 'outbound', 'connecting', 'ringing', 'wrapup', 'oncall'];
-        this.lastMainStatus = null;
+        this.activeCallInfo = null;
+        this.listeners = [];
+        this.pollInterval = null;
     }
 
+    /**
+     * Start monitoring CTM for active calls
+     * Auto-detects from both softphone AND webpage
+     */
     startMonitoring(onCallDetected) {
-        ATS.logger.info('[CTM] Starting softphone monitoring...');
-
-        this.onCallDetected = onCallDetected;
-
-        this.monitorInterval = setInterval(() => {
-            this.checkForCall();
-        }, 1000);
-
-        this.setupMutationObserver();
-        this.checkForCall();
+        if (this.isMonitoring) return;
+        this.isMonitoring = true;
+        
+        console.log('[CTM] Starting auto-detection for softphone + webpage');
+        
+        // Method 1: Listen to CTM softphone events (for /calls/phone)
+        this.setupCTMEventListeners();
+        
+        // Method 2: Poll the page for active calls (for /calls page)
+        this.pollForActiveCalls(onCallDetected);
     }
 
-    stopMonitoring() {
-        if (this.monitorInterval) {
-            clearInterval(this.monitorInterval);
-            this.monitorInterval = null;
-        }
-        if (this.observer) {
-            this.observer.disconnect();
-            this.observer = null;
-        }
-        ATS.logger.info('[CTM] Stopped monitoring');
-    }
-
-    setupMutationObserver() {
-        if (this.observer) return;
-
-        const mainEl = document.querySelector('main.pick-outbound');
-        if (!mainEl) return;
-
-        this.lastMainStatus = mainEl.getAttribute('data-status');
-
-        this.observer = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'data-status') {
-                    const newStatus = mutation.target.getAttribute('data-status');
-                    if (newStatus !== this.lastMainStatus) {
-                        this.lastMainStatus = newStatus;
-                        ATS.logger.info('[CTM] Softphone status changed:', newStatus);
-                        this.checkForCall();
-                    }
-                }
-                if (mutation.type === 'childList') {
-                    for (const added of mutation.addedNodes) {
-                        if (added.nodeType === Node.ELEMENT_NODE) {
-                            this.checkForCall();
-                        }
-                    }
-                }
+    /**
+     * Setup CTM custom event listeners for softphone
+     */
+    setupCTMEventListeners() {
+        // Listen for station check events
+        document.addEventListener('ctm:stationCheck', (e) => {
+            console.log('[CTM] Station check:', e.detail);
+            if (e.detail?.mode === 'on') {
+                console.log('[CTM] Softphone mode activated');
             }
         });
 
-        this.observer.observe(mainEl, {
-            attributes: true,
-            attributeFilter: ['data-status'],
-            childList: true,
-            subtree: true
-        });
-    }
-
-    checkForCall() {
-        try {
-            const mainEl = document.querySelector('main.pick-outbound');
-            if (!mainEl) return null;
-
-            const status = mainEl.getAttribute('data-status');
-
-            const inboundBanner = this.getInboundBannerInfo();
-            const inboundVisible = this.isInboundStatusVisible(mainEl, status);
-
-            if (!inboundBanner && !inboundVisible) {
-                if (this.callActive) {
-                    ATS.logger.info('[CTM] Call ended (no inbound elements visible)');
-                    this.callActive = false;
-                    this.currentCallData = null;
-                    this.lastBannerHash = null;
-                }
-                return null;
-            }
-
-            if (inboundBanner) {
-                const bannerHash = inboundBanner.phone + '|' + inboundBanner.name + '|' + status;
-                if (bannerHash !== this.lastBannerHash) {
-                    this.lastBannerHash = bannerHash;
-                    this.lastPhoneNumber = inboundBanner.phone;
-                    this.callActive = true;
-
-                    const callData = {
-                        phoneNumber: inboundBanner.phone,
-                        callerName: inboundBanner.name,
-                        timestamp: new Date().toISOString(),
-                        status: status || 'incoming',
-                        source: 'ctm-softphone-banner'
+        // Listen for live activity (incoming/outgoing call)
+        document.addEventListener('ctm:live-activity', async (e) => {
+            console.log('[CTM] Live activity:', e.detail);
+            const activity = e.detail?.activity;
+            if (activity) {
+                const phoneNumber = activity.from || activity.to || this.extractPhoneFromActivity(activity);
+                if (phoneNumber) {
+                    this.activeCallInfo = {
+                        phone: phoneNumber,
+                        direction: activity.direction || 'inbound',
+                        source: 'softphone',
+                        activityId: activity.id
                     };
-
-                    ATS.logger.info('[CTM] Incoming call detected:', callData);
-
-                    if (this.onCallDetected) {
-                        this.onCallDetected(callData);
-                    }
-
-                    return callData;
+                    this.notifyListeners(this.activeCallInfo);
                 }
-            } else if (inboundVisible && this.lastPhoneNumber) {
-                const callData = {
-                    phoneNumber: this.lastPhoneNumber,
-                    callerName: null,
-                    timestamp: new Date().toISOString(),
-                    status: status || 'connecting',
-                    source: 'ctm-softphone-status'
-                };
-
-                if (!this.callActive) {
-                    this.callActive = true;
-                    ATS.logger.info('[CTM] Call active (status-based):', callData);
-
-                    if (this.onCallDetected) {
-                        this.onCallDetected(callData);
-                    }
-                }
-
-                return callData;
             }
+        });
 
-        } catch (e) {
-            ATS.logger.error('[CTM] Error checking for call:', e.message);
+        // Listen for screen pops (call starting)
+        document.addEventListener('ctm:screen-pop', (e) => {
+            console.log('[CTM] Screen pop:', e.detail);
+        });
+
+        // Check if CTM object exists and listen to its events
+        if (window.CTM) {
+            const originalPhoneReady = CTM.phonemode;
+            CTM.phonemode = true;
         }
-
-        return null;
     }
 
-    getInboundBannerInfo() {
-        const banner = document.querySelector('.banner[data-type="answer"]');
-        if (!banner) return null;
-
-        const infoBody = banner.querySelector('.info-body');
-        const infoTitle = banner.querySelector('.info-title');
-
-        const phoneEl = infoBody || banner.querySelector('.info-phone, [class*="phone"], [class*="number"]');
-        const nameEl = infoTitle || banner.querySelector('.info-name, [class*="caller-name"]');
-
-        if (!phoneEl) return null;
-
-        const phone = this.extractPhoneFromElement(phoneEl);
-        if (!phone) return null;
-
-        const name = nameEl ? nameEl.textContent?.trim() : null;
-
-        return { phone, name };
-    }
-
-    extractPhoneFromElement(el) {
-        const text = el.textContent?.trim();
-        if (text && this.isPhoneNumber(text)) {
-            return this.cleanPhoneNumber(text);
+    /**
+     * Extract phone number from activity object
+     */
+    extractPhoneFromActivity(activity) {
+        if (!activity) return null;
+        
+        // Try various properties where phone might be
+        const phoneFields = ['from', 'to', 'caller_id', 'phoneNumber', 'phone', 'number'];
+        for (const field of phoneFields) {
+            if (activity[field]) {
+                const phone = activity[field];
+                // Clean the phone number
+                return phone.replace(/[^0-9+]/g, '');
+            }
         }
         return null;
     }
 
-    isInboundStatusVisible(mainEl, status) {
-        const inboundStatuses = ['inbound', 'connecting', 'ringing', 'oncall'];
-        if (status && inboundStatuses.includes(status)) return true;
-
-        const inboundEl = mainEl.querySelector('.agent-status-inbound');
-        const connectingEl = mainEl.querySelector('.agent-status-connecting');
-
-        if (inboundEl && this.isElementVisible(inboundEl)) return true;
-        if (connectingEl && this.isElementVisible(connectingEl)) return true;
-
-        return false;
+    /**
+     * Poll page for active calls (works for /calls webpage)
+     */
+    pollForActiveCalls(onCallDetected) {
+        this.pollInterval = setInterval(() => {
+            // Check for active call rows in the call log table
+            const activeRows = document.querySelectorAll('tr.call[data-active="1"]');
+            
+            if (activeRows.length > 0) {
+                // Get the first active call
+                const callRow = activeRows[0];
+                const phoneNumber = callRow.dataset.number || this.extractPhoneFromRow(callRow);
+                
+                if (phoneNumber && phoneNumber !== this.lastPhoneNumber) {
+                    this.lastPhoneNumber = phoneNumber;
+                    
+                    const direction = callRow.querySelector('.direction.inbound') ? 'inbound' : 'outbound';
+                    
+                    this.activeCallInfo = {
+                        phone: phoneNumber,
+                        direction: direction,
+                        source: 'webpage',
+                        callId: callRow.dataset.id
+                    };
+                    
+                    console.log('[CTM] Active call detected from webpage:', this.activeCallInfo);
+                    this.notifyListeners(this.activeCallInfo);
+                    
+                    if (onCallDetected) {
+                        onCallDetected(this.activeCallInfo);
+                    }
+                }
+            } else {
+                // No active calls
+                if (this.lastPhoneNumber) {
+                    this.lastPhoneNumber = null;
+                    this.activeCallInfo = null;
+                }
+            }
+        }, 1000); // Check every second
     }
 
-    isElementVisible(el) {
-        if (!el) return false;
-        const style = window.getComputedStyle(el);
-        return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+    /**
+     * Extract phone number from call row
+     */
+    extractPhoneFromRow(row) {
+        // Try data-number attribute first
+        if (row.dataset.number) {
+            return row.dataset.number;
+        }
+        
+        // Try finding phone number in the row
+        const phoneElement = row.querySelector('[data-field="caller_number"], .call_caller_number');
+        if (phoneElement) {
+            return phoneElement.textContent?.replace(/[^0-9+]/g, '') || 
+                   phoneElement.dataset?.search ||
+                   phoneElement.dataset?.digits;
+        }
+        
+        return null;
     }
 
-    isPhoneNumber(text) {
-        if (!text) return false;
-        const cleaned = text.replace(/^[+\s#*]+/, '').replace(/\D/g, '');
-        return cleaned.length >= 10 && cleaned.length <= 15;
+    /**
+     * Get current active call info
+     */
+    getActiveCall() {
+        return this.activeCallInfo;
     }
 
-    cleanPhoneNumber(phone) {
-        if (!phone) return null;
-        return phone.replace(/[^\d+]/g, '');
+    /**
+     * Check if there's an active call
+     */
+    hasActiveCall() {
+        return this.activeCallInfo !== null;
     }
 
-    getCallStatus() {
-        return {
-            active: this.callActive,
-            phoneNumber: this.lastPhoneNumber,
-            callData: this.currentCallData
-        };
+    /**
+     * Add listener for call events
+     */
+    addListener(callback) {
+        this.listeners.push(callback);
+    }
+
+    /**
+     * Notify all listeners
+     */
+    notifyListeners(callInfo) {
+        this.listeners.forEach(cb => {
+            try {
+                cb(callInfo);
+            } catch (e) {
+                console.error('[CTM] Listener error:', e);
+            }
+        });
+    }
+
+    /**
+     * Stop monitoring
+     */
+    stopMonitoring() {
+        this.isMonitoring = false;
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+        console.log('[CTM] Stopped monitoring');
     }
 }
 
+// Export for use in other modules
 window.CTMService = CTMService;

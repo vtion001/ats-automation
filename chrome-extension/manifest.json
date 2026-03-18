@@ -41,7 +41,7 @@
       "js": [
         "src/lib/core.js",
         "src/services/ctm-service.js",
-        "src/modules/call-monitor.js",
+        "src/call-monitor.js",
         "src/main.js"
       ],
       "run_at": "document_end"
