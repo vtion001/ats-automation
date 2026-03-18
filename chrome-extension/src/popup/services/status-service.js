@@ -53,50 +53,49 @@ const StatusService = {
 
     async testCTM() {
         try {
-            // Check if CTM tab is open
             const tabs = await new Promise(resolve => {
-                chrome.tabs.query({ url: '*://*.calltrackingmetrics.com/*' }, resolve);
+                chrome.tabs.query({ url: '*://*.calltrackingmetrics.com/calls/phone*' }, resolve);
             });
-            
+
             if (tabs.length === 0) {
-                console.log('[StatusService] CTM: No tab open, creating...');
-                // Open CTM tab automatically
-                const newTab = await new Promise((resolve, reject) => {
-                    chrome.tabs.create({ 
-                        url: 'https://www.calltrackingmetrics.com',
-                        active: false
-                    }, (tab) => {
-                        if (chrome.runtime.lastError) {
-                            reject(chrome.runtime.lastError);
-                        } else {
-                            resolve(tab);
-                        }
-                    });
-                });
-                console.log('[StatusService] CTM: Opening tab:', newTab.id);
-                return { status: 'opening', connected: false, tabId: newTab.id };
+                return { status: 'no_tab', connected: false, tabId: null };
             }
-            
-            // Tab exists, check if content script is loaded
-            try {
-                await new Promise((resolve, reject) => {
-                    chrome.tabs.sendMessage(tabs[0].id, { action: 'PING' }, (response) => {
-                        if (chrome.runtime.lastError) {
-                            reject(chrome.runtime.lastError);
-                        } else {
-                            resolve(response);
-                        }
-                    });
+
+            const tabId = tabs[0].id;
+
+            const result = await new Promise(resolve => {
+                chrome.tabs.sendMessage(tabId, { type: 'GET_CTM_MONITOR_STATE' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        resolve({ error: chrome.runtime.lastError.message });
+                    } else {
+                        resolve(response);
+                    }
                 });
-                console.log('[StatusService] CTM: Connected');
-                return { status: 'connected', connected: true, tabId: tabs[0].id };
-            } catch(e) {
-                console.log('[StatusService] CTM: Tab open, content script not ready');
-                return { status: 'tab_open', connected: false, tabId: tabs[0].id };
+            });
+
+            if (result && result.state) {
+                const stateMap = {
+                    'monitoring': 'monitoring',
+                    'call_active': 'call_active',
+                    'recording': 'recording',
+                    'processing': 'processing',
+                    'idle': 'connected',
+                    'error': 'error'
+                };
+                return {
+                    status: stateMap[result.state] || result.state,
+                    connected: result.initialized || false,
+                    tabId: tabId,
+                    phone: result.phone || null,
+                    state: result.state
+                };
             }
+
+            return { status: 'no_response', connected: false, tabId: tabId };
+
         } catch(e) {
             console.log('[StatusService] CTM test error:', e.message);
-            return { status: 'error', connected: false };
+            return { status: 'error', connected: false, error: e.message };
         }
     },
 
@@ -124,9 +123,16 @@ const StatusService = {
     
     getCTMStatusText(status) {
         switch(status) {
+            case 'monitoring': return 'Monitoring';
+            case 'call_active': return 'Call Active';
+            case 'recording': return 'Recording';
+            case 'processing': return 'Processing';
+            case 'idle': return 'Ready';
             case 'connected': return 'Connected';
             case 'opening': return 'Opening CTM...';
             case 'tab_open': return 'Tab open';
+            case 'no_tab': return 'No CTM tab';
+            case 'no_response': return 'No response';
             case 'error': return 'Error';
             default: return 'Not connected';
         }

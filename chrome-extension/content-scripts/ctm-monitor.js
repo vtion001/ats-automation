@@ -1,11 +1,14 @@
 /**
- * CTM Monitor - Webhook-only Version with Remote Logging & Multi-Client Support
- * 
+ * CTM Monitor - DOM-Based Call Detection with Auto-Record Pipeline
+ *
  * Architecture:
- * - Polls server webhook endpoint for analyzed call data
- * - Remote logs to shared webhook endpoint (tagged: source="ctm")
- * - Account-specific branching for all six client accounts
- * 
+ * - MutationObserver + periodic DOM checks for call detection (no webhooks needed)
+ * - Auto-start tab recording when call is detected in DOM
+ * - Auto-stop recording when call ends, send audio to /api/transcribe
+ * - AI analysis displayed in overlay via showCallAnalysis()
+ * - Status broadcasting to service worker for popup status indicators
+ * - Webhook polling reduced to 60s interval (fallback only)
+ *
  * Client Accounts: flyland, banyan, element, takami, tbt, legacy
  */
 

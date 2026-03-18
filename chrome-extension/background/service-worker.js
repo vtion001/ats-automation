@@ -142,6 +142,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             clearAnalysisResult();
             sendResponse({ success: true });
             return true;
+
+        case 'CTM_MONITOR_STATE':
+            console.log('[BG] CTM Monitor state:', message.payload);
+            sendResponse({ success: true });
+            return true;
+
+        case 'GET_CTM_MONITOR_STATE':
+            sendResponse({ state: 'unknown' });
+            return true;
         
         default:
             sendResponse({ error: 'Unknown message type' });

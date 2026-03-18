@@ -146,8 +146,13 @@ async function runAllServiceChecks(statusManager, skipStatus = false) {
         // Update each service status
         const services = ['storage', 'aiServer', 'salesforce', 'background', 'ctm'];
         services.forEach(s => {
-            const status = s === 'ctm' ? results.ctmMonitor : results[s];
-            statusManager.updateServiceStatus(s, status);
+            if (s === 'ctm') {
+                const isOnline = results.ctmMonitor;
+                const label = StatusService.getCTMStatusText(results.ctmStatus);
+                statusManager.updateServiceStatus(s, isOnline, label);
+            } else {
+                statusManager.updateServiceStatus(s, results[s]);
+            }
         });
         
         // Update main status
