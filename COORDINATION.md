@@ -20,11 +20,9 @@
 
 ## Recent Changes (append-only)
 ```
-2026-03-18 15:30 - session-1 (OpenCode) - main
-  Files: server/routes/webhook.py, server/services/ai_service.py, server/models/requests.py
-  Changes: CTM webhook field mapping, QA scoring, event extraction from body status
-  Deploy: ags-ai-server:v8 on Azure Container Apps
-  Test: Webhook OK (event=end, score=85, qa=A)
+2026-03-18 16:00 - session-1 (OpenCode) - main
+  Files: popup/tab-selector.html, popup/tab-selector.js, popup/popup.html
+  Changes: Tab Audio Capture theme alignment - removed all emojis, added SVG icons, added recording timer + pulsing dot indicator, enterprise theme (#1e3a5f, #3182ce)
 ```
 
 ## Pending / In Progress
