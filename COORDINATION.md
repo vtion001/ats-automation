@@ -4,21 +4,23 @@
 
 | Terminal | Agent | Branch | Status | Last Update | Work |
 |----------|-------|--------|--------|-------------|------|
-| session-1 | OpenCode (main) | main | ACTIVE | 2026-03-18 15:30 | Azure server CTM webhook + Chrome extension |
-| session-2 | ? | ? | ? | ? | ? |
-| session-3 | ? | ? | ? | ? | ? |
-
-## Session IDs (set when starting work)
-- Find your session ID: `whoami` + `tty` + `date +%s`
-
-## Rules
-1. Before making ANY file changes, check this file
-2. Each session claims a branch: `git checkout -b session/<your-session>`
-3. When done, merge to main via PR or directly
-4. Pull main before starting: `git pull origin main`
-5. Update this file before and after major changes
+| session-1 | OpenCode (main) | main | ACTIVE | 2026-03-18 18:50 | DOM monitoring + auto-record pipeline |
 
 ## Recent Changes (append-only)
+```
+2026-03-18 18:50 - session-1 (OpenCode) - main
+  Files: chrome-extension/content-scripts/ctm-monitor.js, chrome-extension/src/popup/services/status-service.js,
+         chrome-extension/popup/popup.js, chrome-extension/background/service-worker.js
+  Changes:
+    - REPLACED webhook polling with DOM-based call detection
+    - MutationObserver + periodic DOM checks detect calls in CTM softphone page
+    - Auto-start tab recording when call detected (no manual trigger needed)
+    - Auto-stop when call ends -> send audio to /api/transcribe -> AI analyze -> overlay display
+    - Manual transcript fallback if transcription fails
+    - Status states: monitoring, call_active, recording, processing, idle, error
+    - CTM status indicator in popup now shows actual monitoring state
+    - Webhook polling reduced to 60s (fallback only)
+  Extension: pushed, reload at chrome://extensions
 ```
 2026-03-18 18:25 - session-1 (OpenCode) - main
   Review: chrome-extension files (service-worker.js, popup.js, tab-selector.js, 
@@ -101,8 +103,8 @@
 3. Update manifest.json content_scripts array
 
 ## Pending / In Progress
-- Real CTM call test (need to make actual call)
-- Add MutationObserver DOM call detection
+- Real CTM call test (make a call in CTM, verify DOM detects it, auto-records, transcribes, displays)
+- Verify CTM Monitor status indicator shows "Monitoring" after opening CTM tab
 
 ## Completed
 - [x] CTM webhook endpoint with CTM field mapping
@@ -118,7 +120,8 @@
 - [x] ai_service import fix (services/__init__.py)
 - [x] DOCUMENTATION.md updated (Tab Record, CTM webhook, server URL)
 - [x] deploy-azure.sh fixed (update vs create, ACR login)
-- [x] FIXED: BUG 1 - `SHOW_CALL_ANALYSIS` now handled by service-worker and forwarded to CTM tab
-- [x] FIXED: BUG 2 - `overlay.js` now has `SHOW_CALL_ANALYSIS` listener with `showCallAnalysisOverlay()`
-- [x] FIXED: BUG 3 - Clarified overlay architecture (overlay-ui.js for popup, overlay.js for CTM page)
-- [x] Missing: dual monitoring stacks (ctm-monitor.js vs src/ stack) - documented but not yet consolidated
+- [x] FIXED: overlay pipeline bugs (service-worker + overlay.js SHOW_CALL_ANALYSIS)
+- [x] DOM monitoring with MutationObserver for call detection (ctm-monitor.js)
+- [x] Auto-record pipeline: DOM detects call -> tab capture -> /api/transcribe -> analyze -> overlay
+- [x] Manual transcript fallback when transcription fails
+- [x] CTM status indicator wired to DOM monitoring state
