@@ -3,6 +3,16 @@
 
 Write-Host "Installing ATS Automation..." -ForegroundColor Cyan
 
+# Check for Git
+$gitCmd = $null
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    $gitCmd = "git"
+} elseif (Test-Path "C:\Program Files\Git\cmd\git.exe") {
+    $gitCmd = "C:\Program Files\Git\cmd\git.exe"
+} elseif (Test-Path "C:\Program Files (x86)\Git\cmd\git.exe") {
+    $gitCmd = "C:\Program Files (x86)\Git\cmd\git.exe"
+}
+
 # Check for Python
 $pythonCmd = $null
 if (Get-Command python -ErrorAction SilentlyContinue) {
@@ -27,6 +37,10 @@ if (-not $pythonCmd) {
 }
 
 Write-Host "Found Python: $pythonCmd" -ForegroundColor Green
+
+if (-not $gitCmd) {
+    Write-Host "WARNING: Git not found. Will download as ZIP instead." -ForegroundColor Yellow
+}
 
 # Clone the repository
 $repoUrl = "https://github.com/vtion001/ats-automation.git"
@@ -60,14 +74,22 @@ if (Test-Path $installPath) {
 }
 
 # Clone via git or download zip
-try {
-    git clone $repoUrl $installPath -Force 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "Repository cloned successfully!" -ForegroundColor Green
+$cloned = $false
+if ($gitCmd) {
+    try {
+        & $gitCmd clone $repoUrl $installPath --quiet 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Repository cloned successfully!" -ForegroundColor Green
+            $cloned = $true
+        }
+    } catch {
+        # Fall through to ZIP download
     }
-} catch {
+}
+
+if (-not $cloned) {
     # Fallback: download zip
-    Write-Host "Downloading repository..." -ForegroundColor Yellow
+    Write-Host "Downloading repository as ZIP..." -ForegroundColor Yellow
     $zipUrl = "https://github.com/vtion001/ats-automation/archive/refs/heads/main.zip"
     $zipPath = "$env:TEMP\ats-automation.zip"
     Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
@@ -109,6 +131,17 @@ if (Test-Path ".env.example") {
         Copy-Item ".env.example" ".env"
         Write-Host "Created .env file - please configure your API keys" -ForegroundColor Yellow
     }
+}
+
+# Offer to set up auto-update
+Write-Host ""
+Write-Host "Auto-Update Setup:" -ForegroundColor Cyan
+$autoUpdate = Read-Host "Would you like to set up automatic daily updates? (y/n)"
+if ($autoUpdate -eq "y" -or $autoUpdate -eq "Y") {
+    $schedule = Read-Host "What time (24h format, default: 8)?"
+    if (-not $schedule) { $schedule = "8:00" }
+    Write-Host "Setting up auto-update at $schedule..." -ForegroundColor Yellow
+    & "$installPath\update.ps1" -AutoUpdate -Schedule $schedule
 }
 
 # Chrome Extension

@@ -17,16 +17,15 @@ RUN pip install --no-cache-dir -r requirements-server.txt
 # Install faster-whisper for audio transcription
 RUN pip install --no-cache-dir faster-whisper
 
-# Copy application
-COPY server/ai_server.py .
-
-# Copy clients folder for knowledge base
-COPY clients/ ./clients/
+# Copy entire app
+COPY . .
 
 # Set environment variables
 ENV PORT=8000
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-CMD ["python", "ai_server.py"]
+# Run modular server from server directory
+CMD ["python", "-m", "server.main"]

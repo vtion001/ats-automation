@@ -27,7 +27,7 @@ class DetermineActionRequest(BaseModel):
 
 
 class CTMWebhookRequest(BaseModel):
-    event: str
+    event: Optional[str] = None
     call_id: Optional[str] = None
     phone_number: Optional[str] = None
     caller_number: Optional[str] = None

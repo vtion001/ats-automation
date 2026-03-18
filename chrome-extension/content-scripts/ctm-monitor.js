@@ -1,402 +1,400 @@
 /**
- * CTM Call Monitor - Enhanced Version
- * Detects calls, transcribes, auto-searches Salesforce, saves notes
+ * CTM Monitor - Webhook-only Version with Remote Logging & Multi-Client Support
+ * 
+ * Architecture:
+ * - Polls server webhook endpoint for analyzed call data
+ * - Remote logs to shared webhook endpoint (tagged: source="ctm")
+ * - Account-specific branching for all six client accounts
+ * 
+ * Client Accounts: flyland, banyan, element, takami, tbt, legacy
  */
 
 (function() {
     'use strict';
 
-    const CONFIG = {
-        pollInterval: 1000,
-        transcriptionEnabled: true,
-        autoSearchSF: true,
-        autoAnalyze: true,  // Auto-analyze calls
-        client: 'flyland',
-        salesforceUrl: ''  // Will be loaded from storage
+    // =============================================================================
+    // CLIENT CONFIGURATIONS
+    // =============================================================================
+    const CLIENT_CONFIGS = {
+        flyland: {
+            name: 'Flyland Recovery',
+            dispositionTags: ['payment', 'callback', 'voicemail', 'sale', 'no_sale'],
+            sfMappings: {
+                phone: 'Phone',
+                state: 'State__c',
+                insurance: 'Insurance__c',
+                disposition: 'Call_Disposition__c'
+            },
+            triggers: {
+                autoSearchSF: true,
+                autoFillWrapup: true,
+                tagOnDisconnect: ['voicemail']
+            }
+        },
+        banyan: {
+            name: 'Banyan',
+            dispositionTags: ['callback', 'sale', 'info_request', 'not_interested'],
+            sfMappings: {
+                phone: 'Phone',
+                state: 'State__c',
+                disposition: 'Call_Result__c'
+            },
+            triggers: {
+                autoSearchSF: true,
+                autoFillWrapup: false,
+                tagOnDisconnect: []
+            }
+        },
+        element: {
+            name: 'Element',
+            dispositionTags: ['callback', 'sale', 'follow_up', 'unqualified'],
+            sfMappings: {
+                phone: 'Phone',
+                state: 'Billing_State__c',
+                disposition: 'Call_Outcome__c'
+            },
+            triggers: {
+                autoSearchSF: true,
+                autoFillWrapup: true,
+                tagOnDisconnect: ['follow_up']
+            }
+        },
+        takami: {
+            name: 'Takami Health',
+            dispositionTags: ['appointment', 'callback', 'info', 'not_qualified'],
+            sfMappings: {
+                phone: 'Phone',
+                state: 'State',
+                disposition: 'Call_Disposition__c'
+            },
+            triggers: {
+                autoSearchSF: true,
+                autoFillWrapup: true,
+                tagOnDisconnect: []
+            }
+        },
+        tbt: {
+            name: 'TBT',
+            dispositionTags: ['callback', 'sale', 'transfer', 'hangup'],
+            sfMappings: {
+                phone: 'Phone',
+                state: 'State__c',
+                disposition: 'Call_Result__c'
+            },
+            triggers: {
+                autoSearchSF: true,
+                autoFillWrapup: false,
+                tagOnDisconnect: ['hangup']
+            }
+        },
+        legacy: {
+            name: 'Legacy',
+            dispositionTags: ['callback', 'sale', 'info', 'other'],
+            sfMappings: {
+                phone: 'Phone',
+                state: 'State__c',
+                disposition: 'Call_Disposition__c'
+            },
+            triggers: {
+                autoSearchSF: true,
+                autoFillWrapup: true,
+                tagOnDisconnect: []
+            }
+        }
     };
 
-    let lastCallState = null;
-    let monitorInterval = null;
-    let speechRecognition = null;
-    let currentCallData = null;
-    let transcriptionText = '';
-
-    async function loadConfig() {
-        try {
-            const keys = ['transcriptionEnabled', 'autoSearchSF', 'autoAnalyze', 'activeClient', 'salesforceUrl', 'saveMarkdown'];
-            const result = await chrome.storage.local.get(keys);
-            
-            if (result.transcriptionEnabled !== undefined) CONFIG.transcriptionEnabled = result.transcriptionEnabled;
-            if (result.autoSearchSF !== undefined) CONFIG.autoSearchSF = result.autoSearchSF;
-            if (result.autoAnalyze !== undefined) CONFIG.autoAnalyze = result.autoAnalyze;
-            if (result.activeClient) CONFIG.client = result.activeClient;
-            if (result.salesforceUrl) CONFIG.salesforceUrl = result.salesforceUrl;
-            if (result.saveMarkdown !== undefined) CONFIG.saveMarkdown = result.saveMarkdown;
-            
-            console.log('[ATS] Config loaded:', CONFIG);
-        } catch (e) {
-            console.log('[ATS] Using default config');
-        }
-    }
-
-    function initSpeechRecognition() {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            console.log('[ATS] Speech recognition not supported');
-            return null;
-        }
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-
-        recognition.onresult = (event) => {
-            let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    transcriptionText += transcript + ' ';
-                    console.log('[ATS] Final transcript:', transcript);
-                } else {
-                    interimTranscript += transcript;
-                }
-            }
-        };
-
-        recognition.onerror = (event) => {
-            console.error('[ATS] Speech recognition error:', event.error);
-        };
-
-        recognition.onend = () => {
-            console.log('[ATS] Speech recognition ended');
-        };
-
-        return recognition;
-    }
-
-    function detectCallEvent() {
-        const selectors = [
-            '.call-status',
-            '.incoming-call', 
-            '.outgoing-call',
-            '.call-notification',
-            '.active-call',
-            '.call-info',
-            '.caller-id',
-            '[data-call-status]',
-            '[class*="call-active"]',
-            '[class*="inbound"]',
-            '.ringing',
-            '.incall'
-        ];
-
-        for (const selector of selectors) {
-            const element = document.querySelector(selector);
-            if (element) {
-                const status = element.textContent?.trim() || element.getAttribute('data-call-status');
-                if (status && status !== lastCallState && status.length < 50) {
-                    lastCallState = status;
-                    return { status, element };
-                }
-            }
-        }
-        return null;
-    }
-
-    function extractPhoneNumber() {
-        const phoneSelectors = [
-            '.caller-number',
-            '.phone-number',
-            '.call-from',
-            '.phone-display',
-            '[data-phone]',
-            '.tel-number',
-            '[class*="phone"]',
-            '[class*="caller"]'
-        ];
-
-        for (const selector of phoneSelectors) {
-            const elements = document.querySelectorAll(selector);
-            for (const element of elements) {
-                const phone = element.textContent?.trim() || element.getAttribute('data-phone');
-                if (phone && phone.length >= 7 && phone.length <= 20) {
-                    return cleanPhoneNumber(phone);
-                }
-            }
-        }
-        return null;
-    }
-
-    function extractCallerName() {
-        const nameSelectors = [
-            '.caller-name',
-            '.contact-name',
-            '.name-display',
-            '[data-caller-name]',
-            '[class*="caller"]'
-        ];
-
-        for (const selector of nameSelectors) {
-            const element = document.querySelector(selector);
-            if (element) {
-                const name = element.textContent?.trim();
-                if (name && name.length > 0 && name.length < 100) {
-                    return name;
-                }
-            }
-        }
-        return null;
-    }
-
-    function cleanPhoneNumber(phone) {
-        return phone.replace(/[^\d+]/g, '').replace(/^\+1/, '');
-    }
-
-    function broadcastCallEvent(data) {
-        chrome.runtime.sendMessage({
-            type: 'CTM_CALL_EVENT',
-            payload: data
-        });
-    }
-
-    function startTranscription() {
-        if (!speechRecognition) return;
-        
-        transcriptionText = '';
-        try {
-            speechRecognition.start();
-            console.log('[ATS] Transcription started');
-        } catch (e) {
-            console.log('[ATS] Transcription already running');
-        }
-    }
-
-    function stopTranscription() {
-        if (!speechRecognition) return;
-        
-        try {
-            speechRecognition.stop();
-            console.log('[ATS] Transcription stopped');
-        } catch (e) {
-            console.log('[ATS] Error stopping transcription');
-        }
-    }
-
-    function saveTranscriptionToMarkdown(callData) {
-        if (!CONFIG.saveMarkdown) {
-            console.log('[ATS] Save to markdown disabled');
-            chrome.runtime.sendMessage({
-                type: 'TRANSCRIPTION_COMPLETE',
-                payload: {
-                    markdown: transcriptionText,
-                    phone: callData.phoneNumber,
-                    callerName: callData.callerName,
-                    timestamp: new Date().toISOString()
-                }
-            });
-            return;
-        }
-
-        const markdown = `# Call Transcription - ${new Date().toISOString()}
-
-## Call Info
-- **Phone:** ${callData.phoneNumber || 'Unknown'}
-- **Caller Name:** ${callData.callerName || 'Unknown'}
-- **Status:** ${callData.status}
-- **Start Time:** ${callData.startTime}
-- **End Time:** ${new Date().toISOString()}
-
-## Transcription
-
-${transcriptionText || 'No transcription available'}
-
-## Notes
-
----
-
-*Generated by ATS Automation*
-`;
-
-        const blob = new Blob([markdown], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `call_${Date.now()}_${callData.phoneNumber || 'unknown'}.md`;
-        a.click();
-        
-        URL.revokeObjectURL(url);
-        
-        console.log('[ATS] Transcription saved to markdown');
-        
-        chrome.runtime.sendMessage({
-            type: 'TRANSCRIPTION_COMPLETE',
-            payload: {
-                markdown: markdown,
-                phone: callData.phoneNumber,
-                callerName: callData.callerName,
-                timestamp: new Date().toISOString()
-            }
-        });
-    }
-
-    function handleCallStart(callData) {
-        console.log('[ATS] Call started:', callData);
-        currentCallData = { ...callData, startTime: new Date().toISOString() };
-        
-        // Auto-trigger AI analysis if enabled
-        if (CONFIG.autoAnalyze && callData.phoneNumber) {
-            console.log('[ATS] Auto-analyze enabled, triggering AI analysis...');
-            triggerAutoAnalyze(callData);
-        }
-        
-        if (CONFIG.transcriptionEnabled) {
-            startTranscription();
-        }
-
-        if (CONFIG.autoSearchSF && callData.phoneNumber) {
-            chrome.runtime.sendMessage({
-                type: 'SEARCH_SALESFORCE',
-                payload: { phone: callData.phoneNumber }
-            });
-        }
-
-        broadcastCallEvent({ ...callData, event: 'call_started' });
-    }
+    // =============================================================================
+    // CONFIGURATION
+    // =============================================================================
+    const CONFIG = {
+        pollInterval: 5000,        // Poll every 5 seconds
+        webhookEndpoint: '/api/webhook-results',
+        activeClient: 'flyland'     // Default client
+    };
     
-    // Auto-analyze: Send call data to AI server for analysis
-    async function triggerAutoAnalyze(callData) {
+    let REMOTE_LOG_URL = null;  // Set dynamically from config
+
+    let monitorInterval = null;
+    let lastCallId = null;
+    let isInitialized = false;
+
+    // =============================================================================
+    // REMOTE LOGGING
+    // =============================================================================
+    async function remoteLog(level, message, data = {}) {
         try {
-            // Get AI server URL
-            const result = await chrome.storage.local.get('aiServerUrl');
-            const serverUrl = result.aiServerUrl || 'http://4.157.143.70:8000';
+            const serverUrl = await getServerUrl();
             
-            // Prepare analysis request
-            // Since we don't have transcription yet, we'll use the caller info
-            const analysisData = {
-                phone: callData.phoneNumber,
-                client: CONFIG.client,
-                callerName: callData.callerName,
-                callStatus: callData.status
+            const logEntry = {
+                source: 'ctm',
+                level: level,
+                message: message,
+                timestamp: new Date().toISOString(),
+                url: window.location.href,
+                client: CONFIG.activeClient,
+                ...data
             };
             
-            console.log('[ATS] Sending to AI server for analysis:', analysisData);
+            // Send to AI server logging endpoint (if configured)
+            fetch(`${serverUrl}/api/logs/${CONFIG.activeClient}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(logEntry)
+            }).catch(() => {});
             
-            // For now, we just send the phone number - the server will need transcription
-            // In a real scenario, we'd wait for transcription or use CTM's call info
-            chrome.runtime.sendMessage({
-                type: 'CTM_CALL_DETECTED',
-                payload: {
-                    ...callData,
-                    autoAnalyze: true,
-                    serverUrl: serverUrl
-                }
+            // Also send to remote log URL if configured (for real-time monitoring)
+            if (REMOTE_LOG_URL) {
+                fetch(`${REMOTE_LOG_URL}/api/logs/${CONFIG.activeClient}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(logEntry)
+                }).catch(() => {});
+            }
+            
+            // Also log locally for debugging
+            const logFn = level === 'error' ? console.error : 
+                         level === 'warn' ? console.warn : console.log;
+            logFn(`[ATS][${level.toUpperCase()}] ${message}`, data);
+            
+        } catch (e) {
+            // Silent fail for logging
+        }
+    }
+
+    function logInfo(message, data) { remoteLog('log', message, data); }
+    function logWarn(message, data) { remoteLog('warn', message, data); }
+    function logError(message, data) { remoteLog('error', message, data); }
+
+    // =============================================================================
+    // CLIENT CONFIG HELPERS
+    // =============================================================================
+    function getClientConfig() {
+        return CLIENT_CONFIGS[CONFIG.activeClient] || CLIENT_CONFIGS.flyland;
+    }
+
+    function getSfMapping(field) {
+        const config = getClientConfig();
+        return config.sfMappings[field] || field;
+    }
+
+    // =============================================================================
+    // CONFIG LOADING
+    // =============================================================================
+    async function loadConfig() {
+        try {
+            const keys = ['activeClient', 'aiServerUrl', 'salesforceUrl', 'remoteLogUrl'];
+            const result = await chrome.storage.local.get(keys);
+            
+            if (result.activeClient) {
+                CONFIG.activeClient = result.activeClient;
+            }
+            
+            if (result.remoteLogUrl) {
+                REMOTE_LOG_URL = result.remoteLogUrl;
+            }
+            
+            logInfo('Config loaded', { 
+                client: CONFIG.activeClient, 
+                remoteLogUrl: REMOTE_LOG_URL || 'disabled'
             });
             
-            console.log('[ATS] Auto-analyze triggered for phone:', callData.phoneNumber);
+        } catch (e) {
+            logWarn('Config load failed, using defaults', { error: e.message });
+        }
+    }
+
+    async function getServerUrl() {
+        try {
+            const result = await chrome.storage.local.get('aiServerUrl');
+            return result.aiServerUrl || 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
+        } catch (e) {
+            return 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
+        }
+    }
+
+    // =============================================================================
+    // WEBHOOK FETCHING
+    // =============================================================================
+    async function fetchWebhookResults() {
+        try {
+            const serverUrl = await getServerUrl();
+            
+            const response = await fetch(`${serverUrl}${CONFIG.webhookEndpoint}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(10000)
+            });
+            
+            if (!response.ok) {
+                logWarn('Webhook fetch failed', { status: response.status });
+                return null;
+            }
+            
+            const data = await response.json();
+            logInfo('Webhook results fetched', { hasData: !!data, client: CONFIG.activeClient });
+            return data;
             
         } catch (error) {
-            console.error('[ATS] Auto-analyze error:', error);
+            logWarn('Webhook fetch error', { error: error.message });
+            return null;
         }
     }
 
-    function handleCallEnd() {
-        console.log('[ATS] Call ended');
+    // =============================================================================
+    // CALL HANDLING
+    // =============================================================================
+    function broadcastCallEvent(data) {
+        try {
+            chrome.runtime.sendMessage({
+                type: 'CTM_CALL_EVENT',
+                payload: { ...data, client: CONFIG.activeClient }
+            });
+        } catch (e) {
+            // Silent fail
+        }
+    }
+
+    function handleAccountSpecificActions(result) {
+        const clientConfig = getClientConfig();
         
-        if (speechRecognition && transcriptionText) {
-            stopTranscription();
-            saveTranscriptionToMarkdown(currentCallData);
+        logInfo('Processing account-specific actions', { 
+            client: CONFIG.activeClient, 
+            disposition: result.suggestedDisposition 
+        });
+
+        // Trigger based on disposition
+        if (result.suggestedDisposition) {
+            const disp = result.suggestedDisposition.toLowerCase();
+            
+            // Auto-tag based on disposition
+            if (clientConfig.triggers.tagOnDisconnect.includes(disp)) {
+                logInfo('Tag triggered by disposition', { tag: disp });
+                // Notify background to apply tag
+                chrome.runtime.sendMessage({
+                    type: 'APPLY_CTM_TAG',
+                    payload: { tag: disp, phone: result.phone }
+                });
+            }
         }
 
-        // TRIGGER AUTOMATION ON CALL END with full transcription
-        if (CONFIG.autoAnalyze && currentCallData && currentCallData.phoneNumber) {
-            console.log('[ATS] Triggering automation on call end...');
-            
-            // Send to background for automation
+        // Search Salesforce
+        if (clientConfig.triggers.autoSearchSF && result.phone) {
             chrome.runtime.sendMessage({
-                type: 'TRIGGER_AUTOMATION',
-                payload: {
-                    phone: currentCallData.phoneNumber,
-                    callerName: currentCallData.callerName,
-                    transcript: transcriptionText,
-                    status: currentCallData.status,
-                    timestamp: new Date().toISOString()
+                type: 'SEARCH_SALESFORCE',
+                payload: { 
+                    phone: result.phone,
+                    client: CONFIG.activeClient,
+                    mapping: clientConfig.sfMappings
                 }
             });
         }
-
-        if (currentCallData) {
-            broadcastCallEvent({ ...currentCallData, event: 'call_ended' });
-        }
-        
-        lastCallState = null;
-        currentCallData = null;
     }
 
+    function showCallAnalysis(result) {
+        logInfo('Showing call analysis', { phone: result.phone, client: CONFIG.activeClient });
+        
+        // Send to background to show overlay
+        chrome.runtime.sendMessage({
+            type: 'SHOW_CALL_ANALYSIS',
+            payload: { ...result, client: CONFIG.activeClient }
+        });
+        
+        // Handle account-specific actions
+        handleAccountSpecificActions(result);
+        
+        // Broadcast event
+        broadcastCallEvent({
+            phoneNumber: result.phone,
+            callerName: result.callerName || result.phone,
+            status: 'analyzed',
+            event: 'call_analyzed',
+            timestamp: Date.now(),
+            client: CONFIG.activeClient
+        });
+    }
+
+    async function checkForNewCalls() {
+        const data = await fetchWebhookResults();
+        
+        if (!data) return;
+        
+        // Get results array
+        let results = [];
+        if (data.results && Array.isArray(data.results)) {
+            results = data.results;
+        } else if (data.phone || data.call_id) {
+            results = [data];
+        }
+        
+        if (results.length === 0) return;
+        
+        // Get the most recent result
+        const latest = results[0];
+        
+        // Skip if we've already processed this call
+        const callId = latest.call_id || latest.id || latest.phone + '_' + (latest.timestamp || Date.now());
+        
+        if (callId === lastCallId) {
+            return; // Already processed
+        }
+        
+        // Check if this result has analysis (transcript was processed)
+        if (!latest.transcript && !latest.analysis) {
+            logInfo('Waiting for transcript', { callId });
+            return;
+        }
+        
+        logInfo('New call detected', { 
+            phone: latest.phone, 
+            callId: callId,
+            client: CONFIG.activeClient 
+        });
+        
+        lastCallId = callId;
+        
+        // Format the result for display
+        const analysis = latest.analysis || {};
+        
+        const result = {
+            phone: latest.phone,
+            callerName: latest.caller_name || analysis.caller_name || null,
+            transcript: latest.transcript || '',
+            summary: analysis.summary || '',
+            salesforceNotes: analysis.salesforce_notes || '',
+            qualificationScore: analysis.qualification_score || 0,
+            suggestedDisposition: analysis.suggested_disposition || 'New',
+            tags: analysis.tags || [],
+            sentiment: analysis.sentiment || 'neutral',
+            detectedState: analysis.detected_state || null,
+            detectedInsurance: analysis.detected_insurance || null,
+            callId: callId,
+            timestamp: latest.timestamp || Date.now(),
+            client: CONFIG.activeClient
+        };
+        
+        showCallAnalysis(result);
+        
+        // Increment stats
+        chrome.runtime.sendMessage({ type: 'INCREMENT_STAT', payload: { stat: 'calls' } });
+        chrome.runtime.sendMessage({ type: 'INCREMENT_STAT', payload: { stat: 'analysis' } });
+    }
+
+    // =============================================================================
+    // MONITORING LIFECYCLE
+    // =============================================================================
     function startMonitoring() {
-        console.log('[ATS] CTM Enhanced Monitor started');
+        if (isInitialized) return;
         
-        speechRecognition = initSpeechRecognition();
-
-        let callActive = false;
-
-        // Event Listener: MutationObserver for efficient DOM detection
-        const observer = new MutationObserver((mutations) => {
-            if (callActive) return;
-            
-            const callEvent = detectCallEvent();
-            if (callEvent) {
-                const phoneNumber = extractPhoneNumber();
-                const callerName = extractCallerName();
-                
-                const callData = {
-                    status: callEvent.status,
-                    phoneNumber,
-                    callerName,
-                    timestamp: Date.now(),
-                    url: window.location.href
-                };
-                
-                handleCallStart(callData);
-                callActive = true;
-            }
-        });
+        logInfo('CTM Webhook Monitor starting', { client: CONFIG.activeClient });
+        isInitialized = true;
         
-        // Start observing the body for changes
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class', 'data-call-status']
-        });
-        
-        console.log('[ATS] DOM Event listeners started');
-
-        // Fallback: polling interval
+        // Poll server for webhook results
         monitorInterval = setInterval(() => {
-            const callEvent = detectCallEvent();
-            
-            if (callEvent && !callActive) {
-                const phoneNumber = extractPhoneNumber();
-                const callerName = extractCallerName();
-                
-                const callData = {
-                    status: callEvent.status,
-                    phoneNumber,
-                    callerName,
-                    timestamp: Date.now(),
-                    url: window.location.href
-                };
-                
-                handleCallStart(callData);
-                callActive = true;
-            } else if (!callEvent && callActive) {
-                handleCallEnd();
-                callActive = false;
-            }
+            checkForNewCalls();
         }, CONFIG.pollInterval);
+        
+        // Check immediately after startup
+        setTimeout(checkForNewCalls, 2000);
     }
 
     function stopMonitoring() {
@@ -404,16 +402,31 @@ ${transcriptionText || 'No transcription available'}
             clearInterval(monitorInterval);
             monitorInterval = null;
         }
-        stopTranscription();
+        isInitialized = false;
+        logInfo('CTM Webhook Monitor stopped', { client: CONFIG.activeClient });
     }
 
-    loadConfig().then(() => {
+    // =============================================================================
+    // INITIALIZATION
+    // =============================================================================
+    async function init() {
+        await loadConfig();
+        
+        logInfo('CTM Monitor initializing', { 
+            client: CONFIG.activeClient,
+            clientName: getClientConfig().name
+        });
+        
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', startMonitoring);
         } else {
             startMonitoring();
         }
-    });
+    }
 
+    // Start
+    init();
+
+    // Cleanup on unload
     window.addEventListener('unload', stopMonitoring);
 })();

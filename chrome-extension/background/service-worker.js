@@ -184,6 +184,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             handleTriggerAutomation(message.payload, sender.tab?.id);
             sendResponse({ success: true });
             break;
+        case 'SHOW_CALL_ANALYSIS':
+            handleShowCallAnalysis(message.payload);
+            break;
+        case 'INCREMENT_STAT':
+            if (message.payload && message.payload.stat) {
+                incrementStat(message.payload.stat);
+            }
+            break;
+        case 'APPLY_CTM_TAG':
+            handleApplyCtmTag(message.payload);
+            break;
         case 'GET_DESKTOP_SOURCES':
             handleGetDesktopSources(message.payload).then(sources => {
                 sendResponse({ success: true, sources: sources });
@@ -227,6 +238,51 @@ async function handleCallEvent(payload) {
             lastCall.endTime = payload.timestamp;
             lastCall.duration = payload.timestamp - lastCall.startTime;
         }
+    }
+}
+
+async function handleShowCallAnalysis(payload) {
+    console.log('[AGS] Showing call analysis:', payload);
+    
+    const result = payload;
+    
+    // Show overlay notification
+    showOverlayNotification(`Call analyzed: ${result.phone || 'Unknown'}`);
+    
+    // Send to all open popup windows
+    chrome.runtime.sendMessage({
+        type: 'CALL_ANALYSIS_RESULT',
+        payload: result
+    }).catch(() => {
+        // Popup might not be open, that's ok
+    });
+    
+    // Also update call log
+    callLog.push({
+        phone: result.phone,
+        callerName: result.callerName,
+        startTime: result.timestamp || Date.now(),
+        status: 'analyzed',
+        analysis: result
+    });
+}
+
+async function handleApplyCtmTag(payload) {
+    const { tag, phone } = payload;
+    console.log('[AGS] Applying CTM tag:', { tag, phone });
+    
+    // Forward to CTM tab to apply tag via DOM
+    try {
+        const tabs = await chrome.tabs.query({ url: '*://*.calltrackingmetrics.com/*' });
+        
+        if (tabs.length > 0) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+                type: 'APPLY_TAG',
+                payload: { tag, phone }
+            });
+        }
+    } catch (e) {
+        console.error('[AGS] Failed to apply tag:', e);
     }
 }
 

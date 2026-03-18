@@ -115,6 +115,44 @@ See `docs/` folder for detailed documentation:
 - Python 3.10+ (only for #7, #11, #16 if needed)
 - Chrome/Edge browser
 
+## Auto-Update
+
+The system can automatically update itself daily from GitHub.
+
+### Windows
+
+```powershell
+# Set up auto-update (runs daily at 8 AM)
+.\update.ps1 -AutoUpdate
+
+# Custom time (e.g., 9 AM)
+.\update.ps1 -AutoUpdate -Schedule "9:00"
+
+# Check status
+Get-ScheduledTask -TaskName "ATS Automation Auto-Update"
+
+# Run manually
+Start-ScheduledTask -TaskName "ATS Automation Auto-Update"
+```
+
+### macOS / Linux
+
+```bash
+# Set up auto-update (runs daily at 8 AM)
+./auto-update.sh --install
+
+# Custom hour (e.g., 9 AM)
+./auto-update.sh --install 9
+
+# Check status
+./auto-update.sh --status
+
+# Disable
+./auto-update.sh --uninstall
+```
+
+Update logs are saved to `update.log` in the project directory.
+
 ## Security
 
 - All automation runs on local agent machines

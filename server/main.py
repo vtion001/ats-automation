@@ -6,6 +6,12 @@ Modular version 2.0.0
 
 import uvicorn
 import os
+import sys
+from pathlib import Path
+
+# Add server directory to path
+sys.path.insert(0, str(Path(__file__).parent))
+
 from core.app import app
 
 

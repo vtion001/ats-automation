@@ -7,6 +7,7 @@ Version: 2.0.0 - Refactored with modular agents
 
 import re
 import asyncio
+import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -309,11 +310,42 @@ async def get_knowledge_base(client: str):
 # ============ Webhook Endpoints ============
 
 
+async def fetch_ctm_transcript(recording_url: str) -> Optional[str]:
+    """Fetch transcript from CTM recording URL"""
+    try:
+        if not recording_url:
+            return None
+
+        logger.info(f"Fetching transcript from: {recording_url}")
+
+        response = requests.get(recording_url, timeout=30)
+        if response.status_code == 200:
+            data = response.json()
+            # CTM returns transcript in various formats, try common fields
+            transcript = (
+                data.get("transcript")
+                or data.get("transcription")
+                or data.get("text")
+                or data.get("content", {}).get("transcript")
+                or data.get("call", {}).get("transcript")
+            )
+            if transcript:
+                logger.info(f"Got transcript from recording URL, length: {len(transcript)}")
+                return transcript
+
+        logger.warning(f"Failed to fetch transcript from recording URL: {response.status_code}")
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching transcript: {e}")
+        return None
+
+
 @app.post("/api/ctm-webhook")
 async def ctm_webhook(request: CTMWebhookRequest):
     """Handle incoming webhook from CTM"""
 
-    logger.info(f"CTM Webhook received: {request.event}")
+    logger.info(f"CTM Webhook received: event={request.event}, call_id={request.call_id}")
+    logger.debug(f"CTM Webhook payload: {request.dict()}")
 
     # Extract phone
     phone = (
@@ -324,8 +356,12 @@ async def ctm_webhook(request: CTMWebhookRequest):
         if not phone.startswith("+"):
             phone = "+1" + phone
 
-    # Get transcript
+    # Get transcript - either from payload or fetch from recording URL
     transcript = request.transcript or request.transcription or ""
+
+    if not transcript and request.recording_url:
+        logger.info(f"No transcript in payload, fetching from recording URL...")
+        transcript = await fetch_ctm_transcript(request.recording_url)
 
     if transcript and len(transcript) > 10:
         # Analyze
@@ -345,17 +381,27 @@ async def ctm_webhook(request: CTMWebhookRequest):
             "event": request.event,
             "call_id": request.call_id,
             "phone": phone,
+            "transcript_length": len(transcript),
             "analysis": analysis,
             "ai_analyzed": True,
         }
 
+    logger.info(f"No transcript available. recording_url: {request.recording_url}")
     return {
         "status": "received",
         "event": request.event,
         "call_id": request.call_id,
         "phone": phone,
-        "message": "Webhook received, no transcript to analyze",
+        "has_recording_url": bool(request.recording_url),
+        "message": "Webhook received. Transcript will be analyzed when available.",
     }
+
+
+@app.post("/api/ctm-webhook-raw")
+async def ctm_webhook_raw(request: dict):
+    """Raw webhook endpoint for debugging - logs all incoming data"""
+    logger.info(f"CTM Raw Webhook received: {json.dumps(request, indent=2)[:2000]}")
+    return {"status": "received", "logged": True}
 
 
 @app.get("/api/webhook-results")
