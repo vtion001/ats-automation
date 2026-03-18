@@ -157,16 +157,25 @@ async function startRecording() {
     
     try {
         if (!chrome.tabCapture) {
-            updateStatus('Tab capture not available - try Chrome instead of Edge', 'stopped');
+            updateStatus('Tab capture not available - try Chrome instead of Chrome', 'stopped');
             return;
         }
         
-        // tabCapture requires the extension to be "activated" on the target tab.
-        // User must click the extension icon on the CTM tab first.
-        const tabInfo = await chrome.tabs.get(selectedTabId).catch(() => null);
+        updateStatus('Activating tab...', 'stopped');
+        
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const previousTabId = currentTab?.id;
+        
+        if (previousTabId === selectedTabId) {
+            previousTabId = null;
+        }
+        
+        await chrome.tabs.update(selectedTabId, { active: true });
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         const stream = await new Promise((resolve, reject) => {
-            chrome.tabCapture.capture({ audio: true, video: false, tabId: selectedTabId }, (stream) => {
+            chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
                 if (chrome.runtime.lastError) {
                     const err = chrome.runtime.lastError.message;
                     if (err.includes('not been invoked') || err.includes('cannot be captured')) {
@@ -179,6 +188,10 @@ async function startRecording() {
                 }
             });
         });
+        
+        if (previousTabId) {
+            chrome.tabs.update(previousTabId, { active: true });
+        }
         
         if (!stream) {
             updateStatus('Could not capture tab - permission denied', 'stopped');
