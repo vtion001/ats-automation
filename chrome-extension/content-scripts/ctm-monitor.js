@@ -128,6 +128,8 @@
     let lastOutboundState = false;
     let currentCallId = null;
     let callStartTime = null;
+    let mediaRecorder = null;
+    let recordingStream = null;
 
     // Monitoring state for status indicator
     const MONITOR_STATE = {
@@ -326,33 +328,63 @@
         if (currentMonitorState === MONITOR_STATE.RECORDING) return;
 
         try {
-            logInfo('Starting auto recording via service worker...');
-            recordedChunks = [];
-
-            // Get current tab ID to inject capture script
+            logInfo('Starting auto recording...');
+            
+            // Get this tab's ID for the SW
             const [tab] = await new Promise(resolve => {
                 chrome.tabs.query({ active: true, currentWindow: true }, resolve);
             });
 
             if (!tab || !tab.id) {
-                logWarn('Cannot identify current tab for recording');
+                logWarn('Cannot identify current tab');
                 return;
             }
 
+            const tabId = tab.id;
+
+            // Request SW to capture tab audio and send the stream here
             const response = await new Promise(resolve => {
                 chrome.runtime.sendMessage({
-                    type: 'START_CAPTURE_TAB',
-                    tabId: tab.id
+                    type: 'REQUEST_TAB_CAPTURE',
+                    tabId: tabId
                 }, resolve);
             });
 
-            if (response && response.error) {
-                logError('Auto recording failed: ' + response.error);
-                broadcastMonitorState(MONITOR_STATE.ERROR, { error: response.error });
+            if (!response || !response.stream) {
+                logError('Tab capture not available: ' + (response?.error || 'no stream'));
+                broadcastMonitorState(MONITOR_STATE.ERROR, { error: response?.error || 'no stream' });
                 return;
             }
 
-            logInfo('Auto recording started via SW', { tabId: tab.id });
+            // Create MediaRecorder in this content script (MediaRecorder IS available here)
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            if (recordingStream) {
+                recordingStream.getTracks().forEach(t => t.stop());
+            }
+
+            recordingStream = response.stream;
+            const mimeType = response.mimeType || 'audio/webm';
+            
+            mediaRecorder = new MediaRecorder(recordingStream, { mimeType });
+            const chunks = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) {
+                    chunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onerror = (event) => {
+                logError('MediaRecorder error: ' + event.error);
+                broadcastMonitorState(MONITOR_STATE.ERROR, { error: String(event.error) });
+            };
+
+            mediaRecorder.start(1000);
+            window.__atsChunks = chunks;
+            
+            logInfo('Auto recording started', { tabId, mimeType });
             broadcastMonitorState(MONITOR_STATE.RECORDING, {
                 phone: currentCallId,
                 duration: 0
@@ -365,25 +397,34 @@
     }
 
     async function stopAutoRecording() {
-        if (currentMonitorState !== MONITOR_STATE.RECORDING) {
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
             broadcastMonitorState(MONITOR_STATE.IDLE);
             currentCallId = null;
             return;
         }
 
         try {
-            logInfo('Stopping auto recording via service worker...');
+            logInfo('Stopping auto recording...');
 
-            const response = await new Promise(resolve => {
-                chrome.runtime.sendMessage({ type: 'STOP_CAPTURE_TAB' }, resolve);
-            });
+            const chunks = window.__atsChunks || [];
+            
+            mediaRecorder.stop();
+            if (recordingStream) {
+                recordingStream.getTracks().forEach(t => t.stop());
+            }
 
-            const chunks = response?.chunks || [];
+            // Small delay to let final chunks arrive
+            await new Promise(r => setTimeout(r, 500));
 
-            if (chunks.length > 0) {
+            const finalChunks = window.__atsChunks || chunks;
+            
+            mediaRecorder = null;
+            recordingStream = null;
+
+            if (finalChunks.length > 0) {
                 const duration = callStartTime ? Math.floor((Date.now() - callStartTime) / 1000) : null;
-                logInfo(`Recording stopped, chunks: ${chunks.length}, duration: ${duration}s`);
-                await processRecording(duration, chunks);
+                logInfo(`Recording stopped, chunks: ${finalChunks.length}, duration: ${duration}s`);
+                await processRecording(duration, finalChunks);
             } else {
                 logWarn('No audio chunks captured');
                 broadcastMonitorState(MONITOR_STATE.IDLE);
@@ -861,7 +902,14 @@
                 break;
             case 'STOP_DOM_MONITORING':
                 stopDOMObserver();
-                chrome.runtime.sendMessage({ type: 'STOP_CAPTURE_TAB' }).catch(() => {});
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+                if (recordingStream) {
+                    recordingStream.getTracks().forEach(t => t.stop());
+                    recordingStream = null;
+                }
+                mediaRecorder = null;
                 broadcastMonitorState(MONITOR_STATE.IDLE);
                 sendResponse({ success: true });
                 break;
@@ -900,7 +948,14 @@
             clearInterval(monitorInterval);
             monitorInterval = null;
         }
-        chrome.runtime.sendMessage({ type: 'STOP_CAPTURE_TAB' }).catch(() => {});
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+        if (recordingStream) {
+            recordingStream.getTracks().forEach(t => t.stop());
+            recordingStream = null;
+        }
+        mediaRecorder = null;
         isInitialized = false;
         broadcastMonitorState(MONITOR_STATE.IDLE);
         logInfo('CTM DOM Monitor stopped', { client: CONFIG.activeClient });

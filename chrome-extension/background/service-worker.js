@@ -98,6 +98,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: true });
             return true;
         
+        case 'REQUEST_TAB_CAPTURE':
+            handleRequestTabCapture(message.tabId, sendResponse);
+            return true;
+        
         case 'START_CAPTURE_TAB':
             handleStartCaptureTab(message.tabId, sendResponse);
             return true;
@@ -210,6 +214,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
+async function handleRequestTabCapture(tabId, sendResponse) {
+    try {
+        if (!tabId) {
+            sendResponse({ error: 'No tab ID', stream: null });
+            return;
+        }
+
+        // If already capturing this tab, return existing stream
+        if (currentCapture.recording && currentCapture.tabId === tabId && currentCapture.stream) {
+            const mimeType = currentCapture.mimeType || 'audio/webm';
+            sendResponse({ success: true, stream: currentCapture.stream, mimeType, tabId });
+            return;
+        }
+
+        // Stop any existing capture
+        if (currentCapture.recording) {
+            await stopCaptureInternal();
+        }
+
+        console.log('[BG] REQUEST_TAB_CAPTURE for tab', tabId);
+
+        const stream = await chrome.tabCapture.capture({
+            audio: {
+                mandatory: {
+                    chromeMediaSource: 'tab',
+                    chromeMediaSourceId: String(tabId)
+                }
+            },
+            video: false
+        });
+
+        if (!stream || !stream.getAudioTracks().length) {
+            sendResponse({ error: 'No audio track', stream: null });
+            return;
+        }
+
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : 'audio/webm';
+
+        currentCapture = {
+            tabId: tabId,
+            mediaRecorder: null,
+            stream: stream,
+            audioChunks: [],
+            recording: true,
+            startTime: Date.now(),
+            injected: false,
+            mimeType: mimeType
+        };
+
+        updateRecordingState(true);
+        console.log('[BG] Tab capture started for tab', tabId);
+        sendResponse({ success: true, stream, mimeType, tabId });
+
+    } catch (e) {
+        console.error('[BG] REQUEST_TAB_CAPTURE error:', e);
+        sendResponse({ error: e.message || String(e), stream: null });
+    }
+}
+
 async function handleStartCaptureTab(tabId, sendResponse) {
     try {
         if (currentCapture.recording) {
@@ -262,24 +327,15 @@ async function handleStartCaptureTab(tabId, sendResponse) {
             : 'audio/webm';
         currentCapture.mimeType = mimeType;
         
-        // Create a blob URL from the stream so the injected script can use MediaRecorder
-        const streamUrl = URL.createObjectURL(stream);
-        
-        // Inject the recorder script that will create MediaRecorder from the stream URL
+        // Inject the recorder script that will create MediaRecorder from the stream
         const results = await chrome.scripting.executeScript({
             target: { tabId: tabId },
             world: 'ISOLATED',
-            func: (url, mime) => {
+            func: (capturedStream, mime) => {
                 if (window.__atsRecorder) return { error: 'already_recording' };
                 window.__atsRecorder = true;
                 
-                const audio = new Audio(url);
-                audio.autoplay = true;
-                
-                const recorder = new MediaRecorder(audio.captureStream ? audio.captureStream() : new MediaStream([
-                    ...(audio.srcObject ? audio.srcObject.getAudioTracks() : [])
-                ]), { mimeType: mime });
-                
+                const recorder = new MediaRecorder(capturedStream, { mimeType: mime });
                 const chunks = [];
                 
                 recorder.ondataavailable = (e) => {
@@ -297,20 +353,21 @@ async function handleStartCaptureTab(tabId, sendResponse) {
                 window.__atsRecorderChunks = chunks;
                 window.__atsRecorder = recorder;
                 
-                // Show indicator
                 const el = document.createElement('div');
                 el.id = 'ats-recording-indicator';
-                el.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;background:#ef4444;color:white;padding:6px 12px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(239,68,68,0.4);';
+                el.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;background:#ef4444;color:white;padding:6px 12px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(239,68,68,0.4);pointer-events:none;';
                 el.innerHTML = '<span style="width:8px;height:8px;background:white;border-radius:50%;display:inline-block;animation:pulse 1s infinite"></span> ATS Recording';
-                const style = document.createElement('style');
-                style.textContent = '@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}';
-                document.head.appendChild(style);
+                const st = document.createElement('style');
+                st.textContent = '@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}';
+                document.head.appendChild(st);
                 document.body.appendChild(el);
                 window.__atsRecorderEl = el;
                 
                 chrome.runtime.sendMessage({ type: 'CAPTURE_STARTED', mimeType: mime }).catch(() => {});
+                
+                return { success: true };
             },
-            args: [streamUrl, mimeType]
+            args: [stream, mimeType]
         });
         
         if (!results || results.length === 0) {
