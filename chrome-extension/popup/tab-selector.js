@@ -161,7 +161,7 @@ async function startRecording() {
             return;
         }
         
-        const stream = await chrome.tabCapture.capture({ audio: true, video: false });
+        const stream = await chrome.tabCapture.capture({ audio: true, video: false, tabId: selectedTabId });
         
         if (!stream) {
             updateStatus('Could not capture tab - permission denied', 'stopped');
