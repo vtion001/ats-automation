@@ -20,6 +20,20 @@
 
 ## Recent Changes (append-only)
 ```
+2026-03-18 18:15 - session-1 (OpenCode) - main
+  Files: server/services/__init__.py, server/routes/analyze.py, DOCUMENTATION.md, deploy-azure.sh
+  Changes:
+    - CRITICAL FIX: services/__init__.py - imported ai_service INSTANCE (AIService) not module
+      - Root cause: `from . import ai_service` imported MODULE, not the `ai_service = AIService()` instance
+      - Symptom: "AttributeError: module 'services.ai_service' has no attribute 'analyze'"
+      - Fix: `from .ai_service import ai_service, AIService` (imports the INSTANCE)
+    - Fixed analyze.py: used wrong `API_KEY` (ATS_API_KEY) vs `OPENROUTER_API_KEY`
+    - All 10 server endpoints now PASSING (health, analyze, transcribe, webhook, results, etc.)
+    - Updated DOCUMENTATION.md with Tab Record, CTM webhook, new server URL
+    - Fixed deploy-azure.sh: uses `update` not `create`, includes ACR login
+  Server: v19 deployed (revision 0000022)
+```
+```
 2026-03-18 17:55 - session-1 (OpenCode) - main
   Files: server/routes/transcribe.py, server/routes/remote_logs.py, server/core/app.py, chrome-extension/background/service-worker.js, chrome-extension/popup/tab-selector.js, chrome-extension/popup/tab-selector.html
   Changes:
@@ -33,7 +47,6 @@
 ```
 
 ## Pending / In Progress
-- Chrome extension polling for webhook results (call-monitor.js)
 - Real CTM call test (need to make actual call)
 
 ## Completed
@@ -46,3 +59,7 @@
 - [x] Debug button with max z-index
 - [x] CSP fix for inline script
 - [x] SVG phone icon
+- [x] All 10 server endpoints passing (analyze, determine-action, analyze-full, etc.)
+- [x] ai_service import fix (services/__init__.py)
+- [x] DOCUMENTATION.md updated (Tab Record, CTM webhook, server URL)
+- [x] deploy-azure.sh fixed (update vs create, ACR login)
