@@ -33,15 +33,41 @@ class TabAudioCaptureService {
     // Capture audio from specific tab
     async captureTabAudio(tabId) {
         try {
-            // Get tab stream with audio
-            const stream = await chrome.tabCapture.capture({
-                tabId: tabId,
-                audio: true,
-                video: false
+            // tabCapture.capture() only works on current active tab
+            // We need to switch to the target tab first
+            
+            // Get current tab to restore later
+            const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            const currentTabId = currentTab?.id;
+            
+            // Switch to target tab
+            await chrome.tabs.update(tabId, { active: true });
+            
+            // Small delay to ensure tab switch completes
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            // Now capture from the active tab
+            const stream = await new Promise((resolve, reject) => {
+                chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(stream);
+                    }
+                });
             });
             
             if (!stream) {
+                // Restore previous tab on failure
+                if (currentTabId) {
+                    chrome.tabs.update(currentTabId, { active: true });
+                }
                 return { error: 'Could not capture tab audio' };
+            }
+            
+            // Restore previous tab after successful capture
+            if (currentTabId) {
+                chrome.tabs.update(currentTabId, { active: true });
             }
             
             this.stream = stream;
