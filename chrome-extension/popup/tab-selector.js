@@ -203,19 +203,23 @@ async function stopRecording() {
     setWorkingUI(true);
     
     try {
-        // Set up promise to wait for chunks from RECORDING_STOPPED message
+        // Set up promise to wait for RECORDING_STOPPED message from content script
+        // RECORDING_STOPPED contains the final chunk array
         recordingStoppedPromise = new Promise(resolve => { recordingStoppedResolve = resolve; });
+        
+        // Safety timeout: if RECORDING_STOPPED never arrives, resolve with what we have
         const timeoutId = setTimeout(() => {
             if (recordingStoppedResolve) {
                 recordingStoppedResolve(recordedChunks);
                 recordingStoppedResolve = null;
                 recordingStoppedPromise = null;
             }
-        }, 5000);
+        }, 30000);
         
+        // Send stop to service worker → injected script → MediaRecorder.stop() → RECORDING_STOPPED
         await chrome.runtime.sendMessage({ type: 'STOP_CAPTURE_TAB' });
         
-        // Wait for chunks to arrive from content script
+        // Wait for RECORDING_STOPPED from the content script (not the SW response)
         recordedChunks = await recordingStoppedPromise;
         clearTimeout(timeoutId);
         
@@ -288,6 +292,13 @@ async function processAndAnalyze() {
         }
         
         displayResults(result);
+        
+        // Also auto-fill the manual transcript textarea if it exists
+        const transcription = result.transcription || '';
+        if (transcription) {
+            const textarea = document.getElementById('manualTranscriptText');
+            if (textarea) textarea.value = transcription;
+        }
         
         chrome.runtime.sendMessage({ type: 'SET_BADGE', color: '#22c55e', text: 'OK' });
         

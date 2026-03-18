@@ -330,35 +330,26 @@ async function handleStartCaptureTab(tabId, sendResponse) {
                     chrome.runtime.sendMessage({ type: 'CAPTURE_STARTED', mimeType: recorder.mimeType }).catch(() => {});
                 }
                 
-                // Try getDisplayMedia first (tab or screen audio)
+                // Try getDisplayMedia — selfBrowserSurface captures the tab where this script runs
+                // systemAudio captures all system audio (includes CTM call audio through speakers/headphones)
                 navigator.mediaDevices.getDisplayMedia({
-                    audio: {
-                        mandatory: {
-                            chromeMediaSource: 'tab',
-                            chromeMediaSourceId: String(targetTabId)
-                        }
-                    },
+                    audio: true,
                     video: false,
                     selfBrowserSurface: 'include',
                     systemAudio: 'include'
                 }).then((stream) => {
                     startRecording(stream);
                 }).catch((err) => {
-                    // Fallback: try getDisplayMedia without constraints
+                    // Fallback: try without systemAudio suppression
                     navigator.mediaDevices.getDisplayMedia({
                         audio: true,
-                        video: false
+                        video: false,
+                        selfBrowserSurface: 'include'
                     }).then((stream) => {
                         startRecording(stream);
                     }).catch((err2) => {
-                        // Last resort: try getUserMedia for microphone
-                        navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then((stream) => {
-                            startRecording(stream);
-                        }).catch((err3) => {
-                            window.__atsRecorder = null;
-                            const msg = err2.message || err.message || err3.message || 'Capture not supported';
-                            chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: msg }).catch(() => {});
-                        });
+                        window.__atsRecorder = null;
+                        chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: err2.message || err.message || 'Capture not supported' }).catch(() => {});
                     });
                 });
                 
