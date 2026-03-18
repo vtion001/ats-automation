@@ -115,34 +115,40 @@ See `docs/` folder for detailed documentation:
 - Python 3.10+ (only for #7, #11, #16 if needed)
 - Chrome/Edge browser
 
-## Auto-Update
+## Auto-Update (GitHub Live Sync)
 
-The system can automatically update itself daily from GitHub.
+The system continuously monitors GitHub and automatically updates when changes are pushed.
 
 ### Windows
 
 ```powershell
-# Set up auto-update (runs daily at 8 AM)
+# Enable GitHub sync (checks every 30 minutes)
 .\update.ps1 -AutoUpdate
 
-# Custom time (e.g., 9 AM)
-.\update.ps1 -AutoUpdate -Schedule "9:00"
+# Check every 15 minutes
+.\update.ps1 -AutoUpdate -IntervalMinutes 15
+
+# Check for updates only
+.\update.ps1 -CheckOnly
 
 # Check status
-Get-ScheduledTask -TaskName "ATS Automation Auto-Update"
+Get-ScheduledTask -TaskName "ATS Automation GitHub Sync"
 
-# Run manually
-Start-ScheduledTask -TaskName "ATS Automation Auto-Update"
+# Disable
+Unregister-ScheduledTask -TaskName "ATS Automation GitHub Sync"
 ```
 
 ### macOS / Linux
 
 ```bash
-# Set up auto-update (runs daily at 8 AM)
+# Enable GitHub sync (checks every 30 minutes)
 ./auto-update.sh --install
 
-# Custom hour (e.g., 9 AM)
-./auto-update.sh --install 9
+# Check every 15 minutes
+./auto-update.sh --install 15
+
+# Check for updates only
+./auto-update.sh --check
 
 # Check status
 ./auto-update.sh --status
@@ -151,7 +157,14 @@ Start-ScheduledTask -TaskName "ATS Automation Auto-Update"
 ./auto-update.sh --uninstall
 ```
 
-Update logs are saved to `update.log` in the project directory.
+### How It Works
+1. Cron/scheduled task runs every X minutes (default: 30)
+2. Compares local HEAD commit with GitHub origin/main
+3. If different → automatically pulls changes
+4. Checks and installs new dependencies if needed
+5. Logs all activity to `update.log`
+
+Update logs: `update.log`
 
 ## Security
 
