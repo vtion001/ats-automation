@@ -8,7 +8,7 @@ from .knowledge_base_service import KNOWLEDGE_BASES, load_knowledge_bases, get_k
 from .storage import StorageService, get_storage_service
 from .cache import CacheService, get_cache_service
 from .webhook_storage import WebhookStorage, webhook_storage
-from . import ai_service
+from .ai_service import ai_service, AIService
 
 __all__ = [
     "KnowledgeBaseService",
@@ -23,4 +23,5 @@ __all__ = [
     "WebhookStorage",
     "webhook_storage",
     "ai_service",
+    "AIService",
 ]

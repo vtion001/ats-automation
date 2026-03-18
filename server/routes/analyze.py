@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from models.requests import TranscriptionRequest, DetermineActionRequest
 from services import ai_service, KNOWLEDGE_BASES
+from config.settings import OPENROUTER_API_KEY
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 
@@ -13,9 +14,7 @@ router = APIRouter(prefix="/api", tags=["analysis"])
 @router.post("/analyze")
 async def analyze_transcription(request: TranscriptionRequest):
     """Analyze transcription and return insights"""
-    from config.settings import API_KEY
-
-    if not API_KEY:
+    if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=500, detail="OpenRouter API key not configured")
 
     client = request.client or "flyland"
@@ -73,9 +72,7 @@ async def determine_action(request: DetermineActionRequest):
 @router.post("/analyze-full")
 async def analyze_full(request: TranscriptionRequest):
     """Full analysis including action determination"""
-    from config.settings import API_KEY
-
-    if not API_KEY:
+    if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=500, detail="OpenRouter API key not configured")
 
     client = request.client or "flyland"
