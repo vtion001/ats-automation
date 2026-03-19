@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "ATS Automation (API Mode)",
+  "version": "3.1.0",
+  "description": "BPO workflow automation - CTM API integration with Azure Key Vault credentials",
+  "minimum_chrome_version": "102",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "notifications",
+    "downloads"
+  ],
+  "host_permissions": [
+    "*://*.calltrackingmetrics.com/*",
+    "https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/*"
+  ],
+  "background": {
+    "service_worker": "background/api-service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "commands": {
+    "toggle-recording": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+R",
+        "mac": "Command+Shift+R"
+      },
+      "description": "Toggle audio recording"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.calltrackingmetrics.com/*"
+      ],
+      "js": [
+        "src/lib/core.js",
+        "src/services/ctm-service.js",
+        "src/main.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://*.calltrackingmetrics.com/calls/phone*",
+        "*://*.calltrackingmetrics.com/desk*"
+      ],
+      "js": [
+        "content-scripts/ctm-softphone-monitor.js"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

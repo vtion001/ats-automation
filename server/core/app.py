@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
         webhook_router,
         results_router,
         remote_logs_router,
+        ctm_api_router,
     )
 
     app.include_router(health_router)
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(webhook_router)
     app.include_router(results_router)
     app.include_router(remote_logs_router)
+    app.include_router(ctm_api_router)
 
     # OPTIONS handler for CORS preflight
     @app.options("/{full_path:path}")
