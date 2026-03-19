@@ -1,11 +1,18 @@
 /**
- * AGS Popup - Call Analysis with Clean UI
+ * AGS Popup - Dynamic Call Display
+ * 
+ * Monitors for calls and displays analysis results.
+ * Receives data from:
+ * 1. API polling (/api/ctm/calls)
+ * 2. DOM monitor (via chrome.storage)
  */
 
 const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
+const STORAGE_KEY = 'ats_latest_analysis';
+const POLL_INTERVAL = 5000;
 
 let stats = { calls: 0, analyzed: 0, hot: 0 };
-let processedCallIds = new Set();
+let lastAnalysis = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[Popup] Initializing...');
@@ -62,8 +69,57 @@ async function checkServer() {
 }
 
 function startMonitoring() {
+    // Poll for storage updates from DOM monitor
+    checkStorageForAnalysis();
+    setInterval(checkStorageForAnalysis, POLL_INTERVAL);
+    
+    // Also poll API for calls
     checkForCalls();
     setInterval(checkForCalls, 10000);
+}
+
+async function checkStorageForAnalysis() {
+    try {
+        const result = await getStorage(STORAGE_KEY);
+        const analysis = result[STORAGE_KEY];
+        
+        if (analysis && analysis !== lastAnalysis) {
+            lastAnalysis = analysis;
+            console.log('[Popup] New analysis from DOM monitor:', analysis.type);
+            
+            if (analysis.type === 'analysis_complete') {
+                await handleAnalysisComplete(analysis);
+            } else if (analysis.type === 'call_detected') {
+                showCallDetected(analysis.phone);
+            }
+        }
+    } catch (e) {
+        console.log('[Popup] Storage check skipped (may not be extension)');
+    }
+}
+
+async function handleAnalysisComplete(data) {
+    // Update stats
+    stats.calls++;
+    stats.analyzed++;
+    if (data.analysis.score >= 70) stats.hot++;
+    await saveStats();
+    updateStats();
+    
+    // Show analysis
+    showAnalysis(data);
+}
+
+function showCallDetected(phone) {
+    document.getElementById('callContent').innerHTML = `
+        <div class="call-card">
+            <div class="call-header">
+                <span class="call-badge active">📞 Call Detected</span>
+            </div>
+            <div class="call-phone">${formatPhone(phone)}</div>
+            <div class="call-meta">Waiting for call to end...</div>
+        </div>
+    `;
 }
 
 async function checkForCalls() {
@@ -72,6 +128,12 @@ async function checkForCalls() {
         if (!resp.ok) return;
         
         const calls = await resp.json();
+        
+        // Skip if we already showing analysis from DOM monitor
+        if (lastAnalysis && lastAnalysis.type === 'analysis_complete') {
+            return;
+        }
+        
         if (calls.length === 0) {
             showWaiting();
             return;
@@ -83,14 +145,9 @@ async function checkForCalls() {
         if (isActive) {
             showActiveCall(call);
         } else {
-            const alreadyDone = processedCallIds.has(call.call_id);
-            if (alreadyDone) {
-                showEndedCall(call);
-            } else {
-                showEndedCall(call);
-                processedCallIds.add(call.call_id);
-                await analyzeCall(call);
-            }
+            showEndedCall(call);
+            // Auto-analyze
+            await analyzeCall(call);
         }
         
     } catch (e) {
@@ -104,6 +161,7 @@ function showWaiting() {
             <div class="waiting-state">
                 <div class="waiting-icon">📞</div>
                 <div class="waiting-text">Monitoring for calls...</div>
+                <div class="waiting-subtext">Waiting for CTM activity</div>
             </div>
         </div>
     `;
@@ -118,7 +176,7 @@ function showActiveCall(call) {
                 <span class="call-meta">${time}</span>
             </div>
             <div class="call-phone">${formatPhone(call.phone)}</div>
-            <div class="call-meta">${capitalize(call.direction)}</div>
+            <div class="call-meta">${capitalize(call.direction || 'incoming')}</div>
         </div>
     `;
 }
@@ -182,7 +240,7 @@ async function analyzeCall(call) {
         updateStats();
         
         // Show analysis
-        showAnalysis(call, analysis);
+        showAnalysis({ phone: call.phone, call_id: call.call_id, analysis });
         
     } catch (e) {
         console.error('[Popup] Analysis error:', e);
@@ -190,11 +248,11 @@ async function analyzeCall(call) {
     }
 }
 
-function showAnalysis(call, analysis) {
-    const score = analysis.qualification_score || 0;
-    const sentiment = analysis.sentiment || 'neutral';
-    const summary = analysis.summary || 'No summary available';
-    const tags = analysis.tags || [];
+function showAnalysis(data) {
+    const score = data.analysis.score || 0;
+    const sentiment = data.analysis.sentiment || 'neutral';
+    const summary = data.analysis.summary || 'No summary available';
+    const tags = data.analysis.tags || [];
     
     let scoreClass = 'cold';
     let scoreLabel = 'Cold Lead';
@@ -209,9 +267,10 @@ function showAnalysis(call, analysis) {
         <div class="call-card">
             <div class="call-header">
                 <span class="call-badge ended">✓ Analyzed</span>
+                <span class="call-badge ${scoreClass}">${scoreClass.toUpperCase()}</span>
             </div>
-            <div class="call-phone">${formatPhone(call.phone)}</div>
-            <div class="call-meta">${call.duration || 0}s · ${sentiment}</div>
+            <div class="call-phone">${formatPhone(data.phone)}</div>
+            <div class="call-meta">${sentiment} sentiment</div>
             
             <div class="analysis-card">
                 <div class="analysis-header">
@@ -219,7 +278,7 @@ function showAnalysis(call, analysis) {
                         <div class="score-circle ${scoreClass}">${score}</div>
                         <div class="score-info">
                             <div class="score-label">${scoreLabel}</div>
-                            <div class="score-sublabel">${capitalize(sentiment)} sentiment</div>
+                            <div class="score-sublabel">${capitalize(sentiment)}</div>
                         </div>
                     </div>
                 </div>
@@ -239,7 +298,9 @@ function bindEvents() {
     document.getElementById('refreshBtn')?.addEventListener('click', async () => {
         const btn = document.getElementById('refreshBtn');
         btn.textContent = '⏳...';
+        lastAnalysis = null; // Clear cache to force refresh
         await checkServer();
+        await checkStorageForAnalysis();
         await checkForCalls();
         btn.textContent = '↻ Refresh';
     });
@@ -251,13 +312,13 @@ function bindEvents() {
 
 // Storage helpers
 function getStorage(keys) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
         chrome.storage.local.get(keys, resolve);
     });
 }
 
 function setStorage(items) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
         chrome.storage.local.set(items, resolve);
     });
 }
@@ -267,6 +328,8 @@ function formatPhone(phone) {
     const digits = phone.replace(/\D/g, '');
     if (digits.length === 11 && digits[0] === '1') {
         return `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
+    } else if (digits.length === 10) {
+        return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
     }
     return phone;
 }
