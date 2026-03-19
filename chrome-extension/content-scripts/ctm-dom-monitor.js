@@ -215,6 +215,36 @@ function extractFromIncomingBanners() {
 }
 
 /**
+ * Extract from active call display
+ */
+function extractFromActiveCall() {
+    // Look for calling_number element (appears during active calls)
+    const callingNumber = document.querySelector('.calling_number, .phone_number, .phone_in_progress');
+    if (callingNumber) {
+        // Check direct text content
+        const text = callingNumber.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) {
+            console.log('[CTM-DOM] Found phone in calling_number:', phone);
+            return phone;
+        }
+    }
+
+    // Look for .details, .full_name, .phone_number spans
+    const details = document.querySelector('.calling_number .details, .calling_number .phone_number, .calling_number .full_name');
+    if (details) {
+        const text = details.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) {
+            console.log('[CTM-DOM] Found phone in details:', phone);
+            return phone;
+        }
+    }
+
+    return null;
+}
+
+/**
  * Extract from banners/notifications
  */
 function extractFromBanners() {
@@ -236,19 +266,23 @@ function extractFromBanners() {
  * Main extraction function - tries all methods
  */
 function extractAnyPhoneNumber() {
-    // Priority 1: CTM phone control
+    // Priority 1: CTM phone control (shadow DOM)
     let phone = extractFromCTMPhoneControl();
     if (phone) return phone;
 
-    // Priority 2: Party options
+    // Priority 2: Active call display
+    phone = extractFromActiveCall();
+    if (phone) return phone;
+
+    // Priority 3: Party options
     phone = extractFromPartyOptions();
     if (phone) return phone;
 
-    // Priority 3: Incoming call banners
+    // Priority 4: Incoming call banners
     phone = extractFromIncomingBanners();
     if (phone) return phone;
 
-    // Priority 4: General banners
+    // Priority 5: General banners
     phone = extractFromBanners();
     if (phone) return phone;
 
