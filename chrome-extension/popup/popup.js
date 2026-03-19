@@ -346,6 +346,13 @@ function startMonitoring() {
     
     checkForCalls();
     setInterval(checkForCalls, 10000);
+    
+    // Update floating widget periodically
+    setInterval(() => {
+        if (floatingEnabled) {
+            updateFloatingWidget();
+        }
+    }, 5000);
 }
 
 async function checkStorageForAnalysis() {
@@ -528,6 +535,184 @@ function showAnalysis(data) {
     `;
 }
 
+// ============ FLOATING WIDGET ============
+
+let floatingEnabled = false;
+
+function createFloatingWidget() {
+    // Check if already exists
+    if (document.getElementById('ats-floating-widget')) return;
+    
+    // Create floating widget
+    const widget = document.createElement('div');
+    widget.id = 'ats-floating-widget';
+    widget.innerHTML = `
+        <div class="ats-fw-header">
+            <span class="ats-fw-title">📞 AGS</span>
+            <div class="ats-fw-controls">
+                <button class="ats-fw-btn" id="ats-fw-expand" title="Expand">⬆</button>
+                <button class="ats-fw-btn" id="ats-fw-close" title="Close">×</button>
+            </div>
+        </div>
+        <div class="ats-fw-content" id="ats-fw-content">
+            <div class="ats-fw-status">
+                <span class="ats-fw-dot"></span>
+                <span>Monitoring</span>
+            </div>
+            <div class="ats-fw-phone" id="ats-fw-phone">No active call</div>
+        </div>
+    `;
+    
+    addFloatingStyles();
+    document.body.appendChild(widget);
+    
+    // Event listeners
+    document.getElementById('ats-fw-close')?.addEventListener('click', closeFloatingWidget);
+    document.getElementById('ats-fw-expand')?.addEventListener('click', expandFloatingWidget);
+    
+    // Make draggable
+    makeDraggable(widget);
+    
+    // Update with current data
+    updateFloatingWidget();
+}
+
+function closeFloatingWidget() {
+    const widget = document.getElementById('ats-floating-widget');
+    if (widget) widget.remove();
+    floatingEnabled = false;
+    setStorage({ floatingEnabled: false });
+}
+
+function expandFloatingWidget() {
+    // Open the full popup
+    window.open(chrome.runtime.getURL('popup/popup.html'), 'ags-popup', 'width=400,height=600');
+}
+
+function updateFloatingWidget() {
+    const phoneEl = document.getElementById('ats-fw-phone');
+    if (!phoneEl) return;
+    
+    getStorage(STORAGE_KEY).then(result => {
+        const data = result[STORAGE_KEY];
+        if (data && data.phone) {
+            const score = data.analysis?.qualification_score || data.analysis?.score || 0;
+            if (data.type === 'analysis_complete' || data.status === 'complete') {
+                phoneEl.innerHTML = `<span class="hot">${formatPhone(data.phone)}</span><br><small>Score: ${score}</small>`;
+            } else {
+                phoneEl.innerHTML = `<span class="active">${formatPhone(data.phone)}</span><br><small>Analyzing...</small>`;
+            }
+        } else {
+            phoneEl.innerHTML = 'No active call';
+        }
+    });
+}
+
+function makeDraggable(element) {
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    
+    element.querySelector('.ats-fw-header').addEventListener('mousedown', dragMouseDown);
+    
+    function dragMouseDown(e) {
+        e.preventDefault();
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.addEventListener('mouseup', closeDragElement);
+        document.addEventListener('mousemove', elementDrag);
+    }
+    
+    function elementDrag(e) {
+        e.preventDefault();
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        element.style.top = (element.offsetTop - pos2) + 'px';
+        element.style.right = 'auto';
+        element.style.left = (element.offsetLeft - pos1) + 'px';
+    }
+    
+    function closeDragElement() {
+        document.removeEventListener('mouseup', closeDragElement);
+        document.removeEventListener('mousemove', elementDrag);
+    }
+}
+
+function addFloatingStyles() {
+    if (document.getElementById('ats-fw-styles')) return;
+    
+    const styles = document.createElement('style');
+    styles.id = 'ats-fw-styles';
+    styles.textContent = `
+        #ats-floating-widget {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 999999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+        }
+        .ats-fw-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+            color: white;
+            cursor: move;
+        }
+        .ats-fw-title { font-weight: 600; font-size: 13px; }
+        .ats-fw-controls { display: flex; gap: 4px; }
+        .ats-fw-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ats-fw-btn:hover { background: rgba(255,255,255,0.3); }
+        .ats-fw-content { padding: 12px; }
+        .ats-fw-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .ats-fw-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #38a169;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .ats-fw-phone {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a202c;
+        }
+        .ats-fw-phone .active { color: #38a169; }
+        .ats-fw-phone .hot { color: #e53e3e; }
+        .ats-fw-phone small { font-weight: normal; color: #666; }
+    `;
+    document.head.appendChild(styles);
+}
+
 // ============ EVENTS ============
 
 function bindEvents() {
@@ -552,5 +737,32 @@ function bindEvents() {
     // Config button
     document.getElementById('configBtn')?.addEventListener('click', () => {
         window.open(chrome.runtime.getURL('config/config.html'), '_blank');
+    });
+    
+    // Floating toggle
+    const floatingToggle = document.getElementById('floatingToggle');
+    if (floatingToggle) {
+        floatingToggle.addEventListener('click', async () => {
+            floatingEnabled = !floatingEnabled;
+            await setStorage({ floatingEnabled });
+            
+            if (floatingEnabled) {
+                createFloatingWidget();
+                floatingToggle.classList.add('active');
+            } else {
+                closeFloatingWidget();
+                floatingToggle.classList.remove('active');
+            }
+        });
+    }
+    
+    // Load floating state on startup
+    getStorage({ floatingEnabled: false }).then(result => {
+        if (result.floatingEnabled) {
+            floatingEnabled = true;
+            createFloatingWidget();
+            const floatingToggle = document.getElementById('floatingToggle');
+            if (floatingToggle) floatingToggle.classList.add('active');
+        }
     });
 }
