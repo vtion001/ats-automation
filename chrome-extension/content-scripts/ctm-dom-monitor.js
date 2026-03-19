@@ -70,7 +70,18 @@ function extractFromCTMPhoneControl() {
     const phoneControl = document.querySelector('ctm-phone-control');
     if (!phoneControl) return null;
 
-    // Method 1: Look in outbound number container
+    // Method 1: Look for select2 chosen element (shows caller ID / from number)
+    const select2Chosen = phoneControl.querySelector('.select2-chosen, .from_number .select2-choice .select2-chosen');
+    if (select2Chosen) {
+        const text = select2Chosen.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) {
+            console.log('[CTM-DOM] Found phone in select2-chosen:', phone);
+            return phone;
+        }
+    }
+
+    // Method 2: Look in outbound number container
     const outboundContainer = phoneControl.querySelector('#outbound-number-container, .agent-status-outbound-picker, .outbound-number');
     if (outboundContainer) {
         const text = outboundContainer.textContent || '';
@@ -78,7 +89,7 @@ function extractFromCTMPhoneControl() {
         if (phone) return phone;
     }
 
-    // Method 2: Look for dialpad or number display
+    // Method 3: Look for dialpad or number display
     const dialpad = phoneControl.querySelector('.dialpad, .number-display, .phone-number-input');
     if (dialpad) {
         const text = dialpad.textContent || dialpad.getAttribute('value') || '';
@@ -86,14 +97,14 @@ function extractFromCTMPhoneControl() {
         if (phone) return phone;
     }
 
-    // Method 3: Look in data attributes on the phone control
+    // Method 4: Look in data attributes on the phone control
     const dataPhone = phoneControl.getAttribute('data-phone') || phoneControl.getAttribute('phone');
     if (dataPhone) {
         const phone = extractPhoneFromText(dataPhone);
         if (phone) return phone;
     }
 
-    // Method 4: Look in header or dialer elements
+    // Method 5: Look in header or dialer elements
     const dialerHeader = phoneControl.querySelector('#dialer-header, .dialer-header, .phone-header');
     if (dialerHeader) {
         const text = dialerHeader.textContent || '';
@@ -101,7 +112,7 @@ function extractFromCTMPhoneControl() {
         if (phone) return phone;
     }
 
-    // Method 5: Search for any phone-like numbers in the control
+    // Method 6: Search for any phone-like numbers in the control
     const allElements = phoneControl.querySelectorAll('*');
     for (const el of allElements) {
         // Check text content
