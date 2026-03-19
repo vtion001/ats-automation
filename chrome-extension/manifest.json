@@ -1,21 +1,20 @@
 {
   "manifest_version": 3,
   "name": "ATS Automation",
-  "version": "2.5.0",
-  "description": "BPO workflow automation - CTM call monitoring + audio capture + markdown logging",
+  "version": "3.3.0",
+  "description": "BPO workflow automation - CTM DOM monitoring + AI analysis",
   "minimum_chrome_version": "102",
   "permissions": [
     "activeTab",
     "storage",
     "scripting",
-    "tabCapture",
     "notifications",
-    "downloads"
+    "downloads",
+    "tabCapture"
   ],
   "host_permissions": [
     "*://*.calltrackingmetrics.com/*",
-    "*://*.zoho.com/*",
-    "http://localhost:8765/*"
+    "https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js"
@@ -43,31 +42,9 @@
         "*://*.calltrackingmetrics.com/*"
       ],
       "js": [
-        "src/lib/core.js",
-        "src/services/ctm-service.js",
-        "src/call-monitor.js",
-        "src/main.js"
+        "content-scripts/ctm-dom-monitor.js"
       ],
       "run_at": "document_end"
-    },
-    {
-      "matches": [
-        "*://*.calltrackingmetrics.com/calls/phone*"
-      ],
-      "js": [
-        "content-scripts/ctm-monitor.js",
-        "content-scripts/overlay.js"
-      ],
-      "run_at": "document_end"
-    },
-    {
-      "matches": [
-        "*://*.calltrackingmetrics.com/*"
-      ],
-      "js": [
-        "content-scripts/console-interceptor.js"
-      ],
-      "run_at": "document_start"
     }
   ],
   "icons": {
