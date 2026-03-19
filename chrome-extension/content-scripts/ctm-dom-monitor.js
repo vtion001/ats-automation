@@ -70,7 +70,28 @@ function extractFromCTMPhoneControl() {
     const phoneControl = document.querySelector('ctm-phone-control');
     if (!phoneControl) return null;
 
-    // Method 1: Look for select2 chosen element (shows caller ID / from number)
+    // Method 1: Check shadow DOM of ctm-phone-input
+    const phoneInput = phoneControl.querySelector('ctm-phone-input');
+    if (phoneInput && phoneInput.shadowRoot) {
+        const shadowInput = phoneInput.shadowRoot.querySelector('input.phone-number, input');
+        if (shadowInput) {
+            const value = shadowInput.value || shadowInput.getAttribute('value') || '';
+            const phone = extractPhoneFromText(value);
+            if (phone) {
+                console.log('[CTM-DOM] Found phone in shadow DOM input:', phone);
+                return phone;
+            }
+        }
+        // Check shadow text content
+        const shadowContent = phoneInput.shadowRoot.textContent || '';
+        const phoneShadow = extractPhoneFromText(shadowContent);
+        if (phoneShadow) {
+            console.log('[CTM-DOM] Found phone in shadow DOM:', phoneShadow);
+            return phoneShadow;
+        }
+    }
+
+    // Method 2: Look for select2 chosen element (shows caller ID / from number)
     const select2Chosen = phoneControl.querySelector('.select2-chosen, .from_number .select2-choice .select2-chosen');
     if (select2Chosen) {
         const text = select2Chosen.textContent || '';
@@ -81,7 +102,15 @@ function extractFromCTMPhoneControl() {
         }
     }
 
-    // Method 2: Look in outbound number container
+    // Method 3: Look in inbound call banner (incoming calls)
+    const incomingInfo = phoneControl.querySelector('#incoming-call-info, .incoming-call-info, .info-body, .info-title');
+    if (incomingInfo) {
+        const text = incomingInfo.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) return phone;
+    }
+
+    // Method 4: Look in outbound number container
     const outboundContainer = phoneControl.querySelector('#outbound-number-container, .agent-status-outbound-picker, .outbound-number');
     if (outboundContainer) {
         const text = outboundContainer.textContent || '';
@@ -89,7 +118,7 @@ function extractFromCTMPhoneControl() {
         if (phone) return phone;
     }
 
-    // Method 3: Look for dialpad or number display
+    // Method 5: Look for dialpad or number display
     const dialpad = phoneControl.querySelector('.dialpad, .number-display, .phone-number-input');
     if (dialpad) {
         const text = dialpad.textContent || dialpad.getAttribute('value') || '';
@@ -97,22 +126,14 @@ function extractFromCTMPhoneControl() {
         if (phone) return phone;
     }
 
-    // Method 4: Look in data attributes on the phone control
+    // Method 6: Look in data attributes on the phone control
     const dataPhone = phoneControl.getAttribute('data-phone') || phoneControl.getAttribute('phone');
     if (dataPhone) {
         const phone = extractPhoneFromText(dataPhone);
         if (phone) return phone;
     }
 
-    // Method 5: Look in header or dialer elements
-    const dialerHeader = phoneControl.querySelector('#dialer-header, .dialer-header, .phone-header');
-    if (dialerHeader) {
-        const text = dialerHeader.textContent || '';
-        const phone = extractPhoneFromText(text);
-        if (phone) return phone;
-    }
-
-    // Method 6: Search for any phone-like numbers in the control
+    // Method 7: Search for any phone-like numbers in the control
     const allElements = phoneControl.querySelectorAll('*');
     for (const el of allElements) {
         // Check text content
@@ -161,6 +182,39 @@ function extractFromPartyOptions() {
 }
 
 /**
+ * Extract from incoming call banners
+ */
+function extractFromIncomingBanners() {
+    // Look for incoming call banner
+    const banner = document.querySelector('.banner[data-type="answer"], .banner.incoming-call');
+    if (!banner) return null;
+
+    // Check info-body and info-title which typically contain the caller info
+    const infoBody = banner.querySelector('.info-body');
+    const infoTitle = banner.querySelector('.info-title');
+    
+    for (const el of [infoBody, infoTitle]) {
+        if (el) {
+            const text = el.textContent || el.getAttribute('data-phone') || '';
+            const phone = extractPhoneFromText(text);
+            if (phone) {
+                console.log('[CTM-DOM] Found phone in incoming banner:', phone);
+                return phone;
+            }
+        }
+    }
+
+    // Check data attributes
+    const dataPhone = banner.getAttribute('data-phone') || banner.getAttribute('phone');
+    if (dataPhone) {
+        const phone = extractPhoneFromText(dataPhone);
+        if (phone) return phone;
+    }
+
+    return null;
+}
+
+/**
  * Extract from banners/notifications
  */
 function extractFromBanners() {
@@ -190,7 +244,11 @@ function extractAnyPhoneNumber() {
     phone = extractFromPartyOptions();
     if (phone) return phone;
 
-    // Priority 3: Banners
+    // Priority 3: Incoming call banners
+    phone = extractFromIncomingBanners();
+    if (phone) return phone;
+
+    // Priority 4: General banners
     phone = extractFromBanners();
     if (phone) return phone;
 
