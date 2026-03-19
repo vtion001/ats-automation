@@ -223,6 +223,63 @@ async def get_active_calls():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/active-calls/by-agent/{agent_id}", response_model=List[CallResponse])
+async def get_active_calls_by_agent(agent_id: str):
+    """Get currently active calls for a specific agent"""
+    try:
+        client = create_ctm_client()
+        calls = client.get_active_calls()
+
+        filtered_calls = []
+        for call in calls:
+            call_agent = call.get("agent", {})
+            if call_agent.get("id") == agent_id:
+                filtered_calls.append(_map_ctm_call(call))
+
+        return filtered_calls
+    except Exception as e:
+        logger.error(f"Failed to fetch active calls for agent {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/user/by-email/{email}")
+async def get_user_by_email(email: str):
+    """Look up CTM user by email and return their agent_id"""
+    try:
+        client = create_ctm_client()
+        all_users = []
+
+        page = 1
+        while True:
+            users_url = f"/api/v1/accounts/{client.account_id}/users.json"
+            result = client._make_request("GET", users_url, params={"page": page, "per_page": 200})
+            users = result.get("users", [])
+            all_users.extend(users)
+
+            total_pages = result.get("total_pages", 1)
+            if page >= total_pages:
+                break
+            page += 1
+
+        email_lower = email.lower()
+        for user in all_users:
+            if user.get("email", "").lower() == email_lower:
+                return {
+                    "found": True,
+                    "user_id": user.get("id"),
+                    "name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+                    "email": user.get("email"),
+                    "status": user.get("status"),
+                    "role": user.get("role"),
+                    "agent_id": user.get("id"),
+                }
+
+        return {"found": False, "error": "User not found"}
+    except Exception as e:
+        logger.error(f"Failed to look up user by email {email}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/health")
 async def health_check():
     """Check CTM API connectivity"""

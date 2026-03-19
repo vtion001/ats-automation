@@ -230,6 +230,65 @@
             background: var(--bg-light);
             border-top: 1px solid var(--border);
         }
+        
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .login-form input {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .login-form input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+        }
+        .login-success {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+        .login-success .agent-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        .login-error {
+            color: var(--error);
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        
+        .monitoring-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(56, 161, 105, 0.1);
+            border-radius: 6px;
+            margin-top: 8px;
+        }
+        .monitoring-indicator .pulse {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+        .monitoring-indicator span {
+            font-size: 12px;
+            color: var(--success);
+        }
     </style>
 </head>
 <body>
@@ -252,7 +311,20 @@
         <span class="status-text" id="statusText">Initializing...</span>
     </div>
 
-    <div class="section">
+    <div class="section" id="loginSection">
+        <div class="section-title">Agent Login</div>
+        <div class="login-form" id="loginForm">
+            <input type="email" id="emailInput" placeholder="Agent email" value="kiel@allianceglobalsolutions.com" />
+            <input type="password" id="passwordInput" placeholder="Password" value="AGS2026@@" />
+            <button class="btn primary" id="loginBtn">Login</button>
+        </div>
+        <div class="login-success" id="loginSuccess" style="display: none;">
+            <span class="agent-name" id="agentName"></span>
+            <button class="btn secondary" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+
+    <div class="section" id="clientSection" style="display: none;">
         <div class="section-title">Client</div>
         <select class="client-select" id="clientSelect">
             <option value="flyland">Flyland Recovery</option>
