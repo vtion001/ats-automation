@@ -1,6 +1,7 @@
 /**
- * CTM DOM Monitor - Dynamic Call Detection
- * Extracts phone numbers from CTM phone control interface
+ * CTM DOM Monitor - Softphone Only
+ * ONLY extracts phone numbers from the agent's softphone interface
+ * IGNORES the dashboard (left side) which shows all agents' calls
  */
 
 const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
@@ -59,187 +60,86 @@ function formatPhone(phone) {
     return phone;
 }
 
-// ============ DOM EXTRACTION (SOFTPHONE ONLY) ============
+// ============ SOFTPHONE ONLY EXTRACTION ============
 
 /**
- * Extract phone from CTM phone control interface (SOFTPHONE ONLY)
- * This is the agent's actual phone interface - not the dashboard
+ * Extract phone ONLY from the agent's softphone interface
+ * This ignores the dashboard completely
  */
-function extractFromCTMPhoneControl() {
-    // Find the main CTM phone control element
-    const phoneControl = document.querySelector('ctm-phone-control');
-    if (!phoneControl) return null;
-
-    // Method 1: Check shadow DOM of ctm-phone-input
-    const phoneInput = phoneControl.querySelector('ctm-phone-input');
+function extractFromSoftphoneOnly() {
+    // Method 1: Check shadow DOM of ctm-phone-input (dialpad)
+    const phoneInput = document.querySelector('ctm-phone-control ctm-phone-input');
     if (phoneInput && phoneInput.shadowRoot) {
-        const shadowInput = phoneInput.shadowRoot.querySelector('input.phone-number, input[type="tel"]');
+        const shadowInput = phoneInput.shadowRoot.querySelector('input.phone-number[type="tel"]');
         if (shadowInput) {
-            const value = shadowInput.value || shadowInput.getAttribute('value') || '';
+            const value = shadowInput.value || '';
             const phone = extractPhoneFromText(value);
             if (phone) {
-                console.log('[CTM-DOM] Found phone in shadow DOM input:', phone);
+                console.log('[CTM-DOM] Found phone in dialpad:', phone);
                 return phone;
             }
         }
     }
 
-    // Method 2: Look for calling number during active call
-    const callingNumber = phoneControl.querySelector('.calling_number .phone_number, .phone_in_progress .phone_number');
-    if (callingNumber) {
-        const text = callingNumber.textContent || '';
-        const phone = extractPhoneFromText(text);
-        if (phone) {
-            console.log('[CTM-DOM] Found phone in calling_number:', phone);
-            return phone;
+    // Method 2: Check call-info (shows current caller's info during active call)
+    const callInfo = document.querySelector('ctm-phone-control .call-info');
+    if (callInfo) {
+        const callingNumber = callInfo.querySelector('.calling_number');
+        if (callingNumber) {
+            const text = callingNumber.textContent || '';
+            const phone = extractPhoneFromText(text);
+            if (phone) {
+                console.log('[CTM-DOM] Found phone in call-info:', phone);
+                return phone;
+            }
         }
     }
 
-    // Method 3: Look in dialpad display
-    const dialpadDisplay = phoneControl.querySelector('.dialpad-display, .phone-display, .number-display');
-    if (dialpadDisplay) {
-        const text = dialpadDisplay.textContent || '';
-        const phone = extractPhoneFromText(text);
-        if (phone) return phone;
-    }
-
-    // Method 4: Look in info elements during incoming call
-    const infoBody = phoneControl.querySelector('.info-body, .info-title');
-    if (infoBody) {
-        const text = infoBody.textContent || '';
+    // Method 3: Check phone_in_progress (during active call)
+    const phoneInProgress = document.querySelector('ctm-phone-control .phone_in_progress');
+    if (phoneInProgress) {
+        const text = phoneInProgress.textContent || '';
         const phone = extractPhoneFromText(text);
         if (phone) return phone;
     }
 
-    // Method 5: Check data attributes
-    const dataPhone = phoneControl.getAttribute('data-phone');
-    if (dataPhone) {
-        const phone = extractPhoneFromText(dataPhone);
-        if (phone) return phone;
-    }
-
-    return null;
-}
-
-/**
- * Extract from banners/notifications
- */
-function extractFromBanners() {
-    const banners = document.querySelectorAll('.banner, .incoming-call, .call-banner, [data-type="answer"]');
-    
-    for (const banner of banners) {
-        const phone = extractPhoneFromText(banner.textContent);
-        if (phone) return phone;
-
-        const dataPhone = banner.getAttribute('data-phone');
-        if (dataPhone && looksLikePhone(dataPhone)) {
-            return cleanPhone(dataPhone);
+    // Method 4: Check incoming call banner (when call is ringing)
+    const incomingBanner = document.querySelector('ctm-phone-control .banner[data-type="answer"]');
+    if (incomingBanner) {
+        const infoBody = incomingBanner.querySelector('.info-body');
+        if (infoBody) {
+            const text = infoBody.textContent || '';
+            const phone = extractPhoneFromText(text);
+            if (phone) {
+                console.log('[CTM-DOM] Found phone in incoming banner:', phone);
+                return phone;
+            }
         }
     }
-    return null;
-}
 
-/**
- * Main extraction function - ONLY from softphone interface
- * We ONLY look inside ctm-phone-control to avoid dashboard numbers
- */
-function extractAnyPhoneNumber() {
-    // Find the softphone element
-    const phoneControl = document.querySelector('ctm-phone-control');
-    if (!phoneControl) {
-        console.log('[CTM-DOM] No ctm-phone-control found');
-        return null;
-    }
-
-    // ONLY extract from within the softphone interface
-    // Priority 1: Shadow DOM phone input
-    let phone = extractFromCTMPhoneControl();
-    if (phone) return phone;
-
-    // Priority 2: Active call display within softphone
-    phone = extractFromActiveCallInSoftphone(phoneControl);
-    if (phone) return phone;
-
-    // Priority 3: Incoming call banners within softphone
-    phone = extractFromIncomingBannersInSoftphone(phoneControl);
-    if (phone) return phone;
-
-    // Priority 4: Party options within softphone
-    phone = extractFromPartyOptionsInSoftphone(phoneControl);
-    if (phone) return phone;
-
-    console.log('[CTM-DOM] No phone found in softphone');
-    return null;
-}
-
-/**
- * Extract from party options within a specific container
- */
-function extractFromPartyOptionsInSoftphone(container) {
-    const partyOptions = container.querySelector('.frame.party-options');
-    if (!partyOptions) return null;
-
-    const participants = partyOptions.querySelectorAll('.participant');
-    
-    for (const participant of participants) {
-        const isModerator = participant.getAttribute('data-moderator') === '1';
-        if (isModerator) continue;
-
-        const resultText = participant.querySelector('.result-text');
-        if (resultText) {
-            const phone = extractPhoneFromText(resultText.textContent);
-            if (phone) return phone;
-        }
-
-        const dataId = participant.getAttribute('data-id');
-        if (dataId && looksLikePhone(dataId)) {
-            return cleanPhone(dataId);
-        }
-    }
-    return null;
-}
-
-/**
- * Extract from incoming banners within a specific container
- */
-function extractFromIncomingBannersInSoftphone(container) {
-    const banner = container.querySelector('.banner[data-type="answer"]');
-    if (!banner) return null;
-
-    const infoBody = banner.querySelector('.info-body');
-    const infoTitle = banner.querySelector('.info-title');
-    
-    for (const el of [infoBody, infoTitle]) {
-        if (el) {
-            const text = el.textContent || el.getAttribute('data-phone') || '';
+    // Method 5: Check inner-phone frame (contains dialpad and call info)
+    const innerPhone = document.querySelector('ctm-phone-control .inner-phone');
+    if (innerPhone) {
+        const callingNumber = innerPhone.querySelector('.calling_number .phone_number');
+        if (callingNumber) {
+            const text = callingNumber.textContent || '';
             const phone = extractPhoneFromText(text);
             if (phone) return phone;
         }
     }
 
-    const dataPhone = banner.getAttribute('data-phone');
-    if (dataPhone) {
-        const phone = extractPhoneFromText(dataPhone);
-        if (phone) return phone;
-    }
-
-    return null;
-}
-
-/**
- * Extract from active call display within softphone
- */
-function extractFromActiveCallInSoftphone(container) {
-    const callingNumber = container.querySelector('.calling_number, .phone_number, .phone_in_progress');
-    if (callingNumber) {
-        const text = callingNumber.textContent || '';
+    // Method 6: Check party-header (shows participants during call)
+    const partyHeader = document.querySelector('ctm-phone-control .party-header');
+    if (partyHeader) {
+        const text = partyHeader.textContent || '';
         const phone = extractPhoneFromText(text);
         if (phone) return phone;
     }
 
-    const details = container.querySelector('.calling_number .details, .calling_number .phone_number, .calling_number .full_name');
-    if (details) {
-        const text = details.textContent || '';
+    // Method 7: Check active-chats frame
+    const activeChats = document.querySelector('ctm-phone-control .active-chats');
+    if (activeChats) {
+        const text = activeChats.textContent || '';
         const phone = extractPhoneFromText(text);
         if (phone) return phone;
     }
@@ -337,7 +237,7 @@ async function setLatestAnalysis(data) {
 async function processPhoneNumber(phone) {
     if (!phone || phone === lastDetectedPhone) return;
     
-    console.log('[CTM-DOM] Phone detected:', phone);
+    console.log('[CTM-DOM] Phone detected in softphone:', phone);
     lastDetectedPhone = phone;
 
     // Store call detected status
@@ -422,7 +322,7 @@ async function processPhoneNumber(phone) {
 // ============ MONITORING ============
 
 async function monitorLoop() {
-    const phone = extractAnyPhoneNumber();
+    const phone = extractFromSoftphoneOnly();
     
     if (phone && phone !== lastDetectedPhone) {
         await processPhoneNumber(phone);
@@ -430,8 +330,7 @@ async function monitorLoop() {
 }
 
 function startMonitoring() {
-    console.log('[CTM-DOM] Starting CTM phone control monitoring...');
-    console.log('[CTM-DOM] Looking for ctm-phone-control element');
+    console.log('[CTM-DOM] Starting SOFTPHONE-ONLY monitoring...');
     
     // Initial check
     monitorLoop();
