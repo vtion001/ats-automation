@@ -1,6 +1,6 @@
 /**
  * ATS Automation - Background Service Worker
- * Handles tab audio capture, background recording, and analysis
+ * Handles tab audio capture, background recording, analysis, and CTM call monitoring
  */
 
 const AUDIO_STORAGE_KEY = 'ats_captured_audio';
@@ -9,6 +9,21 @@ const ANALYSIS_RESULT_KEY = 'ats_analysis_result';
 const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
 const LOCAL_LOG_URL = 'http://localhost:8765';
 const DEFAULT_CLIENT = 'flyland';
+const ACTIVE_CALL_POLL_INTERVAL = 3000;
+
+// Background CTM Call Monitoring State
+let bgCallMonitor = {
+    active: false,
+    polling: false,
+    currentCallId: null,
+    callPhone: null,
+    auth: {
+        loggedIn: false,
+        agentId: null,
+        agentName: null,
+        email: null
+    }
+};
 
 let currentCapture = {
     tabId: null,
@@ -212,6 +227,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'SAVE_CALL_FILES':
             handleSaveCallFiles(message.payload);
             sendResponse({ success: true });
+            return true;
+        
+        // ============ Background Call Monitoring ============
+        
+        case 'BG_LOGIN':
+            handleBackgroundLogin(message.email, sendResponse);
+            return true;
+        
+        case 'BG_LOGOUT':
+            handleBackgroundLogout(sendResponse);
+            return true;
+        
+        case 'BG_GET_STATUS':
+            sendResponse({
+                loggedIn: bgCallMonitor.auth.loggedIn,
+                agentName: bgCallMonitor.auth.agentName,
+                email: bgCallMonitor.auth.email,
+                monitoring: bgCallMonitor.active
+            });
+            return true;
+        
+        case 'BG_CALL_ENDED':
+            handleBackgroundCallEnded(message.callId, message.phone, message.client || DEFAULT_CLIENT, sendResponse);
             return true;
         
         default:
@@ -896,8 +934,280 @@ async function restoreState() {
                 }
             });
         }
+        
+        // Restore CTM monitoring state
+        const authState = await chrome.storage.local.get(['auth_email', 'auth_agentId', 'auth_agentName', 'auth_loggedIn']);
+        if (authState.auth_loggedIn && authState.auth_agentId) {
+            bgCallMonitor.auth = {
+                loggedIn: true,
+                agentId: authState.auth_agentId,
+                agentName: authState.auth_agentName || '',
+                email: authState.auth_email || ''
+            };
+            startBackgroundCallMonitoring();
+        }
     } catch (e) {
         console.log('[BG] State restore:', e);
+    }
+}
+
+// ============ Background CTM Call Monitoring ============
+
+async function handleBackgroundLogin(email, sendResponse) {
+    try {
+        // Look up user by email via server
+        const resp = await fetch(`${SERVER_URL}/api/ctm/user/by-email/${encodeURIComponent(email)}`);
+        if (!resp.ok) {
+            sendResponse({ success: false, error: 'Failed to lookup user' });
+            return;
+        }
+        
+        const data = await resp.json();
+        if (!data.found) {
+            sendResponse({ success: false, error: 'User not found' });
+            return;
+        }
+        
+        bgCallMonitor.auth = {
+            loggedIn: true,
+            agentId: data.agent_id,
+            agentName: data.name,
+            email: data.email
+        };
+        
+        // Save to storage for persistence
+        await chrome.storage.local.set({
+            auth_email: data.email,
+            auth_agentId: data.agent_id,
+            auth_agentName: data.name,
+            auth_loggedIn: true
+        });
+        
+        // Start monitoring
+        startBackgroundCallMonitoring();
+        
+        console.log('[BG] Logged in as:', data.name, data.agent_id);
+        sendResponse({ success: true, agentId: data.agent_id, agentName: data.name });
+        
+    } catch (e) {
+        console.error('[BG] Login error:', e);
+        sendResponse({ success: false, error: e.message });
+    }
+}
+
+async function handleBackgroundLogout(sendResponse) {
+    bgCallMonitor.active = false;
+    bgCallMonitor.polling = false;
+    bgCallMonitor.currentCallId = null;
+    bgCallMonitor.callPhone = null;
+    
+    bgCallMonitor.auth = {
+        loggedIn: false,
+        agentId: null,
+        agentName: null,
+        email: null
+    };
+    
+    await chrome.storage.local.set({
+        auth_email: null,
+        auth_agentId: null,
+        auth_agentName: null,
+        auth_loggedIn: false
+    });
+    
+    console.log('[BG] Logged out, monitoring stopped');
+    sendResponse({ success: true });
+}
+
+function startBackgroundCallMonitoring() {
+    if (bgCallMonitor.polling) return;
+    if (!bgCallMonitor.auth.loggedIn || !bgCallMonitor.auth.agentId) return;
+    
+    console.log('[BG] Starting background call monitoring for agent:', bgCallMonitor.auth.agentId);
+    bgCallMonitor.active = true;
+    bgCallMonitor.polling = true;
+    
+    pollForActiveCalls();
+}
+
+function stopBackgroundCallMonitoring() {
+    console.log('[BG] Stopping background call monitoring');
+    bgCallMonitor.active = false;
+    bgCallMonitor.polling = false;
+    bgCallMonitor.currentCallId = null;
+    bgCallMonitor.callPhone = null;
+}
+
+async function pollForActiveCalls() {
+    if (!bgCallMonitor.active || !bgCallMonitor.polling) return;
+    if (!bgCallMonitor.auth.agentId) return;
+    
+    try {
+        const resp = await fetch(`${SERVER_URL}/api/ctm/active-calls/by-agent/${encodeURIComponent(bgCallMonitor.auth.agentId)}`);
+        const calls = resp.ok ? await resp.json() : [];
+        
+        if (calls && calls.length > 0) {
+            const call = calls[0];
+            
+            if (call.call_id !== bgCallMonitor.currentCallId) {
+                console.log('[BG] New active call detected:', call.call_id, call.phone);
+                bgCallMonitor.currentCallId = call.call_id;
+                bgCallMonitor.callPhone = call.phone;
+                
+                // Notify popup if open
+                notifyPopup({ type: 'CALL_STARTED', phone: call.phone, callId: call.call_id });
+            }
+        } else {
+            if (bgCallMonitor.currentCallId && bgCallMonitor.callPhone) {
+                console.log('[BG] Call ended:', bgCallMonitor.currentCallId);
+                const callId = bgCallMonitor.currentCallId;
+                const phone = bgCallMonitor.callPhone;
+                
+                // Clear state first
+                bgCallMonitor.currentCallId = null;
+                bgCallMonitor.callPhone = null;
+                
+                // Handle call ended in background
+                await handleBgCallEnded(callId, phone);
+            }
+        }
+    } catch (e) {
+        console.error('[BG] Poll error:', e);
+    }
+    
+    if (bgCallMonitor.polling) {
+        setTimeout(pollForActiveCalls, ACTIVE_CALL_POLL_INTERVAL);
+    }
+}
+
+async function handleBgCallEnded(callId, phone) {
+    console.log('[BG] Processing ended call:', callId, phone);
+    
+    try {
+        // Wait for transcript to be ready
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Fetch transcript
+        const transResp = await fetch(`${SERVER_URL}/api/ctm/calls/${callId}/transcript`);
+        const transData = transResp.ok ? await transResp.json() : null;
+        
+        if (!transData || !transData.available || !transData.transcript) {
+            console.log('[BG] No transcript available for:', callId);
+            notifyPopup({ type: 'CALL_ENDED_NO_TRANSCRIPT', phone: phone });
+            return;
+        }
+        
+        // Run analysis
+        const analysisResp = await fetch(`${SERVER_URL}/api/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                transcription: transData.transcript, 
+                phone: phone, 
+                client: DEFAULT_CLIENT 
+            })
+        });
+        
+        if (!analysisResp.ok) {
+            console.log('[BG] Analysis failed for:', callId);
+            notifyPopup({ type: 'CALL_ENDED_NO_ANALYSIS', phone: phone });
+            return;
+        }
+        
+        const analysis = await analysisResp.json();
+        
+        const result = {
+            type: 'analysis_complete',
+            phone: phone,
+            call_id: callId,
+            timestamp: Date.now(),
+            analysis: {
+                score: analysis.qualification_score || 0,
+                sentiment: analysis.sentiment || 'neutral',
+                summary: analysis.summary || 'No summary',
+                tags: analysis.tags || [],
+                disposition: analysis.suggested_disposition || 'New',
+                follow_up: analysis.follow_up_required || false
+            },
+            status: 'complete'
+        };
+        
+        // Store result
+        await chrome.storage.local.set({ ats_latest_analysis: result });
+        
+        // Show notification
+        const score = result.analysis.score;
+        const scoreClass = score >= 70 ? 'Hot' : score >= 40 ? 'Warm' : 'Cold';
+        showNotification(
+            'Call Analysis Ready',
+            `${phone} - ${scoreClass} Lead (${score})`
+        );
+        
+        // Notify popup
+        notifyPopup({ type: 'ANALYSIS_COMPLETE', ...result });
+        
+        console.log('[BG] Analysis complete for:', phone, 'Score:', score);
+        
+    } catch (e) {
+        console.error('[BG] Call ended handling error:', e);
+    }
+}
+
+async function handleBackgroundCallEnded(callId, phone, client, sendResponse) {
+    try {
+        // Fetch transcript
+        const transResp = await fetch(`${SERVER_URL}/api/ctm/calls/${callId}/transcript`);
+        const transData = transResp.ok ? await transResp.json() : null;
+        
+        if (!transData || !transData.available || !transData.transcript) {
+            sendResponse({ success: false, error: 'No transcript available' });
+            return;
+        }
+        
+        // Run analysis
+        const analysisResp = await fetch(`${SERVER_URL}/api/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transcription: transData.transcript, phone, client })
+        });
+        
+        if (!analysisResp.ok) {
+            sendResponse({ success: false, error: 'Analysis failed' });
+            return;
+        }
+        
+        const analysis = await analysisResp.json();
+        
+        const result = {
+            type: 'analysis_complete',
+            phone,
+            call_id: callId,
+            timestamp: Date.now(),
+            analysis: {
+                score: analysis.qualification_score || 0,
+                sentiment: analysis.sentiment || 'neutral',
+                summary: analysis.summary || 'No summary',
+                tags: analysis.tags || [],
+                disposition: analysis.suggested_disposition || 'New',
+                follow_up: analysis.follow_up_required || false
+            },
+            status: 'complete'
+        };
+        
+        await chrome.storage.local.set({ ats_latest_analysis: result });
+        sendResponse({ success: true, result });
+        
+    } catch (e) {
+        console.error('[BG] Handle call ended error:', e);
+        sendResponse({ success: false, error: e.message });
+    }
+}
+
+async function notifyPopup(message) {
+    try {
+        chrome.runtime.sendMessage(message);
+    } catch (e) {
+        // Popup might be closed, that's fine
     }
 }
 

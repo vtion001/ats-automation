@@ -28,11 +28,43 @@ let activeCallMonitor = {
     callStartTime: null
 };
 
+// Listen for messages from background service worker
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const type = message.type || message;
+    
+    switch (type) {
+        case 'CALL_STARTED':
+            if (message.phone) {
+                activeCallMonitor.currentCallId = message.callId;
+                activeCallMonitor.callPhone = message.phone;
+                showActiveCallUI({ phone: message.phone, direction: 'inbound' });
+            }
+            break;
+        
+        case 'ANALYSIS_COMPLETE':
+            if (message.phone) {
+                handleAnalysisComplete(message);
+            }
+            break;
+        
+        case 'CALL_ENDED_NO_TRANSCRIPT':
+            showEndedCallUI({ phone: message.phone, duration: 0 });
+            break;
+        
+        case 'ANALYSIS_READY':
+            if (message.result) {
+                handleAnalysisComplete(message.result);
+            }
+            break;
+    }
+});
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[Popup] Initializing...');
     
     await loadAuthState();
     await loadStats();
+    await loadLastAnalysis();
     await checkServer();
     bindEvents();
     
@@ -45,6 +77,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     console.log('[Popup] Ready');
 });
+
+async function loadLastAnalysis() {
+    const result = await getStorage(STORAGE_KEY);
+    const analysis = result[STORAGE_KEY];
+    if (analysis) {
+        lastAnalysis = analysis;
+        console.log('[Popup] Loaded stored analysis for:', analysis.phone);
+        showAnalysis(analysis);
+    }
+}
 
 // ============ STORAGE ============
 
@@ -77,6 +119,26 @@ async function saveAuthState() {
         auth_agentName: authState.agentName,
         auth_loggedIn: authState.loggedIn
     });
+}
+
+function updateMonitoringStatus(status, phone) {
+    const dot = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    
+    if (status === 'active') {
+        dot.className = 'status-dot ok';
+        text.textContent = phone ? `Active call: ${phone}` : 'Monitoring active';
+    } else if (status === 'analyzing') {
+        dot.className = 'status-dot';
+        dot.style.background = '#dd6b20';
+        text.textContent = 'Analyzing call...';
+    } else if (status === 'error') {
+        dot.className = 'status-dot error';
+        text.textContent = status;
+    } else {
+        dot.className = 'status-dot ok';
+        text.textContent = 'Connected - monitoring';
+    }
 }
 
 async function loadStats() {
@@ -112,8 +174,10 @@ async function checkServer() {
     try {
         const resp = await fetch(`${SERVER_URL}/health`);
         if (resp.ok) {
-            dot.className = 'status-dot ok';
-            text.textContent = 'Connected to server';
+            if (!authState.loggedIn) {
+                dot.className = 'status-dot ok';
+                text.textContent = 'Connected to server';
+            }
         } else {
             dot.className = 'status-dot error';
             text.textContent = 'Server error';
@@ -217,7 +281,9 @@ function showWaitingForLogin() {
     `;
 }
 
-function showMonitoringActive() {
+function showMonitoringActive(lastPoll) {
+    const time = lastPoll ? new Date(lastPoll).toLocaleTimeString() : '';
+    const pollStatus = time ? `Last check: ${time}` : 'Checking...';
     const monitoringHtml = `
         <div class="call-card">
             <div class="call-header">
@@ -227,9 +293,17 @@ function showMonitoringActive() {
                 <div class="pulse"></div>
                 <span>Waiting for incoming calls...</span>
             </div>
+            <div class="poll-status" id="pollStatus">${pollStatus}</div>
         </div>
     `;
     document.getElementById('callContent').innerHTML = monitoringHtml;
+}
+
+function updatePollStatus() {
+    const statusEl = document.getElementById('pollStatus');
+    if (statusEl) {
+        statusEl.textContent = `Last check: ${new Date().toLocaleTimeString()}`;
+    }
 }
 
 function showActiveCallUI(call) {
@@ -244,6 +318,7 @@ function showActiveCallUI(call) {
             <div class="call-meta">${capitalize(call.direction || 'inbound')}</div>
         </div>
     `;
+    updateMonitoringStatus('active', call.phone);
 }
 
 function showAnalyzingUI(phone) {
@@ -256,6 +331,7 @@ function showAnalyzingUI(phone) {
             <div class="call-meta">Processing call analysis</div>
         </div>
     `;
+    updateMonitoringStatus('analyzing', phone);
 }
 
 function showEndedCallUI(call) {
@@ -268,6 +344,7 @@ function showEndedCallUI(call) {
             <div class="call-meta">Duration: ${call.duration || 0}s</div>
         </div>
     `;
+    updateMonitoringStatus('ended', call.phone);
 }
 
 // ============ AUTH ============
@@ -293,14 +370,15 @@ async function handleLogin() {
     loginBtn.textContent = 'Logging in...';
     loginBtn.disabled = true;
     
-    const result = await loginAgent(email);
+    // Delegate to background service worker
+    const result = await sendToBackground({ type: 'BG_LOGIN', email });
     
     if (result.success) {
         authState = {
             loggedIn: true,
             agentId: result.agentId,
             agentName: result.agentName,
-            email: result.email
+            email: email
         };
         await saveAuthState();
         
@@ -317,6 +395,9 @@ async function handleLogin() {
 }
 
 async function handleLogout() {
+    // Delegate to background service worker
+    await sendToBackground({ type: 'BG_LOGOUT' });
+    
     authState = {
         loggedIn: false,
         agentId: null,
@@ -327,6 +408,14 @@ async function handleLogout() {
     
     stopActiveCallMonitoring();
     showLoginState();
+}
+
+function sendToBackground(message) {
+    return new Promise((resolve) => {
+        chrome.runtime.sendMessage(message, (response) => {
+            resolve(response || { success: false, error: 'No response' });
+        });
+    });
 }
 
 function showLoginError(message) {
@@ -367,6 +456,7 @@ async function pollForActiveCalls() {
     
     try {
         const calls = await fetchActiveCallsForAgent(authState.agentId);
+        updatePollStatus();
         
         if (calls && calls.length > 0) {
             const call = calls[0];
@@ -386,11 +476,16 @@ async function pollForActiveCalls() {
             }
             
             if (!activeCallMonitor.currentCallId) {
-                showMonitoringActive();
+                showMonitoringActive(Date.now());
             }
         }
     } catch (e) {
         console.error('[Monitor] Poll error:', e);
+        const statusEl = document.getElementById('pollStatus');
+        if (statusEl) {
+            statusEl.textContent = 'Poll error: ' + e.message;
+            statusEl.className = 'poll-status error';
+        }
     }
     
     if (activeCallMonitor.polling) {
@@ -512,6 +607,7 @@ function showAnalysis(data) {
             </div>
         </div>
     `;
+    updateMonitoringStatus('complete', data.phone);
 }
 
 // ============ UTILS ============
