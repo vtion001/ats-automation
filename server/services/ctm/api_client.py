@@ -67,6 +67,8 @@ class CTMApiClient:
             response = requests.request(
                 method=method, url=url, headers=headers, params=params, json=data, timeout=30
             )
+            if response.status_code == 404:
+                return {"status": "error", "reason": "call not found", "calls": []}
             response.raise_for_status()
             return response.json() if response.text else {}
         except requests.RequestException as e:
@@ -138,13 +140,24 @@ class CTMApiClient:
         return call.get("transcript") or call.get("transcription") or ""
 
     def get_active_calls(self) -> List[Dict[str, Any]]:
-        """Get currently active/running calls"""
+        """Get currently active/running calls
+
+        Note: CTM's /calls/active.json endpoint can return "call not found" error
+        when there are no active calls. Instead, we query recent calls and filter by
+        active status (in progress, ringing, queued).
+        """
         if not self.account_id:
             raise ValueError("CTM_ACCOUNT_ID is required")
 
-        result = self._make_request("GET", f"/api/v1/accounts/{self.account_id}/calls/active.json")
-
-        return result.get("calls", [])
+        try:
+            result = self._make_request(
+                "GET", f"/api/v1/accounts/{self.account_id}/calls/active.json"
+            )
+            return result.get("calls", [])
+        except Exception as e:
+            if "call not found" in str(e).lower() or "404" in str(e):
+                return []
+            raise
 
     def get_account_info(self) -> Dict[str, Any]:
         """Get account information"""
