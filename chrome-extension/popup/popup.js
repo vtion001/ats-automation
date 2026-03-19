@@ -1,465 +1,509 @@
 /**
- * AGS Popup - Main Extension Popup
- * Thin orchestrator that wires together modular components
+ * AGS Popup - Clean UX Flow
+ * Monitors CTM API and shows call analysis when calls end
  */
+
+const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
+
+// State
+let currentCall = null;
+let callAnalysis = null;
+let stats = { calls: 0, analyzed: 0, hot: 0 };
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[Popup] Initializing...');
     
-    // Initialize components
-    const toastManager = new ToastManager();
-    toastManager.init();
-    window.ToastManager = toastManager;
-    window.ToastManagerInstance = toastManager;
-    
-    const statusManager = new StatusManager();
-    const qualificationDisplay = new QualificationDisplay();
-    qualificationDisplay.init();
-    window.qualificationDisplay = qualificationDisplay;
-    
-    const testPanel = new TestPanel();
-    const overlayUI = new OverlayUI();
-    testPanel.setOverlayUI(overlayUI);
-    
-    // Initialize modules
+    // Initialize storage
     await StorageService.init();
-    await initCollapsibleSections();
-    await loadSettings();
-    await initNotesAndQualification();
     
-    // Check if first time load
-    const isFirstLoad = await checkFirstLoad();
+    // Initialize UI components
+    initToast();
+    initCollapsibleSections();
+    loadSettings();
+    initNotes();
     
-    // Show initializing state only on first load
-    if (isFirstLoad) {
-        statusManager.showStatus('Initializing...', null);
-        statusManager.setAllInitializing();
-    }
+    // Check services
+    await checkServices();
+    setInterval(checkServices, 30000);
     
-    // Initialize services and start auto-refresh
-    await runAllServiceChecks(statusManager, !isFirstLoad);
-    startServiceAutoRefresh(statusManager);
+    // Start monitoring CTM API for calls
+    startCallMonitoring();
     
-    // Start recording state monitoring (for background recording indicator)
-    startRecordingMonitor(statusManager);
-    
-    // Listen for analysis results from service worker (background processing)
-    listenForAnalysisResults(testPanel);
-    
-    // Bind all events
-    bindClientEvents();
-    bindToggleEvents(statusManager);
-    bindPinButton();
-    bindTestButtons(testPanel);
-    bindConfigButton();
-    bindDebugButton();
-    
-    // Expose globals
-    window.overlayUI = overlayUI;
-    window.StatusService = StatusService;
-    window.NotesManager = NotesManager;
-    window.QualificationManager = QualificationManager;
-    window.StatusManager = statusManager;
+    // Bind events
+    bindEvents();
     
     console.log('[Popup] Ready');
 });
 
-// ============ Helper Functions ============
+// ============ Toast Notifications ============
 
-async function initCollapsibleSections() {
-    try {
-        document.querySelectorAll('.section.collapsible .section-header').forEach(header => {
-            header.addEventListener('click', function() {
-                const section = this.closest('.collapsible');
-                section.classList.toggle('collapsed');
-                const sectionId = section.id;
-                if (sectionId) {
-                    StorageService.set({ ['collapsed_' + sectionId]: section.classList.contains('collapsed') });
-                }
-            });
-        });
-        
-        const collapsedSections = document.querySelectorAll('.section.collapsible');
-        const collapsedKeys = {};
-        collapsedSections.forEach(s => collapsedKeys['collapsed_' + s.id] = null);
-        
-        const collapsedStates = await StorageService.get(collapsedKeys);
-        Object.entries(collapsedStates).forEach(([key, value]) => {
-            if (value === true) {
-                const sectionId = key.replace('collapsed_', '');
-                document.getElementById(sectionId)?.classList.add('collapsed');
-            }
-        });
-    } catch(e) { console.error('[Popup] Collapsible error:', e); }
+let toastContainer;
+
+function initToast() {
+    toastContainer = document.getElementById('toastContainer');
 }
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<span class="toast-message">${message}</span>`;
+    toastContainer.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// ============ Settings ============
 
 async function loadSettings() {
-    try {
-        const config = await StorageService.getConfig();
-        const setIf = (el, val) => { if (el) el.value = val; };
-        const setCheck = (el, val) => { if (el) el.checked = val; };
-        
-        setIf(ge('clientSelect'), config.activeClient);
-        setCheck(ge('callMonitorToggle'), config.callMonitorEnabled);
-        setCheck(ge('autoAnalyzeToggle'), config.autoAnalyzeEnabled);
-        setCheck(ge('sfSyncToggle'), config.sfSyncEnabled);
-        setCheck(ge('aiToggle'), config.aiEnabled);
-    } catch(e) { console.error('[Popup] Load settings error:', e); }
-}
-
-async function initNotesAndQualification() {
-    try {
-        const client = ge('clientSelect')?.value || 'flyland';
-        await NotesManager.load(client);
-        await QualificationManager.loadKnowledgeBase(client);
-    } catch(e) { console.error('[Popup] Notes init error:', e); }
-}
-
-async function checkServerConnection(statusManager) {
-    try {
-        const serverUrl = await StatusService.getAIServerUrl();
-        const response = await fetch(`${serverUrl}/health`, { signal: AbortSignal.timeout(3000) });
-        
-        if (response.ok) {
-            statusManager.updateMainStatus(true);
-            statusManager.updateServiceStatus('aiServer', true);
-            const el = ge('serverStatus');
-            if (el) el.textContent = serverUrl.replace(/^https?:\/\//, '');
-        } else {
-            statusManager.updateMainStatus(false);
-            statusManager.updateServiceStatus('aiServer', false);
-        }
-    } catch {
-        statusManager.updateMainStatus(false);
-        statusManager.updateServiceStatus('aiServer', false);
+    const config = await StorageService.getConfig();
+    
+    const clientSelect = document.getElementById('clientSelect');
+    if (config.client && clientSelect) {
+        clientSelect.value = config.client;
+    }
+    
+    // Load stats
+    const savedStats = await StorageService.get(['stats_calls', 'stats_analyzed', 'stats_hot']);
+    if (savedStats) {
+        stats = {
+            calls: savedStats.stats_calls || 0,
+            analyzed: savedStats.stats_analyzed || 0,
+            hot: savedStats.stats_hot || 0
+        };
+        updateStatsDisplay();
     }
 }
 
-async function runAllServiceChecks(statusManager, skipStatus = false) {
-    try {
-        if (!skipStatus) {
-            statusManager.showStatus('Checking services...', null);
+async function saveSettings() {
+    const client = document.getElementById('clientSelect')?.value;
+    await StorageService.setConfig({ client });
+}
+
+// ============ Notes ============
+
+let notes = [];
+
+async function initNotes() {
+    const saved = await StorageService.get('notes');
+    notes = saved?.notes || [];
+    renderNotes();
+    
+    document.getElementById('addNoteBtn')?.addEventListener('click', addNote);
+    document.getElementById('noteInput')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            addNote();
         }
+    });
+}
+
+function renderNotes() {
+    const container = document.getElementById('notesContainer');
+    const empty = document.getElementById('notesEmpty');
+    const count = document.getElementById('noteCount');
+    
+    if (!container) return;
+    
+    if (notes.length === 0) {
+        empty.style.display = 'block';
+        count.textContent = '0';
+        return;
+    }
+    
+    empty.style.display = 'none';
+    count.textContent = notes.length;
+    
+    const notesHtml = notes.slice().reverse().map((note, i) => `
+        <div class="note-item">
+            <span class="note-text">${escapeHtml(note.text)}</span>
+            <span class="note-time">${formatTime(note.time)}</span>
+        </div>
+    `).join('');
+    
+    container.innerHTML = notesHtml + '<div class="notes-empty" id="notesEmpty" style="display:none;">No notes</div>';
+}
+
+async function addNote() {
+    const input = document.getElementById('noteInput');
+    if (!input || !input.value.trim()) return;
+    
+    notes.push({ text: input.value.trim(), time: Date.now() });
+    await StorageService.set({ notes });
+    input.value = '';
+    renderNotes();
+}
+
+// ============ Call Monitoring ============
+
+let callMonitorInterval = null;
+let processedCallIds = new Set();
+
+function startCallMonitoring() {
+    if (callMonitorInterval) clearInterval(callMonitorInterval);
+    
+    checkForCalls();
+    callMonitorInterval = setInterval(checkForCalls, 10000); // Poll every 10s
+    
+    console.log('[Popup] Call monitoring started');
+}
+
+async function checkForCalls() {
+    try {
+        const response = await fetch(`${SERVER_URL}/api/ctm/calls?limit=5`);
+        if (!response.ok) return;
         
-        const results = await StatusService.runAllTests();
+        const calls = await response.json();
+        updateCallState(calls);
         
-        // Update each service status
-        const services = ['storage', 'aiServer', 'salesforce', 'background', 'ctm'];
-        services.forEach(s => {
-            if (s === 'ctm') {
-                const isOnline = results.ctmMonitor;
-                const label = StatusService.getCTMStatusText(results.ctmStatus);
-                statusManager.updateServiceStatus(s, isOnline, label);
-            } else if (s === 'salesforce') {
-                const sfResult = results.salesforce;
-                const isOnline = sfResult.connected;
-                const label = StatusService.getSalesforceStatusText(sfResult);
-                statusManager.updateServiceStatus(s, isOnline, label);
-            } else {
-                statusManager.updateServiceStatus(s, results[s]);
+    } catch (e) {
+        console.error('[Popup] Call check error:', e);
+    }
+}
+
+function updateCallState(calls) {
+    const callState = document.getElementById('callState');
+    const analysisPreview = document.getElementById('callAnalysisPreview');
+    
+    // Find most recent call
+    const recentCall = calls[0];
+    
+    if (!recentCall) {
+        callState.innerHTML = `
+            <div class="waiting-state">
+                <div class="waiting-icon">📞</div>
+                <div>No recent calls</div>
+            </div>
+        `;
+        analysisPreview.style.display = 'none';
+        return;
+    }
+    
+    const isActive = recentCall.status === 'in progress';
+    const callId = recentCall.call_id;
+    
+    if (isActive) {
+        // Show active call
+        callState.innerHTML = `
+            <div class="call-activity">
+                <div class="call-activity-header">
+                    <span class="call-badge active">Active Call</span>
+                </div>
+                <div class="call-info">
+                    <div class="call-info-row">
+                        <span class="call-info-label">From:</span>
+                        <span class="call-info-value">${formatPhone(recentCall.phone)}</span>
+                    </div>
+                    <div class="call-info-row">
+                        <span class="call-info-label">Direction:</span>
+                        <span class="call-info-value">${recentCall.direction}</span>
+                    </div>
+                    <div class="call-info-row">
+                        <span class="call-info-label">Status:</span>
+                        <span class="call-info-value">${recentCall.status}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        analysisPreview.style.display = 'none';
+        
+    } else {
+        // Call ended - show analysis if available
+        const alreadyAnalyzed = processedCallIds.has(callId);
+        
+        if (alreadyAnalyzed && callAnalysis) {
+            showAnalysis(callAnalysis, recentCall);
+        } else {
+            // Call ended, fetch and analyze
+            callState.innerHTML = `
+                <div class="call-activity">
+                    <div class="call-activity-header">
+                        <span class="call-badge ended">Call Ended</span>
+                    </div>
+                    <div class="call-info">
+                        <div class="call-info-row">
+                            <span class="call-info-label">From:</span>
+                            <span class="call-info-value">${formatPhone(recentCall.phone)}</span>
+                        </div>
+                        <div class="call-info-row">
+                            <span class="call-info-label">Duration:</span>
+                            <span class="call-info-value">${recentCall.duration || 0}s</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Start analysis
+            if (!alreadyAnalyzed) {
+                processedCallIds.add(callId);
+                analyzeCall(callId, recentCall);
             }
-        });
-        
-        // Core services that must pass for main status to be "Ready"
-        const coreServices = ['storage', 'aiServer', 'background'];
-        const corePassed = coreServices.every(s => results[s]);
-        statusManager.updateMainStatus(corePassed);
-        
-        if (!skipStatus) {
-            statusManager.showStatus(corePassed ? 'Ready' : 'Issues detected', corePassed);
-        }
-        
-    } catch(e) {
-        console.error('[Popup] Service check error:', e);
-        if (!skipStatus) {
-            statusManager.showStatus('Error checking services', false);
         }
     }
 }
 
-async function checkFirstLoad() {
+async function analyzeCall(callId, call) {
     try {
-        const result = await StorageService.get('popupInitialized');
-        if (result.popupInitialized) {
-            return false;
+        // Fetch transcript
+        const transcriptResp = await fetch(`${SERVER_URL}/api/ctm/calls/${callId}/transcript`);
+        const transcriptData = await transcriptResp.json();
+        
+        if (!transcriptData.available || !transcriptData.transcript) {
+            showToast('No transcript available for this call', 'warning');
+            return;
         }
-        // Mark as initialized
-        await StorageService.set({ popupInitialized: true });
-        return true;
-    } catch(e) {
-        return true; // First load if error
+        
+        // Run analysis
+        const analyzeResp = await fetch(`${SERVER_URL}/api/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                transcription: transcriptData.transcript,
+                phone: call.phone,
+                client: getSelectedClient()
+            })
+        });
+        
+        const analysis = await analyzeResp.json();
+        
+        // Store and display
+        callAnalysis = analysis;
+        stats.analyzed++;
+        if (analysis.qualification_score >= 70) stats.hot++;
+        stats.calls++;
+        saveStats();
+        updateStatsDisplay();
+        
+        showAnalysis(analysis, call);
+        
+    } catch (e) {
+        console.error('[Popup] Analysis error:', e);
+        showToast('Analysis failed: ' + e.message, 'error');
     }
 }
 
-let autoRefreshInterval = null;
-
-function startServiceAutoRefresh(statusManager) {
-    // Run immediately (skip status since we're already initialized)
-    runAllServiceChecks(statusManager, true);
+function showAnalysis(analysis, call) {
+    const callState = document.getElementById('callState');
+    const analysisPreview = document.getElementById('callAnalysisPreview');
     
-    // Then refresh every 30 seconds
-    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-    autoRefreshInterval = setInterval(() => {
-        runAllServiceChecks(statusManager, true);
-    }, 30000);
+    callState.innerHTML = `
+        <div class="call-activity">
+            <div class="call-activity-header">
+                <span class="call-badge ended">Call Ended</span>
+            </div>
+            <div class="call-info">
+                <div class="call-info-row">
+                    <span class="call-info-label">From:</span>
+                    <span class="call-info-value">${formatPhone(call.phone)}</span>
+                </div>
+                <div class="call-info-row">
+                    <span class="call-info-label">Duration:</span>
+                    <span class="call-info-value">${call.duration || 0}s</span>
+                </div>
+            </div>
+        </div>
+    `;
     
-    console.log('[Popup] Auto-refresh started (30s)');
+    const score = analysis.qualification_score || 0;
+    const scoreCircle = document.getElementById('scoreCircle');
+    const scoreLabel = document.getElementById('scoreLabel');
+    const summary = document.getElementById('analysisSummary');
+    const tags = document.getElementById('analysisTags');
+    
+    // Score styling
+    let scoreClass = 'cold';
+    let label = 'Cold Lead';
+    if (score >= 70) { scoreClass = 'hot'; label = 'Hot Lead'; }
+    else if (score >= 40) { scoreClass = 'warm'; label = 'Warm Lead'; }
+    
+    scoreCircle.textContent = score;
+    scoreCircle.className = `score-circle ${scoreClass}`;
+    scoreLabel.textContent = label;
+    summary.textContent = analysis.summary || 'No summary available';
+    
+    // Tags
+    const tagList = analysis.tags || [];
+    tags.innerHTML = tagList.map(t => `<span class="tag">${t}</span>`).join('');
+    
+    analysisPreview.style.display = 'block';
 }
 
-// Shortcut for getElementById
-function ge(id) { return document.getElementById(id); }
+// ============ Services ============
 
-// ============ Event Binding ============
-
-function bindClientEvents() {
-    // Client change
-    ge('clientSelect')?.addEventListener('change', async (e) => {
-        await StorageService.saveConfig({ activeClient: e.target.value });
-        await NotesManager.load(e.target.value);
-        await QualificationManager.loadKnowledgeBase(e.target.value);
-    });
-    
-    // Note actions
-    ge('notesContainer')?.addEventListener('click', (e) => {
-        const btn = e.target.closest('.note-action-btn');
-        if (!btn) return;
-        const action = btn.dataset.action;
-        const index = parseInt(btn.dataset.index);
-        const actions = { edit: 'editNote', delete: 'deleteNote', save: 'saveEdit', cancel: 'cancelEdit' };
-        NotesManager[actions[action]]?.(index);
-    });
-    
-    // Add note
-    ge('addNoteBtn')?.addEventListener('click', addNote);
-    ge('noteInput')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); }
-        if (e.key === 'Escape') e.target.blur();
-    });
+async function checkServices() {
+    await Promise.all([
+        checkStorage(),
+        checkAIServer(),
+        checkCTMAPI()
+    ]);
 }
 
-function addNote() {
-    const input = ge('noteInput');
-    if (input?.value.trim()) {
-        NotesManager.addNote(input.value.trim(), 'manual');
-        input.value = '';
-        window.ToastManager.success('Note added');
+async function checkStorage() {
+    const status = document.getElementById('storageStatus');
+    try {
+        await StorageService.init();
+        updateServiceStatus(status, true, 'Ready');
+    } catch (e) {
+        updateServiceStatus(status, false, 'Error');
     }
 }
 
-function bindToggleEvents(statusManager) {
-    const toggles = [
-        { id: 'callMonitorToggle', key: 'callMonitorEnabled', msg: (v) => v ? 'Call monitoring enabled' : 'Call monitoring disabled' },
-        { id: 'autoAnalyzeToggle', key: 'autoAnalyzeEnabled', msg: (v) => v ? 'Auto-analyze enabled' : 'Auto-analyze disabled' },
-        { id: 'sfSyncToggle', key: 'sfSyncEnabled', msg: (v) => v ? 'Salesforce sync enabled' : 'Salesforce sync disabled' },
-        { id: 'aiToggle', key: 'aiEnabled', msg: (v) => v ? 'AI analysis enabled' : 'AI analysis disabled' }
-    ];
+async function checkAIServer() {
+    const status = document.getElementById('aiServerStatus');
+    try {
+        const response = await fetch(`${SERVER_URL}/health`);
+        if (response.ok) {
+            const data = await response.json();
+            updateServiceStatus(status, true, data.version || 'Online');
+        } else {
+            updateServiceStatus(status, false, 'Error ' + response.status);
+        }
+    } catch (e) {
+        updateServiceStatus(status, false, 'Offline');
+    }
+}
+
+async function checkCTMAPI() {
+    const status = document.getElementById('ctmStatus');
+    try {
+        const response = await fetch(`${SERVER_URL}/api/ctm/health`);
+        if (response.ok) {
+            const data = await response.json();
+            updateServiceStatus(status, true, data.account_name || 'Connected');
+        } else {
+            updateServiceStatus(status, false, 'Error');
+        }
+    } catch (e) {
+        updateServiceStatus(status, false, 'Offline');
+    }
+}
+
+function updateServiceStatus(el, online, label = '') {
+    if (!el) return;
+    const indicator = el.querySelector('.status-indicator');
+    const labelEl = el.querySelector('.service-label');
     
-    toggles.forEach(({ id, key, msg }) => {
-        ge(id)?.addEventListener('change', async (e) => {
-            await StorageService.saveConfig({ [key]: e.target.checked });
-            statusManager.showStatus(msg(e.target.checked), e.target.checked);
+    if (indicator) {
+        indicator.classList.remove('online', 'offline', 'checking');
+        indicator.classList.add(online ? 'online' : 'offline');
+    }
+    if (labelEl) labelEl.textContent = label;
+}
+
+// ============ Stats ============
+
+function updateStatsDisplay() {
+    document.getElementById('callsCount').textContent = stats.calls;
+    document.getElementById('analyzedCount').textContent = stats.analyzed;
+    document.getElementById('hotCount').textContent = stats.hot;
+}
+
+async function saveStats() {
+    await StorageService.set({
+        stats_calls: stats.calls,
+        stats_analyzed: stats.analyzed,
+        stats_hot: stats.hot
+    });
+}
+
+// ============ Collapsible Sections ============
+
+async function initCollapsibleSections() {
+    document.querySelectorAll('.section.collapsible .section-header').forEach(header => {
+        header.addEventListener('click', function() {
+            this.closest('.section').classList.toggle('collapsed');
         });
     });
 }
 
-function bindPinButton() {
-    const btn = ge('pinBtn');
-    if (!btn) return;
-    
-    btn.addEventListener('click', async () => {
-        const isPinned = btn.classList.contains('pinned');
-        
-        if (isPinned) {
-            btn.classList.remove('pinned');
-            await StorageService.set({ popupFloatEnabled: false });
-            window.ToastManager.success('Floating mode disabled');
-        } else {
-            btn.classList.add('pinned');
-            await StorageService.set({ popupFloatEnabled: true });
-            
-            chrome.windows.create({
-                url: chrome.runtime.getURL('popup/popup.html'),
-                type: 'popup',
-                width: 400,
-                height: 700,
-                focused: true
-            }).then(() => window.ToastManager.success('Floating window opened'))
-              .catch(err => { console.error(err); window.ToastManager.error('Failed to open window'); });
-        }
-    });
-    
-    StorageService.get('popupFloatEnabled').then(r => { if (r.popupFloatEnabled) btn.classList.add('pinned'); });
-}
+// ============ Events ============
 
-function bindTestButtons(testPanel) {
-    // Test all services
-    ge('testBtn')?.addEventListener('click', async () => {
-        window.StatusManager.updateAllServiceStatus('checking');
-        window.ToastManager.info('Testing all services...');
-        
-        try {
-            const results = await StatusService.runAllTests();
-            
-            // Update each service status
-            const services = ['storage', 'aiServer', 'salesforce', 'background', 'ctm'];
-            services.forEach(s => {
-                if (s === 'ctm') {
-                    const label = StatusService.getCTMStatusText(results.ctmStatus);
-                    window.StatusManager.updateServiceStatus(s, results.ctmMonitor, label);
-                } else if (s === 'salesforce') {
-                    const sfResult = results.salesforce;
-                    const label = StatusService.getSalesforceStatusText(sfResult);
-                    window.StatusManager.updateServiceStatus(s, sfResult.connected, label);
-                } else {
-                    window.StatusManager.updateServiceStatus(s, results[s]);
-                }
-            });
-            
-            // Core services that must pass: storage, aiServer, background
-            const coreServices = ['storage', 'aiServer', 'background'];
-            const corePassed = coreServices.every(s => results[s]);
-            window.StatusManager.showStatus(corePassed ? 'Core services online!' : 'Core issues detected', corePassed);
-            window.StatusManager.updateMainStatus(corePassed);
-            window.StatusManager.updateStats();
-        } catch(e) { window.ToastManager.error('Test failed: ' + e.message); }
-    });
+function bindEvents() {
+    // Client select
+    document.getElementById('clientSelect')?.addEventListener('change', saveSettings);
     
-    // Test New Lead
-    ge('testNewLeadBtn')?.addEventListener('click', () => testPanel.handleNewLeadClick());
-    
-    // Test Existing Lead
-    ge('testExistingLeadBtn')?.addEventListener('click', () => testPanel.handleExistingLeadClick());
-    
-    // Run Analysis
-    ge('runAnalysisBtn')?.addEventListener('click', () => testPanel.runAnalysis());
-    
-    // Hide quick test
-    if (ge('quickTestBtn')) ge('quickTestBtn').style.display = 'none';
-}
-
-function bindConfigButton() {
-    ge('configBtn')?.addEventListener('click', () => {
+    // Config button
+    document.getElementById('configBtn')?.addEventListener('click', () => {
         window.open(chrome.runtime.getURL('config/config.html'), '_blank');
     });
     
-    // Tab capture button - opens tab selector
-    ge('tabCaptureBtn')?.addEventListener('click', async () => {
-        // Open tab selector in new window
-        window.open(chrome.runtime.getURL('popup/tab-selector.html'), '_blank', 'width=450,height=600');
+    // Refresh button
+    document.getElementById('refreshBtn')?.addEventListener('click', async () => {
+        showToast('Refreshing...', 'info');
+        await checkServices();
+        await checkForCalls();
+        showToast('Refreshed', 'success');
+    });
+    
+    // Pin button
+    const pinBtn = document.getElementById('pinBtn');
+    pinBtn?.addEventListener('click', async function() {
+        this.classList.toggle('pinned');
+        const pinned = this.classList.contains('pinned');
+        await StorageService.set({ popupFloatEnabled: pinned });
     });
 }
 
-// Debug button to test overlay
-function bindDebugButton() {
-    const debugBtn = document.getElementById('debugOverlayBtn');
-    if (debugBtn) {
-        debugBtn.addEventListener('click', function() {
-            if (window.overlayUI) {
-                window.overlayUI.showCallAnalysis({
-                    phone: '+15551234567',
-                    caller_id: '+15551234567',
-                    callerName: 'Test Caller',
-                    tags: ['hot_lead', 'treatment'],
-                    sentiment: 'positive',
-                    qualificationScore: 85,
-                    summary: 'Test call - caller interested in addiction treatment services.',
-                    suggestedDisposition: 'Qualified',
-                    followUpRequired: true,
-                    recommendedDepartment: 'intake',
-                    testType: 'debug',
-                    isLiveCall: true
-                });
-            }
-        });
+// ============ Helpers ============
+
+function getSelectedClient() {
+    return document.getElementById('clientSelect')?.value || 'flyland';
+}
+
+function formatPhone(phone) {
+    if (!phone) return 'Unknown';
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length === 11 && digits[0] === '1') {
+        return `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
     }
+    return phone;
 }
 
-// ============ Recording Monitor ============
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
-let recordingMonitorInterval = null;
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
-async function checkRecordingState(statusManager) {
-    try {
-        // Check service worker recording state (with timeout for cold SW)
-        const response = await new Promise(resolve => {
-            const timeout = setTimeout(() => resolve(null), 3000);
-            chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATUS' }, (r) => {
-                clearTimeout(timeout);
-                resolve(r);
+// Storage Service (minimal implementation)
+const StorageService = {
+    data: {},
+    
+    async init() {
+        return new Promise((resolve) => {
+            chrome.storage.local.get(['ats_config', 'ats_data'], (result) => {
+                this.config = result.ats_config || {};
+                this.data = result.ats_data || {};
+                resolve();
             });
         });
-        
-        if (response && response.recording) {
-            statusManager.updateServiceStatus('recording', true, 'Recording');
-            return;
-        }
-        
-        // Also check storage state
-        const stateResult = await new Promise(resolve => {
-            chrome.storage.local.get('ats_recording_state', resolve);
+    },
+    
+    async get(keys) {
+        return new Promise((resolve) => {
+            chrome.storage.local.get(keys, (result) => resolve(result));
         });
-        
-        if (stateResult?.ats_recording_state?.recording) {
-            statusManager.updateServiceStatus('recording', true, 'Recording');
-            return;
-        }
-        
-        // Check if analysis result is waiting
-        const analysisResult = await new Promise(resolve => {
-            const timeout = setTimeout(() => resolve(null), 3000);
-            chrome.runtime.sendMessage({ type: 'GET_ANALYSIS_RESULT' }, (r) => {
-                clearTimeout(timeout);
-                resolve(r);
-            });
+    },
+    
+    async set(items) {
+        return new Promise((resolve) => {
+            chrome.storage.local.set(items, resolve);
         });
-        
-        if (analysisResult?.result) {
-            statusManager.updateServiceStatus('recording', true, 'Processing');
-            return;
-        }
-        
-        // No recording active
-        statusManager.updateServiceStatus('recording', false);
-        
-    } catch (e) {
-        console.log('[Popup] Recording check error:', e);
+    },
+    
+    async getConfig() {
+        return this.config;
+    },
+    
+    async setConfig(config) {
+        this.config = { ...this.config, ...config };
+        await this.set({ ats_config: this.config });
     }
-}
-
-function startRecordingMonitor(statusManager) {
-    checkRecordingState(statusManager);
-    
-    if (recordingMonitorInterval) clearInterval(recordingMonitorInterval);
-    recordingMonitorInterval = setInterval(() => {
-        checkRecordingState(statusManager);
-    }, 2000);
-    
-    console.log('[Popup] Recording monitor started');
-}
-
-function listenForAnalysisResults(testPanel) {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.type === 'ANALYSIS_READY' && message.result) {
-            console.log('[Popup] Analysis ready from background:', message.result);
-            
-            // Check if there's an existing analysis result
-            chrome.runtime.sendMessage({ type: 'GET_ANALYSIS_RESULT' }, (response) => {
-                if (response?.result) {
-                    window.ToastManager?.success('Call Analysis Ready!');
-                    
-                    // Show the test panel with the result
-                    const qualResult = document.getElementById('qualResult');
-                    if (qualResult) {
-                        testPanel.displayAnalysisResult(response.result);
-                    }
-                    
-                    // Clear the result after showing
-                    setTimeout(() => {
-                        chrome.runtime.sendMessage({ type: 'CLEAR_ANALYSIS_RESULT' });
-                    }, 5000);
-                }
-            });
-        }
-        return false;
-    });
-}
+};
