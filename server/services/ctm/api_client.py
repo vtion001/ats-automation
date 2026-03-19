@@ -142,22 +142,41 @@ class CTMApiClient:
     def get_active_calls(self) -> List[Dict[str, Any]]:
         """Get currently active/running calls
 
-        Note: CTM's /calls/active.json endpoint can return "call not found" error
-        when there are no active calls. Instead, we query recent calls and filter by
-        active status (in progress, ringing, queued).
+        CTM's /calls/active.json endpoint is unreliable - it may return "call not found"
+        even when there are active calls. Instead, we query recent calls and filter by
+        active status (in progress, ringing, queued, new).
         """
         if not self.account_id:
             raise ValueError("CTM_ACCOUNT_ID is required")
 
         try:
+            # Try the active endpoint first
             result = self._make_request(
                 "GET", f"/api/v1/accounts/{self.account_id}/calls/active.json"
             )
-            return result.get("calls", [])
+            calls = result.get("calls", [])
+            if calls:
+                return calls
         except Exception as e:
-            if "call not found" in str(e).lower() or "404" in str(e):
-                return []
-            raise
+            logger.warning(f"CTM active calls endpoint error: {e}")
+
+        # Fallback: query recent calls and filter by active status
+        active_statuses = ["in progress", "ringing", "queued", "new"]
+        try:
+            result = self._make_request(
+                "GET", f"/api/v1/accounts/{self.account_id}/calls.json", params={"limit": 50}
+            )
+            all_calls = result.get("calls", [])
+            active_calls = [
+                call
+                for call in all_calls
+                if call.get("status", "").lower() in active_statuses
+                or call.get("dial_status", "").lower() in active_statuses
+            ]
+            return active_calls
+        except Exception as e:
+            logger.error(f"Failed to fetch active calls via fallback: {e}")
+            return []
 
     def get_account_info(self) -> Dict[str, Any]:
         """Get account information"""
