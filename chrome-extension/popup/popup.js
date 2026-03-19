@@ -1,16 +1,12 @@
 /**
- * AGS Popup - Modular Call Analysis
- * 
- * Handles popup UI, stats, and floating button toggle.
+ * AGS Popup - Self-Contained Call Analysis
+ * No external imports - all code inlined for Chrome Extension compatibility
  */
-
-import { ApiService } from '../src/services/api-service.js';
-import { StorageService } from '../src/services/storage-service.js';
-import { formatPhone } from '../src/utils/phone-utils.js';
-import { SCORE_THRESHOLDS } from '../src/utils/constants.js';
 
 const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
 const STORAGE_KEY = 'ats_latest_analysis';
+const SCORE_HOT = 70;
+const SCORE_WARM = 40;
 
 let stats = { calls: 0, analyzed: 0, hot: 0 };
 let lastAnalysis = null;
@@ -28,9 +24,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('[Popup] Ready');
 });
 
+// ============ STORAGE ============
+
+function getStorage(keys) {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(keys, resolve);
+    });
+}
+
+function setStorage(items) {
+    return new Promise((resolve) => {
+        chrome.storage.local.set(items, resolve);
+    });
+}
+
 async function loadStats() {
-    stats = await StorageService.getStats();
+    const result = await getStorage(['stats_calls', 'stats_analyzed', 'stats_hot']);
+    stats = {
+        calls: result.stats_calls || 0,
+        analyzed: result.stats_analyzed || 0,
+        hot: result.stats_hot || 0
+    };
     updateStats();
+}
+
+async function saveStats() {
+    await setStorage({
+        stats_calls: stats.calls,
+        stats_analyzed: stats.analyzed,
+        stats_hot: stats.hot
+    });
 }
 
 function updateStats() {
@@ -39,22 +62,98 @@ function updateStats() {
     document.getElementById('hotCount').textContent = stats.hot;
 }
 
+// ============ API ============
+
 async function checkServer() {
     const dot = document.getElementById('statusDot');
     const text = document.getElementById('statusText');
     
-    const isOk = await ApiService.checkHealth();
-    if (isOk) {
-        dot.className = 'status-dot ok';
-        text.textContent = 'Connected to server';
-    } else {
+    try {
+        const resp = await fetch(`${SERVER_URL}/health`);
+        if (resp.ok) {
+            dot.className = 'status-dot ok';
+            text.textContent = 'Connected to server';
+        } else {
+            dot.className = 'status-dot error';
+            text.textContent = 'Server error';
+        }
+    } catch (e) {
         dot.className = 'status-dot error';
         text.textContent = 'Server offline';
     }
 }
 
+async function fetchCalls(limit = 3) {
+    try {
+        const resp = await fetch(`${SERVER_URL}/api/ctm/calls?limit=${limit}&hours=24`);
+        if (!resp.ok) return [];
+        return await resp.json();
+    } catch (e) {
+        console.error('[API] Fetch calls error:', e);
+        return [];
+    }
+}
+
+async function fetchTranscript(callId) {
+    try {
+        const resp = await fetch(`${SERVER_URL}/api/ctm/calls/${callId}/transcript`);
+        if (!resp.ok) return null;
+        return await resp.json();
+    } catch (e) {
+        console.error('[API] Fetch transcript error:', e);
+        return null;
+    }
+}
+
+async function analyzeCall(transcription, phone, client) {
+    try {
+        const resp = await fetch(`${SERVER_URL}/api/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transcription, phone, client })
+        });
+        if (!resp.ok) return null;
+        return await resp.json();
+    } catch (e) {
+        console.error('[API] Analyze error:', e);
+        return null;
+    }
+}
+
+// ============ PHONE UTILS ============
+
+function formatPhone(phone) {
+    if (!phone) return 'Unknown';
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length === 11 && digits[0] === '1') {
+        return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+    } else if (digits.length === 10) {
+        return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+    return phone;
+}
+
+function capitalize(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function getScoreClass(score) {
+    if (score >= SCORE_HOT) return 'hot';
+    if (score >= SCORE_WARM) return 'warm';
+    return 'cold';
+}
+
+function getScoreLabel(score) {
+    if (score >= SCORE_HOT) return 'Hot Lead';
+    if (score >= SCORE_WARM) return 'Warm Lead';
+    return 'Cold Lead';
+}
+
+// ============ FLOATING BUTTON ============
+
 function loadFloatingState() {
-    StorageService.get('floatingEnabled').then(result => {
+    getStorage(['floatingEnabled']).then(result => {
         floatingEnabled = result.floatingEnabled || false;
         updateFloatingToggle();
         if (floatingEnabled) {
@@ -65,17 +164,18 @@ function loadFloatingState() {
 
 function updateFloatingToggle() {
     const btn = document.getElementById('floatingToggle');
-    if (floatingEnabled) {
-        btn.classList.add('active');
-        btn.querySelector('span').textContent = 'On';
-    } else {
-        btn.classList.remove('active');
-        btn.querySelector('span').textContent = 'Float';
+    if (btn) {
+        if (floatingEnabled) {
+            btn.classList.add('active');
+            btn.querySelector('span').textContent = 'On';
+        } else {
+            btn.classList.remove('active');
+            btn.querySelector('span').textContent = 'Float';
+        }
     }
 }
 
 function createFloatingButton() {
-    // Check if already exists
     if (document.getElementById('ats-floating-btn')) return;
     
     const btn = document.createElement('div');
@@ -154,27 +254,30 @@ function toggleOverlay() {
 }
 
 function showOverlay() {
-    overlay = document.createElement('div');
+    const overlay = document.createElement('div');
     overlay.id = 'ats-automation-overlay';
     
     if (lastAnalysis) {
         overlay.innerHTML = generateAnalysisHTML(lastAnalysis);
+        addOverlayStyles();
+        document.body.appendChild(overlay);
+        
+        overlay.querySelector('[data-action="close"]')?.addEventListener('click', () => overlay.remove());
+        overlay.querySelector('[data-action="copy"]')?.addEventListener('click', () => {
+            navigator.clipboard.writeText(lastAnalysis.analysis?.summary || lastAnalysis.analysis || '');
+            const btn = overlay.querySelector('[data-action="copy"]');
+            if (btn) {
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => btn.textContent = '📋 Copy Notes', 2000);
+            }
+        });
     } else {
         overlay.innerHTML = generateWaitingHTML();
+        addOverlayStyles();
+        document.body.appendChild(overlay);
+        
+        overlay.querySelector('[data-action="close"]')?.addEventListener('click', () => overlay.remove());
     }
-    
-    addOverlayStyles();
-    document.body.appendChild(overlay);
-    
-    overlay.querySelector('[data-action="close"]')?.addEventListener('click', () => overlay.remove());
-    overlay.querySelector('[data-action="copy"]')?.addEventListener('click', () => {
-        if (lastAnalysis) {
-            navigator.clipboard.writeText(lastAnalysis.analysis.summary);
-            const btn = overlay.querySelector('[data-action="copy"]');
-            btn.textContent = '✓ Copied!';
-            setTimeout(() => btn.textContent = '📋 Copy Notes', 2000);
-        }
-    });
 }
 
 function generateWaitingHTML() {
@@ -189,25 +292,20 @@ function generateWaitingHTML() {
                 <div class="ats-waiting-text">Monitoring for calls...</div>
             </div>
         </div>
-        <style>
-            .ats-overlay-header {
-                display: flex; justify-content: space-between; align-items: center;
-                padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;
-            }
-            .ats-title { font-weight: 600; font-size: 16px; }
-            .ats-close-btn { background: none; border: none; color: white; font-size: 24px; cursor: pointer; }
-            .ats-overlay-content { padding: 16px; }
-            .ats-waiting-state { text-align: center; padding: 24px; }
-            .ats-waiting-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.6; }
-            .ats-waiting-text { color: #666; font-size: 14px; }
-        </style>
     `;
 }
 
 function generateAnalysisHTML(data) {
-    const score = data.analysis.score || 0;
-    const scoreClass = score >= SCORE_THRESHOLDS.HOT ? 'hot' : score >= SCORE_THRESHOLDS.WARM ? 'warm' : 'cold';
-    const scoreLabel = score >= SCORE_THRESHOLDS.HOT ? 'Hot Lead' : score >= SCORE_THRESHOLDS.WARM ? 'Warm Lead' : 'Cold Lead';
+    const score = data.analysis?.score || data.analysis?.qualification_score || 0;
+    const scoreClass = getScoreClass(score);
+    const scoreLabel = getScoreLabel(score);
+    const sentiment = data.analysis?.sentiment || 'neutral';
+    const summary = data.analysis?.summary || 'No summary available';
+    const tags = data.analysis?.tags || [];
+    
+    const tagsHtml = tags.length > 0 
+        ? `<div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` 
+        : '';
     
     return `
         <div class="ats-overlay-header">
@@ -225,46 +323,105 @@ function generateAnalysisHTML(data) {
                     <span class="ats-status-label ${scoreClass}">${scoreLabel}</span>
                 </div>
             </div>
-            <div class="ats-summary">${data.analysis.summary}</div>
+            
+            <div class="ats-info-list">
+                <div class="ats-info-item">
+                    <span class="ats-info-label">Sentiment:</span>
+                    <span class="ats-info-value">${sentiment}</span>
+                </div>
+            </div>
+            
+            <div class="ats-summary">${summary}</div>
+            ${tagsHtml}
+            
             <button class="ats-copy-btn" data-action="copy">📋 Copy Notes</button>
         </div>
-        <style>
-            .ats-overlay-header {
-                display: flex; justify-content: space-between; align-items: center;
-                padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;
-            }
-            .ats-title { font-weight: 600; font-size: 16px; }
-            .ats-close-btn, .ats-copy-btn { background: none; border: none; color: white; font-size: 24px; cursor: pointer; }
-            .ats-overlay-content { padding: 16px; }
-            .ats-header-section { text-align: center; margin-bottom: 16px; }
-            .ats-phone-icon { width: 48px; height: 48px; margin: 0 auto 8px; }
-            .ats-phone-icon svg { width: 100%; height: 100%; fill: #667eea; }
-            .ats-phone-number { font-size: 20px; font-weight: 600; display: block; margin-top: 8px; }
-            .ats-status-row { display: flex; justify-content: center; gap: 12px; margin-top: 12px; }
-            .ats-score-badge {
-                width: 50px; height: 50px; border-radius: 50%;
-                display: flex; align-items: center; justify-content: center;
-                font-size: 18px; font-weight: 700; color: white;
-            }
-            .ats-score-badge.hot { background: #e74c3c; }
-            .ats-score-badge.warm { background: #f39c12; }
-            .ats-score-badge.cold { background: #3498db; }
-            .ats-status-label { font-size: 14px; padding-top: 15px; }
-            .ats-status-label.hot { color: #e74c3c; }
-            .ats-status-label.warm { color: #f39c12; }
-            .ats-status-label.cold { color: #3498db; }
-            .ats-summary { font-size: 14px; line-height: 1.5; color: #333; margin-bottom: 12px; }
-            .ats-copy-btn {
-                background: #f0f0f0; border: none; padding: 8px 16px;
-                border-radius: 4px; cursor: pointer; font-size: 12px;
-            }
-        </style>
     `;
 }
 
 function addOverlayStyles() {
-    // Styles are inline now
+    if (document.getElementById('ats-overlay-styles')) return;
+    
+    const styles = document.createElement('style');
+    styles.id = 'ats-overlay-styles';
+    styles.textContent = `
+        #ats-automation-overlay {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 380px;
+            max-height: 90vh;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            z-index: 999999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+        }
+        .ats-overlay-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .ats-title { font-weight: 600; font-size: 16px; }
+        .ats-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+        .ats-overlay-content { padding: 16px; max-height: calc(90vh - 60px); overflow-y: auto; }
+        .ats-header-section { text-align: center; margin-bottom: 16px; }
+        .ats-phone-icon { width: 48px; height: 48px; margin: 0 auto 8px; }
+        .ats-phone-icon svg { width: 100%; height: 100%; fill: #667eea; }
+        .ats-phone-number { font-size: 20px; font-weight: 600; display: block; margin-top: 8px; }
+        .ats-status-row { display: flex; justify-content: center; gap: 12px; margin-top: 12px; }
+        .ats-score-badge {
+            width: 50px; height: 50px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: 700; color: white;
+        }
+        .ats-score-badge.hot { background: #e74c3c; }
+        .ats-score-badge.warm { background: #f39c12; }
+        .ats-score-badge.cold { background: #3498db; }
+        .ats-status-label { font-size: 14px; padding-top: 15px; }
+        .ats-status-label.hot { color: #e74c3c; }
+        .ats-status-label.warm { color: #f39c12; }
+        .ats-status-label.cold { color: #3498db; }
+        .ats-info-list { margin-bottom: 16px; }
+        .ats-info-item { display: flex; gap: 8px; font-size: 13px; margin-bottom: 8px; }
+        .ats-info-label { font-weight: 500; color: #666; }
+        .ats-info-value { color: #333; }
+        .ats-summary { font-size: 14px; line-height: 1.5; color: #333; margin-bottom: 12px; }
+        .ats-copy-btn {
+            background: #f0f0f0; border: none; padding: 8px 16px;
+            border-radius: 4px; cursor: pointer; font-size: 12px;
+            width: 100%;
+        }
+        .ats-copy-btn:hover { background: #e0e0e0; }
+        .ats-waiting-state { text-align: center; padding: 24px; }
+        .ats-waiting-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.6; }
+        .ats-waiting-text { color: #666; font-size: 14px; }
+        .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+        .tag { 
+            font-size: 11px; 
+            padding: 3px 10px; 
+            border-radius: 20px; 
+            background: rgba(49, 130, 206, 0.08); 
+            color: #3182ce;
+            font-weight: 500;
+        }
+    `;
+    document.head.appendChild(styles);
 }
+
+// ============ MONITORING ============
 
 function startMonitoring() {
     checkStorageForAnalysis();
@@ -276,14 +433,14 @@ function startMonitoring() {
 
 async function checkStorageForAnalysis() {
     try {
-        const result = await StorageService.get(STORAGE_KEY);
+        const result = await getStorage(STORAGE_KEY);
         const analysis = result[STORAGE_KEY];
         
         if (analysis && analysis !== lastAnalysis) {
             lastAnalysis = analysis;
             console.log('[Popup] New analysis:', analysis.type);
             
-            if (analysis.type === 'analysis_complete') {
+            if (analysis.type === 'analysis_complete' || analysis.status === 'complete') {
                 await handleAnalysisComplete(analysis);
             }
         }
@@ -293,15 +450,17 @@ async function checkStorageForAnalysis() {
 }
 
 async function handleAnalysisComplete(data) {
+    const score = data.analysis?.score || data.analysis?.qualification_score || 0;
+    
     stats.calls++;
     stats.analyzed++;
-    if (data.analysis.score >= 70) stats.hot++;
+    if (score >= SCORE_HOT) stats.hot++;
     
-    await StorageService.setStats(stats);
+    await saveStats();
     updateStats();
     showAnalysis(data);
     
-    // Update floating button tooltip if visible
+    // Update floating button tooltip
     const tooltip = document.querySelector('.ats-fab-tooltip');
     if (tooltip) {
         tooltip.textContent = `📞 ${formatPhone(data.phone)}`;
@@ -310,9 +469,10 @@ async function handleAnalysisComplete(data) {
 
 async function checkForCalls() {
     try {
-        const calls = await ApiService.getCalls(3);
+        const calls = await fetchCalls(3);
         
-        if (lastAnalysis && lastAnalysis.type === 'analysis_complete') {
+        // Skip if we already have analysis
+        if (lastAnalysis && (lastAnalysis.type === 'analysis_complete' || lastAnalysis.status === 'complete')) {
             return;
         }
         
@@ -328,7 +488,7 @@ async function checkForCalls() {
             showActiveCall(call);
         } else {
             showEndedCall(call);
-            await analyzeCall(call);
+            await analyzeCallData(call);
         }
         
     } catch (e) {
@@ -374,7 +534,7 @@ function showEndedCall(call) {
     `;
 }
 
-async function analyzeCall(call) {
+async function analyzeCallData(call) {
     document.getElementById('callContent').innerHTML = `
         <div class="call-card">
             <div class="call-header">
@@ -386,24 +546,25 @@ async function analyzeCall(call) {
     `;
     
     try {
-        const transData = await ApiService.getTranscript(call.call_id);
+        const transData = await fetchTranscript(call.call_id);
         if (!transData || !transData.available || !transData.transcript) {
             showEndedCall(call);
             return;
         }
         
         const client = document.getElementById('clientSelect')?.value || 'flyland';
-        const analysis = await ApiService.analyze(transData.transcript, call.phone, client, call.call_id);
+        const analysis = await analyzeCall(transData.transcript, call.phone, client);
         
         if (!analysis) {
             showEndedCall(call);
             return;
         }
         
+        const score = analysis.qualification_score || 0;
         stats.calls++;
         stats.analyzed++;
-        if (analysis.qualification_score >= 70) stats.hot++;
-        await StorageService.setStats(stats);
+        if (score >= SCORE_HOT) stats.hot++;
+        await saveStats();
         updateStats();
         
         showAnalysis({ phone: call.phone, analysis });
@@ -415,12 +576,12 @@ async function analyzeCall(call) {
 }
 
 function showAnalysis(data) {
-    const score = data.analysis.qualification_score || data.analysis.score || 0;
-    const scoreClass = score >= SCORE_THRESHOLDS.HOT ? 'hot' : score >= SCORE_THRESHOLDS.WARM ? 'warm' : 'cold';
-    const scoreLabel = score >= SCORE_THRESHOLDS.HOT ? 'Hot Lead' : score >= SCORE_THRESHOLDS.WARM ? 'Warm Lead' : 'Cold Lead';
-    const sentiment = data.analysis.sentiment || 'neutral';
-    const summary = data.analysis.summary || 'No summary available';
-    const tags = data.analysis.tags || [];
+    const score = data.analysis?.qualification_score || data.analysis?.score || 0;
+    const scoreClass = getScoreClass(score);
+    const scoreLabel = getScoreLabel(score);
+    const sentiment = data.analysis?.sentiment || 'neutral';
+    const summary = data.analysis?.summary || 'No summary available';
+    const tags = data.analysis?.tags || [];
     
     const tagsHtml = tags.length > 0 
         ? `<div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` 
@@ -453,21 +614,25 @@ function showAnalysis(data) {
     `;
 }
 
+// ============ EVENTS ============
+
 function bindEvents() {
     // Client select
     document.getElementById('clientSelect')?.addEventListener('change', async (e) => {
-        await StorageService.setClient(e.target.value);
+        await setStorage({ client: e.target.value });
     });
     
     // Refresh button
     document.getElementById('refreshBtn')?.addEventListener('click', async () => {
         const btn = document.getElementById('refreshBtn');
-        btn.textContent = '⏳...';
-        lastAnalysis = null;
-        await checkServer();
-        await checkStorageForAnalysis();
-        await checkForCalls();
-        btn.textContent = '↻ Refresh';
+        if (btn) {
+            btn.textContent = '⏳...';
+            lastAnalysis = null;
+            await checkServer();
+            await checkStorageForAnalysis();
+            await checkForCalls();
+            btn.textContent = '↻ Refresh';
+        }
     });
     
     // Config button
@@ -478,7 +643,7 @@ function bindEvents() {
     // Floating toggle
     document.getElementById('floatingToggle')?.addEventListener('click', async () => {
         floatingEnabled = !floatingEnabled;
-        await StorageService.set({ floatingEnabled });
+        await setStorage({ floatingEnabled });
         updateFloatingToggle();
         
         if (floatingEnabled) {
@@ -490,9 +655,4 @@ function bindEvents() {
             if (overlay) overlay.remove();
         }
     });
-}
-
-function capitalize(str) {
-    if (!str) return '';
-    return str.charAt(0).toUpperCase() + str.slice(1);
 }
