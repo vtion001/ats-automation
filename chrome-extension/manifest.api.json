@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ATS Automation (API Mode)",
-  "version": "3.2.0",
-  "description": "BPO workflow automation - CTM API integration with Azure Key Vault credentials",
+  "name": "ATS Automation (DOM + API Mode)",
+  "version": "3.3.0",
+  "description": "BPO workflow automation - CTM DOM monitoring + API analysis",
   "minimum_chrome_version": "102",
   "permissions": [
     "activeTab",
@@ -17,7 +17,7 @@
     "https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io/*"
   ],
   "background": {
-    "service_worker": "background/api-service-worker.js"
+    "service_worker": "background/service-worker.js"
   },
   "action": {
     "default_popup": "popup/popup.html",
@@ -42,7 +42,7 @@
         "*://*.calltrackingmetrics.com/*"
       ],
       "js": [
-        "content-scripts/ctm-live-transcription.js"
+        "content-scripts/ctm-dom-monitor.js"
       ],
       "run_at": "document_end"
     }
