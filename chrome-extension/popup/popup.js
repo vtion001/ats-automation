@@ -1,11 +1,10 @@
 /**
- * AGS Popup - Simplified API-Based Call Monitor
+ * AGS Popup - Call Analysis with Clean UI
  */
 
 const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
 
 let stats = { calls: 0, analyzed: 0, hot: 0 };
-let currentCall = null;
 let processedCallIds = new Set();
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -51,14 +50,14 @@ async function checkServer() {
         const resp = await fetch(`${SERVER_URL}/health`);
         if (resp.ok) {
             dot.className = 'status-dot ok';
-            text.textContent = 'Connected';
+            text.textContent = 'Connected to server';
         } else {
             dot.className = 'status-dot error';
             text.textContent = 'Server error';
         }
     } catch (e) {
         dot.className = 'status-dot error';
-        text.textContent = 'Offline';
+        text.textContent = 'Server offline';
     }
 }
 
@@ -101,21 +100,25 @@ async function checkForCalls() {
 
 function showWaiting() {
     document.getElementById('callContent').innerHTML = `
-        <div class="waiting-state">
-            <div class="waiting-icon">📞</div>
-            <div class="waiting-text">Monitoring for calls...</div>
+        <div class="call-card">
+            <div class="waiting-state">
+                <div class="waiting-icon">📞</div>
+                <div class="waiting-text">Monitoring for calls...</div>
+            </div>
         </div>
     `;
 }
 
 function showActiveCall(call) {
+    const time = call.timestamp ? new Date(call.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
     document.getElementById('callContent').innerHTML = `
         <div class="call-card">
             <div class="call-header">
-                <span class="call-badge active">● Active</span>
+                <span class="call-badge active">● Active Call</span>
+                <span class="call-meta">${time}</span>
             </div>
             <div class="call-phone">${formatPhone(call.phone)}</div>
-            <div class="call-meta">${call.direction} · ${call.timestamp || ''}</div>
+            <div class="call-meta">${capitalize(call.direction)}</div>
         </div>
     `;
 }
@@ -124,7 +127,7 @@ function showEndedCall(call) {
     document.getElementById('callContent').innerHTML = `
         <div class="call-card">
             <div class="call-header">
-                <span class="call-badge ended">Call Ended</span>
+                <span class="call-badge ended">✓ Call Ended</span>
             </div>
             <div class="call-phone">${formatPhone(call.phone)}</div>
             <div class="call-meta">Duration: ${call.duration || 0}s</div>
@@ -133,26 +136,25 @@ function showEndedCall(call) {
 }
 
 async function analyzeCall(call) {
-    // Update UI to show analyzing
-    const content = document.getElementById('callContent');
-    content.innerHTML = `
+    // Show analyzing state
+    document.getElementById('callContent').innerHTML = `
         <div class="call-card">
             <div class="call-header">
-                <span class="call-badge analyzing">Analyzing...</span>
+                <span class="call-badge analyzing">⚡ Analyzing...</span>
             </div>
             <div class="call-phone">${formatPhone(call.phone)}</div>
-            <div class="call-meta">Fetching transcript...</div>
+            <div class="call-meta">Fetching transcript & running AI analysis</div>
         </div>
     `;
     
     try {
         // Get transcript
         const transResp = await fetch(`${SERVER_URL}/api/ctm/calls/${call.call_id}/transcript`);
-        if (!transResp.ok) throw new Error('No transcript');
+        if (!transResp.ok) throw new Error('No transcript available');
         
         const transData = await transResp.json();
         if (!transData.available || !transData.transcript) {
-            showWaiting();
+            showEndedCall(call);
             return;
         }
         
@@ -195,30 +197,35 @@ function showAnalysis(call, analysis) {
     const tags = analysis.tags || [];
     
     let scoreClass = 'cold';
-    let scoreLabel = 'Cold';
-    if (score >= 70) { scoreClass = 'hot'; scoreLabel = 'Hot'; }
-    else if (score >= 40) { scoreClass = 'warm'; scoreLabel = 'Warm'; }
+    let scoreLabel = 'Cold Lead';
+    if (score >= 70) { scoreClass = 'hot'; scoreLabel = 'Hot Lead'; }
+    else if (score >= 40) { scoreClass = 'warm'; scoreLabel = 'Warm Lead'; }
+    
+    const tagsHtml = tags.length > 0 
+        ? `<div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` 
+        : '';
     
     document.getElementById('callContent').innerHTML = `
         <div class="call-card">
             <div class="call-header">
-                <span class="call-badge ended">Analyzed</span>
+                <span class="call-badge ended">✓ Analyzed</span>
             </div>
             <div class="call-phone">${formatPhone(call.phone)}</div>
             <div class="call-meta">${call.duration || 0}s · ${sentiment}</div>
             
-            <div class="analysis-section">
+            <div class="analysis-card">
                 <div class="analysis-header">
-                    <div class="score-circle ${scoreClass}">${score}</div>
-                    <div class="score-info">
-                        <div class="score-label">${scoreLabel} Lead</div>
-                        <div class="score-sublabel">${sentiment} sentiment</div>
+                    <div class="score-badge">
+                        <div class="score-circle ${scoreClass}">${score}</div>
+                        <div class="score-info">
+                            <div class="score-label">${scoreLabel}</div>
+                            <div class="score-sublabel">${capitalize(sentiment)} sentiment</div>
+                        </div>
                     </div>
                 </div>
+                <div class="divider"></div>
                 <div class="summary">${summary}</div>
-                <div class="tags">
-                    ${tags.map(t => `<span class="tag">${t}</span>`).join('')}
-                </div>
+                ${tagsHtml}
             </div>
         </div>
     `;
@@ -230,8 +237,11 @@ function bindEvents() {
     });
     
     document.getElementById('refreshBtn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('refreshBtn');
+        btn.textContent = '⏳...';
         await checkServer();
         await checkForCalls();
+        btn.textContent = '↻ Refresh';
     });
     
     document.getElementById('configBtn')?.addEventListener('click', () => {
@@ -259,4 +269,9 @@ function formatPhone(phone) {
         return `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
     }
     return phone;
+}
+
+function capitalize(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
 }
