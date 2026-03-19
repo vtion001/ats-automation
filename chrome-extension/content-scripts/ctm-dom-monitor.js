@@ -1,6 +1,6 @@
 /**
  * CTM DOM Monitor - Dynamic Call Detection
- * Self-contained - no external imports for Chrome Extension compatibility
+ * Extracts phone numbers from CTM phone control interface
  */
 
 const SERVER_URL = 'https://ags-ai-server.ashyocean-acabefe6.eastus.azurecontainerapps.io';
@@ -9,6 +9,7 @@ const DOM_POLL_INTERVAL = 2000;
 
 let pollTimer = null;
 let lastDetectedPhone = null;
+let lastCallId = null;
 
 // ============ PHONE UTILS ============
 
@@ -60,6 +61,70 @@ function formatPhone(phone) {
 
 // ============ DOM EXTRACTION ============
 
+/**
+ * Extract phone from CTM phone control interface
+ * The main container is <ctm-phone-control>
+ */
+function extractFromCTMPhoneControl() {
+    // Find the main CTM phone control element
+    const phoneControl = document.querySelector('ctm-phone-control');
+    if (!phoneControl) return null;
+
+    // Method 1: Look in outbound number container
+    const outboundContainer = phoneControl.querySelector('#outbound-number-container, .agent-status-outbound-picker, .outbound-number');
+    if (outboundContainer) {
+        const text = outboundContainer.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) return phone;
+    }
+
+    // Method 2: Look for dialpad or number display
+    const dialpad = phoneControl.querySelector('.dialpad, .number-display, .phone-number-input');
+    if (dialpad) {
+        const text = dialpad.textContent || dialpad.getAttribute('value') || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) return phone;
+    }
+
+    // Method 3: Look in data attributes on the phone control
+    const dataPhone = phoneControl.getAttribute('data-phone') || phoneControl.getAttribute('phone');
+    if (dataPhone) {
+        const phone = extractPhoneFromText(dataPhone);
+        if (phone) return phone;
+    }
+
+    // Method 4: Look in header or dialer elements
+    const dialerHeader = phoneControl.querySelector('#dialer-header, .dialer-header, .phone-header');
+    if (dialerHeader) {
+        const text = dialerHeader.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) return phone;
+    }
+
+    // Method 5: Search for any phone-like numbers in the control
+    const allElements = phoneControl.querySelectorAll('*');
+    for (const el of allElements) {
+        // Check text content
+        const text = el.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone && text.trim().length < 50) {
+            return phone;
+        }
+        
+        // Check value attribute for inputs
+        const value = el.getAttribute('value');
+        if (value) {
+            const phone = extractPhoneFromText(value);
+            if (phone) return phone;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Extract from party options (existing method)
+ */
 function extractFromPartyOptions() {
     const partyOptions = document.querySelector('.frame.party-options');
     if (!partyOptions) return null;
@@ -84,8 +149,11 @@ function extractFromPartyOptions() {
     return null;
 }
 
+/**
+ * Extract from banners/notifications
+ */
 function extractFromBanners() {
-    const banners = document.querySelectorAll('.banner, .incoming-call, [data-type="answer"]');
+    const banners = document.querySelectorAll('.banner, .incoming-call, .call-banner, [data-type="answer"]');
     
     for (const banner of banners) {
         const phone = extractPhoneFromText(banner.textContent);
@@ -99,30 +167,20 @@ function extractFromBanners() {
     return null;
 }
 
-function extractFromAnyElement() {
-    const selectors = [
-        '.caller-number', '.phone-number', '.call-phone',
-        '.participant-phone', '[class*="caller"]', '[class*="phone"]', '[data-phone]'
-    ];
-
-    for (const selector of selectors) {
-        const elements = document.querySelectorAll(selector);
-        for (const el of elements) {
-            const phone = extractPhoneFromText(el.textContent || el.getAttribute('data-phone') || '');
-            if (phone) return phone;
-        }
-    }
-    return null;
-}
-
+/**
+ * Main extraction function - tries all methods
+ */
 function extractAnyPhoneNumber() {
-    let phone = extractFromPartyOptions();
+    // Priority 1: CTM phone control
+    let phone = extractFromCTMPhoneControl();
     if (phone) return phone;
 
+    // Priority 2: Party options
+    phone = extractFromPartyOptions();
+    if (phone) return phone;
+
+    // Priority 3: Banners
     phone = extractFromBanners();
-    if (phone) return phone;
-
-    phone = extractFromAnyElement();
     if (phone) return phone;
 
     return null;
@@ -237,6 +295,13 @@ async function processPhoneNumber(phone) {
         return;
     }
 
+    // Avoid processing same call twice
+    if (call.call_id === lastCallId) {
+        console.log('[CTM-DOM] Already processed this call');
+        return;
+    }
+    lastCallId = call.call_id;
+
     console.log('[CTM-DOM] Found call:', call.call_id);
 
     // Poll for transcript
@@ -304,7 +369,8 @@ async function monitorLoop() {
 }
 
 function startMonitoring() {
-    console.log('[CTM-DOM] Starting dynamic CTM monitoring...');
+    console.log('[CTM-DOM] Starting CTM phone control monitoring...');
+    console.log('[CTM-DOM] Looking for ctm-phone-control element');
     
     // Initial check
     monitorLoop();

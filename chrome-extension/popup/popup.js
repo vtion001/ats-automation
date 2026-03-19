@@ -10,14 +10,12 @@ const SCORE_WARM = 40;
 
 let stats = { calls: 0, analyzed: 0, hot: 0 };
 let lastAnalysis = null;
-let floatingEnabled = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[Popup] Initializing...');
     
     await loadStats();
     await checkServer();
-    loadFloatingState();
     startMonitoring();
     bindEvents();
     
@@ -160,87 +158,6 @@ function loadFloatingState() {
             createFloatingButton();
         }
     });
-}
-
-function updateFloatingToggle() {
-    const btn = document.getElementById('floatingToggle');
-    if (btn) {
-        if (floatingEnabled) {
-            btn.classList.add('active');
-            btn.querySelector('span').textContent = 'On';
-        } else {
-            btn.classList.remove('active');
-            btn.querySelector('span').textContent = 'Float';
-        }
-    }
-}
-
-function createFloatingButton() {
-    if (document.getElementById('ats-floating-btn')) return;
-    
-    const btn = document.createElement('div');
-    btn.id = 'ats-floating-btn';
-    btn.innerHTML = `
-        <button class="ats-fab">
-            <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"></path></svg>
-        </button>
-        <div class="ats-fab-tooltip">📞 ATS Monitor</div>
-    `;
-    
-    addFloatingStyles();
-    document.body.appendChild(btn);
-    
-    btn.querySelector('.ats-fab').addEventListener('click', toggleOverlay);
-}
-
-function addFloatingStyles() {
-    if (document.getElementById('ats-fab-styles')) return;
-    
-    const styles = document.createElement('style');
-    styles.id = 'ats-fab-styles';
-    styles.textContent = `
-        #ats-floating-btn {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 999998;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-        .ats-fab {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .ats-fab:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 24px rgba(102, 126, 234, 0.5);
-        }
-        .ats-fab svg { width: 28px; height: 28px; fill: white; }
-        .ats-fab-tooltip {
-            position: absolute;
-            bottom: 70px;
-            right: 0;
-            background: #333;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s;
-        }
-        #ats-floating-btn:hover .ats-fab-tooltip { opacity: 1; }
-    `;
-    document.head.appendChild(styles);
 }
 
 function toggleOverlay() {
@@ -638,21 +555,5 @@ function bindEvents() {
     // Config button
     document.getElementById('configBtn')?.addEventListener('click', () => {
         window.open(chrome.runtime.getURL('config/config.html'), '_blank');
-    });
-    
-    // Floating toggle
-    document.getElementById('floatingToggle')?.addEventListener('click', async () => {
-        floatingEnabled = !floatingEnabled;
-        await setStorage({ floatingEnabled });
-        updateFloatingToggle();
-        
-        if (floatingEnabled) {
-            createFloatingButton();
-        } else {
-            const fab = document.getElementById('ats-floating-btn');
-            if (fab) fab.remove();
-            const overlay = document.getElementById('ats-automation-overlay');
-            if (overlay) overlay.remove();
-        }
     });
 }
