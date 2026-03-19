@@ -10,6 +10,8 @@ const SCORE_WARM = 40;
 
 let stats = { calls: 0, analyzed: 0, hot: 0 };
 let lastAnalysis = null;
+let detectedPhone = null;
+let analysisInProgress = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[Popup] Initializing...');
@@ -103,6 +105,17 @@ async function fetchTranscript(callId) {
     }
 }
 
+async function findCallByPhone(phone) {
+    try {
+        const resp = await fetch(`${SERVER_URL}/api/ctm/calls/by-phone/${encodeURIComponent(phone)}`);
+        if (!resp.ok) return null;
+        return await resp.json();
+    } catch (e) {
+        console.error('[API] Find call by phone error:', e);
+        return null;
+    }
+}
+
 async function analyzeCall(transcription, phone, client) {
     try {
         const resp = await fetch(`${SERVER_URL}/api/analyze`, {
@@ -148,17 +161,7 @@ function getScoreLabel(score) {
     return 'Cold Lead';
 }
 
-// ============ FLOATING BUTTON ============
-
-function loadFloatingState() {
-    getStorage(['floatingEnabled']).then(result => {
-        floatingEnabled = result.floatingEnabled || false;
-        updateFloatingToggle();
-        if (floatingEnabled) {
-            createFloatingButton();
-        }
-    });
-}
+// ============ OVERLAY ============
 
 function toggleOverlay() {
     let overlay = document.getElementById('ats-automation-overlay');
@@ -403,9 +406,23 @@ async function checkForCalls() {
         const age = Date.now() - (latestFromDom.timestamp || 0);
         if (age < 5 * 60 * 1000) {
             if (latestFromDom.type === 'analysis_complete' || latestFromDom.status === 'complete') {
+                detectedPhone = null;
+                analysisInProgress = false;
                 showAnalysis(latestFromDom);
             } else if (latestFromDom.type === 'call_detected') {
+                // Track the detected phone and trigger analysis
+                if (!analysisInProgress && latestFromDom.phone !== detectedPhone) {
+                    detectedPhone = latestFromDom.phone;
+                    triggerCallAnalysis(latestFromDom.phone);
+                }
                 showCallDetected(latestFromDom.phone);
+            } else if (latestFromDom.type === 'call_ended') {
+                // Call ended but no analysis yet - trigger analysis
+                if (!analysisInProgress && latestFromDom.phone !== detectedPhone) {
+                    detectedPhone = latestFromDom.phone;
+                    triggerCallAnalysis(latestFromDom.phone);
+                }
+                showEndedCall({ phone: latestFromDom.phone, duration: latestFromDom.duration });
             } else {
                 showActiveCall({ phone: latestFromDom.phone, direction: 'inbound' });
             }
@@ -414,6 +431,8 @@ async function checkForCalls() {
     }
     
     // No recent call detected by DOM - show waiting
+    detectedPhone = null;
+    analysisInProgress = false;
     showWaiting();
 }
 
@@ -496,6 +515,81 @@ async function analyzeCallData(call) {
     }
 }
 
+async function triggerCallAnalysis(phone) {
+    if (analysisInProgress) return;
+    
+    analysisInProgress = true;
+    console.log('[Popup] Triggering analysis for:', phone);
+    
+    try {
+        // Find the call by phone
+        const call = await findCallByPhone(phone);
+        
+        if (!call) {
+            console.log('[Popup] No ended call found for:', phone);
+            analysisInProgress = false;
+            return;
+        }
+        
+        console.log('[Popup] Found ended call:', call.call_id, 'status:', call.status);
+        
+        // Check if transcript is available
+        const transData = await fetchTranscript(call.call_id);
+        if (!transData || !transData.available || !transData.transcript) {
+            console.log('[Popup] No transcript available yet for:', call.call_id);
+            // Keep polling - call this function again in 5 seconds
+            setTimeout(() => triggerCallAnalysis(phone), 5000);
+            return;
+        }
+        
+        // Run analysis
+        const client = document.getElementById('clientSelect')?.value || 'flyland';
+        const analysis = await analyzeCall(transData.transcript, phone, client);
+        
+        if (!analysis) {
+            console.log('[Popup] Analysis failed for:', phone);
+            showEndedCall({ phone, duration: call.duration });
+            analysisInProgress = false;
+            return;
+        }
+        
+        const score = analysis.qualification_score || 0;
+        stats.calls++;
+        stats.analyzed++;
+        if (score >= SCORE_HOT) stats.hot++;
+        await saveStats();
+        updateStats();
+        
+        // Store result
+        const result = {
+            type: 'analysis_complete',
+            phone: phone,
+            call_id: call.call_id,
+            duration: call.duration,
+            timestamp: Date.now(),
+            analysis: {
+                score: analysis.qualification_score || 0,
+                sentiment: analysis.sentiment || 'neutral',
+                summary: analysis.summary || 'No summary',
+                tags: analysis.tags || [],
+                disposition: analysis.suggested_disposition || 'New',
+                follow_up: analysis.follow_up_required || false
+            },
+            status: 'complete'
+        };
+        
+        await setStorage({ [STORAGE_KEY]: result });
+        
+        // Show analysis
+        showAnalysis(result);
+        analysisInProgress = false;
+        
+    } catch (e) {
+        console.error('[Popup] triggerCallAnalysis error:', e);
+        analysisInProgress = false;
+    }
+}
+
 function showAnalysis(data) {
     const score = data.analysis?.qualification_score || data.analysis?.score || 0;
     const scoreClass = getScoreClass(score);
@@ -535,180 +629,104 @@ function showAnalysis(data) {
     `;
 }
 
-// ============ FLOATING WIDGET ============
+// ============ FLOATING WINDOW ============
 
 let floatingEnabled = false;
+let floatingWindowId = null;
 
-function createFloatingWidget() {
-    // Check if already exists
-    if (document.getElementById('ats-floating-widget')) return;
+async function enableFloatingWindow() {
+    const popupUrl = chrome.runtime.getURL('popup/popup.html');
     
-    // Create floating widget
-    const widget = document.createElement('div');
-    widget.id = 'ats-floating-widget';
-    widget.innerHTML = `
-        <div class="ats-fw-header">
-            <span class="ats-fw-title">📞 AGS</span>
-            <div class="ats-fw-controls">
-                <button class="ats-fw-btn" id="ats-fw-expand" title="Expand">⬆</button>
-                <button class="ats-fw-btn" id="ats-fw-close" title="Close">×</button>
-            </div>
-        </div>
-        <div class="ats-fw-content" id="ats-fw-content">
-            <div class="ats-fw-status">
-                <span class="ats-fw-dot"></span>
-                <span>Monitoring</span>
-            </div>
-            <div class="ats-fw-phone" id="ats-fw-phone">No active call</div>
-        </div>
-    `;
-    
-    addFloatingStyles();
-    document.body.appendChild(widget);
-    
-    // Event listeners
-    document.getElementById('ats-fw-close')?.addEventListener('click', closeFloatingWidget);
-    document.getElementById('ats-fw-expand')?.addEventListener('click', expandFloatingWidget);
-    
-    // Make draggable
-    makeDraggable(widget);
-    
-    // Update with current data
-    updateFloatingWidget();
+    try {
+        const win = await chrome.windows.create({
+            url: popupUrl + '?floating=true',
+            type: 'popup',
+            width: 400,
+            height: 650,
+            left: 100,
+            top: 100
+        });
+        floatingWindowId = win.id;
+        await setStorage({ floatingEnabled: true, floatingWindowId: win.id });
+        
+        window.close();
+    } catch (e) {
+        console.error('[Float] Failed to create window:', e);
+    }
 }
 
-function closeFloatingWidget() {
-    const widget = document.getElementById('ats-floating-widget');
-    if (widget) widget.remove();
-    floatingEnabled = false;
-    setStorage({ floatingEnabled: false });
-}
-
-function expandFloatingWidget() {
-    // Open the full popup
-    window.open(chrome.runtime.getURL('popup/popup.html'), 'ags-popup', 'width=400,height=600');
-}
-
-function updateFloatingWidget() {
-    const phoneEl = document.getElementById('ats-fw-phone');
-    if (!phoneEl) return;
-    
-    getStorage(STORAGE_KEY).then(result => {
-        const data = result[STORAGE_KEY];
-        if (data && data.phone) {
-            const score = data.analysis?.qualification_score || data.analysis?.score || 0;
-            if (data.type === 'analysis_complete' || data.status === 'complete') {
-                phoneEl.innerHTML = `<span class="hot">${formatPhone(data.phone)}</span><br><small>Score: ${score}</small>`;
-            } else {
-                phoneEl.innerHTML = `<span class="active">${formatPhone(data.phone)}</span><br><small>Analyzing...</small>`;
-            }
-        } else {
-            phoneEl.innerHTML = 'No active call';
+async function disableFloatingWindow() {
+    if (floatingWindowId) {
+        try {
+            await chrome.windows.remove(floatingWindowId);
+        } catch (e) {
         }
-    });
+        floatingWindowId = null;
+    }
+    await setStorage({ floatingEnabled: false, floatingWindowId: null });
 }
 
-function makeDraggable(element) {
-    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-    
-    element.querySelector('.ats-fw-header').addEventListener('mousedown', dragMouseDown);
-    
-    function dragMouseDown(e) {
-        e.preventDefault();
-        pos3 = e.clientX;
-        pos4 = e.clientY;
-        document.addEventListener('mouseup', closeDragElement);
-        document.addEventListener('mousemove', elementDrag);
+async function checkExistingFloatingWindow() {
+    if (!window.location.search.includes('floating=true')) {
+        const result = await getStorage(['floatingWindowId']);
+        if (result.floatingWindowId) {
+            try {
+                await chrome.windows.remove(result.floatingWindowId);
+            } catch (e) {
+            }
+            await setStorage({ floatingWindowId: null, floatingEnabled: false });
+        }
+        return;
     }
     
-    function elementDrag(e) {
-        e.preventDefault();
-        pos1 = pos3 - e.clientX;
-        pos2 = pos4 - e.clientY;
-        pos3 = e.clientX;
-        pos4 = e.clientY;
-        element.style.top = (element.offsetTop - pos2) + 'px';
-        element.style.right = 'auto';
-        element.style.left = (element.offsetLeft - pos1) + 'px';
-    }
+    document.body.classList.add('is-floating');
+    addFloatingStyles();
     
-    function closeDragElement() {
-        document.removeEventListener('mouseup', closeDragElement);
-        document.removeEventListener('mousemove', elementDrag);
+    const result = await getStorage(['floatingWindowId']);
+    if (result.floatingWindowId) {
+        floatingWindowId = result.floatingWindowId;
+        
+        chrome.windows.onRemoved.addListener((windowId) => {
+            if (windowId === floatingWindowId) {
+                floatingWindowId = null;
+                setStorage({ floatingEnabled: false, floatingWindowId: null });
+                window.close();
+            }
+        });
     }
 }
 
 function addFloatingStyles() {
-    if (document.getElementById('ats-fw-styles')) return;
+    if (document.getElementById('ats-floating-styles')) return;
     
     const styles = document.createElement('style');
-    styles.id = 'ats-fw-styles';
+    styles.id = 'ats-floating-styles';
     styles.textContent = `
-        #ats-floating-widget {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 200px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        body.is-floating {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: auto !important;
+            bottom: auto !important;
+            width: 400px !important;
+            height: auto !important;
+            min-height: 100%;
+            max-height: 100vh;
+            box-shadow: 0 12px 48px rgba(0,0,0,0.3);
+            border-radius: 0;
             z-index: 999999;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             overflow: hidden;
         }
-        .ats-fw-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 12px;
-            background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
-            color: white;
-            cursor: move;
+        body.is-floating .header {
+            cursor: default;
         }
-        .ats-fw-title { font-weight: 600; font-size: 13px; }
-        .ats-fw-controls { display: flex; gap: 4px; }
-        .ats-fw-btn {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: white;
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        body.is-floating .floating-toggle {
+            background: rgba(39, 174, 96, 0.3) !important;
+            border-color: rgba(39, 174, 96, 0.5) !important;
         }
-        .ats-fw-btn:hover { background: rgba(255,255,255,0.3); }
-        .ats-fw-content { padding: 12px; }
-        .ats-fw-status {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            color: #666;
-            margin-bottom: 8px;
+        body.is-floating .floating-toggle span {
+            color: #48bb78 !important;
         }
-        .ats-fw-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #38a169;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .ats-fw-phone {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1a202c;
-        }
-        .ats-fw-phone .active { color: #38a169; }
-        .ats-fw-phone .hot { color: #e53e3e; }
-        .ats-fw-phone small { font-weight: normal; color: #666; }
     `;
     document.head.appendChild(styles);
 }
@@ -716,6 +734,8 @@ function addFloatingStyles() {
 // ============ EVENTS ============
 
 function bindEvents() {
+    checkExistingFloatingWindow();
+    
     // Client select
     document.getElementById('clientSelect')?.addEventListener('change', async (e) => {
         await setStorage({ client: e.target.value });
@@ -743,26 +763,30 @@ function bindEvents() {
     const floatingToggle = document.getElementById('floatingToggle');
     if (floatingToggle) {
         floatingToggle.addEventListener('click', async () => {
-            floatingEnabled = !floatingEnabled;
-            await setStorage({ floatingEnabled });
-            
-            if (floatingEnabled) {
-                createFloatingWidget();
-                floatingToggle.classList.add('active');
+            if (window.location.search.includes('floating=true')) {
+                if (floatingWindowId) {
+                    try {
+                        await chrome.windows.remove(floatingWindowId);
+                        floatingWindowId = null;
+                    } catch (e) {
+                    }
+                    await setStorage({ floatingEnabled: false, floatingWindowId: null });
+                }
+                window.close();
             } else {
-                closeFloatingWidget();
-                floatingToggle.classList.remove('active');
+                await enableFloatingWindow();
             }
         });
     }
     
-    // Load floating state on startup
-    getStorage({ floatingEnabled: false }).then(result => {
-        if (result.floatingEnabled) {
-            floatingEnabled = true;
-            createFloatingWidget();
-            const floatingToggle = document.getElementById('floatingToggle');
-            if (floatingToggle) floatingToggle.classList.add('active');
-        }
-    });
+    // Load floating state on startup (for popup mode)
+    if (!window.location.search.includes('floating=true')) {
+        getStorage({ floatingEnabled: false }).then(result => {
+            if (result.floatingEnabled && result.floatingWindowId) {
+                floatingWindowId = result.floatingWindowId;
+                const floatingToggle = document.getElementById('floatingToggle');
+                if (floatingToggle) floatingToggle.classList.add('active');
+            }
+        });
+    }
 }

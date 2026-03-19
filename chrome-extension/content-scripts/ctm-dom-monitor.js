@@ -147,6 +147,59 @@ function extractFromSoftphoneOnly() {
     return null;
 }
 
+// ============ AGENT ACCOUNT ID ============
+
+/**
+ * Extract the agent's account_id from the CTM interface
+ * This identifies which workstation/account is receiving calls
+ */
+function extractAgentAccountId() {
+    // Look for account_id in various locations
+    // 1. Check agent-status element
+    const agentStatus = document.querySelector('#agent-status, .agent-status');
+    if (agentStatus) {
+        const accountId = agentStatus.getAttribute('data-account-id') || 
+                         agentStatus.getAttribute('account_id') ||
+                         agentStatus.getAttribute('data-id');
+        if (accountId) {
+            console.log('[CTM-DOM] Found account_id in agent-status:', accountId);
+            return accountId;
+        }
+    }
+    
+    // 2. Check phone control data attributes
+    const phoneControl = document.querySelector('ctm-phone-control');
+    if (phoneControl) {
+        const accountId = phoneControl.getAttribute('data-account-id') ||
+                         phoneControl.getAttribute('account-id') ||
+                         phoneControl.getAttribute('data-station-id') ||
+                         phoneControl.getAttribute('station-id');
+        if (accountId) {
+            console.log('[CTM-DOM] Found account_id in phone-control:', accountId);
+            return accountId;
+        }
+    }
+    
+    // 3. Check URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const accountIdFromUrl = urlParams.get('account_id') || urlParams.get('accountId');
+    if (accountIdFromUrl) {
+        console.log('[CTM-DOM] Found account_id in URL:', accountIdFromUrl);
+        return accountIdFromUrl;
+    }
+    
+    // 4. Check localStorage/sessionStorage
+    const storedAccountId = localStorage.getItem('ctm_account_id') || 
+                           sessionStorage.getItem('ctm_account_id') ||
+                           localStorage.getItem('account_id');
+    if (storedAccountId) {
+        console.log('[CTM-DOM] Found account_id in storage:', storedAccountId);
+        return storedAccountId;
+    }
+    
+    return null;
+}
+
 // ============ API ============
 
 async function fetchCalls(limit = 50, hours = 24) {
@@ -161,11 +214,28 @@ async function fetchCalls(limit = 50, hours = 24) {
 }
 
 async function findCallByPhone(phone) {
+    // First, get the agent's account_id from the interface
+    const agentAccountId = extractAgentAccountId();
+    
     const calls = await fetchCalls(50, 24);
+    
+    // Filter by phone AND account_id if available
     return calls.find(call => {
+        // Phone match
         const callPhone = (call.phone || '').replace(/\D/g, '');
         const searchPhone = phone.replace(/\D/g, '');
-        return callPhone.includes(searchPhone) || searchPhone.includes(callPhone);
+        const phoneMatch = callPhone.includes(searchPhone) || searchPhone.includes(callPhone);
+        
+        if (!phoneMatch) return false;
+        
+        // Account_id match (if available)
+        if (agentAccountId && call.caller && call.caller.account_id) {
+            const callAccountId = call.caller.account_id;
+            console.log('[CTM-DOM] Checking account_id:', callAccountId, '===', agentAccountId);
+            return callAccountId === agentAccountId;
+        }
+        
+        return true; // No account_id to check, just phone match
     }) || null;
 }
 

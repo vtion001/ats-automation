@@ -186,6 +186,31 @@ async def analyze_call(call_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/calls/by-phone/{phone}", response_model=Optional[CallResponse])
+async def get_call_by_phone(phone: str):
+    """Find most recent ended call by phone number"""
+    try:
+        client = create_ctm_client()
+        phone_clean = clean_phone(phone)
+
+        start_date = datetime.utcnow() - timedelta(hours=24)
+        calls = client.get_calls(limit=50, start_date=start_date, direction="inbound")
+
+        for call in calls:
+            call_phone = clean_phone(
+                call.get("caller_number") or call.get("phone_number") or call.get("contact_number")
+            )
+            if call_phone == phone_clean:
+                status = call.get("status", "").lower()
+                if status in ("completed", "ended", "finished"):
+                    return _map_ctm_call(call)
+
+        return None
+    except Exception as e:
+        logger.error(f"Failed to find call by phone {phone}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/active-calls", response_model=List[CallResponse])
 async def get_active_calls():
     """Get currently active calls"""
