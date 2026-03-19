@@ -710,22 +710,71 @@ function addFloatingStyles() {
             bottom: auto !important;
             width: 400px !important;
             height: auto !important;
-            min-height: 100%;
+            min-height: 0 !important;
             max-height: 100vh;
             box-shadow: 0 12px 48px rgba(0,0,0,0.3);
             border-radius: 0;
             z-index: 999999;
-            overflow: hidden;
+            overflow-y: auto !important;
+            overflow-x: hidden;
         }
         body.is-floating .header {
             cursor: default;
+            padding: 12px 16px;
+        }
+        body.is-floating .logo {
+            width: 36px;
+            height: 36px;
+        }
+        body.is-floating .header h1 {
+            font-size: 15px;
+        }
+        body.is-floating .header .tagline {
+            font-size: 10px;
         }
         body.is-floating .floating-toggle {
             background: rgba(39, 174, 96, 0.3) !important;
             border-color: rgba(39, 174, 96, 0.5) !important;
+            padding: 6px 10px;
         }
         body.is-floating .floating-toggle span {
             color: #48bb78 !important;
+        }
+        body.is-floating .status-bar,
+        body.is-floating .section:not(#callSection) {
+            display: none !important;
+        }
+        body.is-floating .section {
+            padding: 12px 16px;
+        }
+        body.is-floating .section-title {
+            font-size: 9px;
+            margin-bottom: 8px;
+        }
+        body.is-floating .call-card {
+            padding: 12px;
+        }
+        body.is-floating .waiting-state {
+            padding: 16px 12px;
+        }
+        body.is-floating .waiting-icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        body.is-floating .analysis-card {
+            padding: 10px;
+            margin-top: 8px;
+        }
+        body.is-floating .score-circle {
+            width: 36px;
+            height: 36px;
+            font-size: 13px;
+        }
+        body.is-floating .actions {
+            margin-top: 10px;
+        }
+        body.is-floating .footer {
+            display: none !important;
         }
     `;
     document.head.appendChild(styles);
