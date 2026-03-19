@@ -1,0 +1,92 @@
+{
+  "client": "flyland",
+  "name": "Flyland Recovery",
+  "industry": "Addiction Counseling",
+  "qualification_criteria": {
+    "hot_lead": {
+      "keywords": ["interested", "want", "need", "looking for", "please help", "call back", "definitely", "sounds good", "great", "insurance", "coverage", "verify benefits"],
+      "score_weight": 30,
+      "description": "Caller shows strong interest and intent"
+    },
+    "warm_lead": {
+      "keywords": ["maybe", "think about", "consider", "information", "details", "tell me more", "pricing", "cost", "how much"],
+      "score_weight": 15,
+      "description": "Caller needs more information"
+    },
+    "scheduling": {
+      "keywords": ["appointment", "schedule", "book", "meeting", "when", "date", "time available", "admission", "intake"],
+      "score_weight": 25,
+      "description": "Caller wants to schedule admission"
+    },
+    "family_member": {
+      "keywords": ["my son", "my daughter", "my husband", "my wife", "my brother", "my sister", "my parent", "family", "loved one", "intervention"],
+      "score_weight": 20,
+      "description": "Family member calling on behalf of someone"
+    },
+    "insurance": {
+      "keywords": ["insurance", "aetna", "blue cross", "cigna", "united", "humana", "medicare", "medicaid", "coverage", "verify benefits", "in network"],
+      "score_weight": 20,
+      "description": "Caller asking about insurance coverage"
+    },
+    "crisis": {
+      "keywords": ["emergency", "crisis", "now", "immediately", "danger", "suicidal", "overdose", "relapse", "dying"],
+      "score_weight": 25,
+      "description": "Caller in crisis - immediate transfer needed"
+    },
+    "unqualified": {
+      "keywords": ["not interested", "no thank you", "remove", "don't call", "wrong number", "not looking", "just browsing"],
+      "score_weight": -30,
+      "description": "Caller not interested"
+    }
+  },
+  "departments": {
+    "intake": {
+      "name": "Admissions & Intake",
+      "keywords": ["admission", "intake", "start", "begin", "join", "program", "residential", "detox"],
+      "transfer_trigger": "score >= 60 OR has crisis"
+    },
+    "insurance": {
+      "name": "Insurance Verification",
+      "keywords": ["insurance", "coverage", "benefits", "verify", "network", "payment", "cost", "price"],
+      "transfer_trigger": "has insurance AND score >= 40"
+    },
+    "family": {
+      "name": "Family Support",
+      "keywords": ["family", "loved one", "son", "daughter", "husband", "wife", "parent", "intervention"],
+      "transfer_trigger": "has family_member AND score >= 30"
+    },
+    "crisis": {
+      "name": "Crisis Line",
+      "keywords": ["emergency", "crisis", "suicidal", "danger"],
+      "transfer_trigger": "has crisis"
+    },
+    "retention": {
+      "name": "Aftercare & Alumni",
+      "keywords": ["alumni", "aftercare", "relapse", "support", "sober", "meeting"],
+      "transfer_trigger": "previous_client AND score < 40"
+    }
+  },
+  "qualification_thresholds": {
+    "hot": 70,
+    "warm": 40,
+    "cold": 0
+  },
+  "faq_knowledge": [
+    {
+      "question": "What programs do you offer?",
+      "answer": "We offer residential treatment, intensive outpatient (IOP), partial hospitalization (PHP), and detox programs."
+    },
+    {
+      "question": "Do you accept insurance?",
+      "answer": "Yes, we accept most major insurance including Aetna, Blue Cross, Cigna, United Healthcare, and Humana. We also verify benefits free of charge."
+    },
+    {
+      "question": "How long is the program?",
+      "answer": "Programs vary based on individual needs. Typical residential is 30-90 days, IOP is 8-12 weeks."
+    },
+    {
+      "question": "Do you offer family therapy?",
+      "answer": "Yes, we offer family programming every week and family therapy sessions as part of the treatment plan."
+    }
+  ]
+}

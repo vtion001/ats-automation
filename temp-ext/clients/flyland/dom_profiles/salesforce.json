@@ -1,0 +1,19 @@
+{
+  "system": "salesforce",
+  "client": "flyland",
+  "url_pattern": "*.flyland.my.salesforce.com",
+  "selectors": {
+    "account_name": ".forceCommunityRecordName, .slds-truncate, h1[data-aura-class='forceRecordHeader']",
+    "phone": "[data-field-name='Phone'], .phone-field, span[class*='Phone']",
+    "email": "[data-field-name='Email'], .email-field",
+    "status": "[data-field-name='Status'], .status-field",
+    "account_type": "[data-field-name='Type'], .type-field",
+    "owner": "[data-field-name='Owner'] .uiOutputText",
+    "last_contact": "[data-field-name='LastContactDate'], .last-contact",
+    "notes": "textarea[id*='Note'], .note-textarea, [data-field-name='Description']",
+    "search_results": ".forceListRecordSelector, .slds-table",
+    "new_lead_button": "[title='New Lead'], a[href*='newLead']"
+  },
+  "search_url_pattern": "/lightning/setup/FindRecords?term={phone}",
+  "notes": "Flyland Salesforce instance - shared with TBT, need owner filters"
+}

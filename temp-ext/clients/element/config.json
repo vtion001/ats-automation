@@ -1,0 +1,50 @@
+{
+  "client_name": "element",
+  "display_name": "Element Medical Billing",
+  "description": "Medical billing - PDF forms + insurance portals",
+  "systems": {
+    "turboscribe": {
+      "name": "TurboScribe",
+      "url_pattern": "*.turboscribe.ai",
+      "enabled": true,
+      "note": "EXISTING - use transcript exports as NLP input"
+    },
+    "availity": {
+      "name": "Availity",
+      "url_pattern": "*.availity.com",
+      "enabled": true
+    },
+    "verifytx": {
+      "name": "VerifyTx",
+      "url_pattern": "*.app.verifytx.com",
+      "enabled": true
+    },
+    "elevate": {
+      "name": "Elevate",
+      "url_pattern": "*.elevate.serverdata.net",
+      "enabled": true,
+      "note": "Patient data source - NOT in original plan"
+    }
+  },
+  "automations": {
+    "pdf_filler": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1
+    },
+    "portal_lookup": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 2
+    },
+    "template_generator": {
+      "enabled": true,
+      "priority": "MEDIUM",
+      "phase": 2
+    }
+  },
+  "critical_notes": [
+    "TurboScribe already exists - use transcript exports",
+    "Don't build new STT - use existing outputs"
+  ]
+}

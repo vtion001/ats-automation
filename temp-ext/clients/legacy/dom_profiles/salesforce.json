@@ -1,0 +1,15 @@
+{
+  "system": "salesforce",
+  "client": "legacy",
+  "url_pattern": "*.flyland.my.salesforce.com",
+  "selectors": {
+    "account_name": ".forceCommunityRecordName, .slds-truncate",
+    "phone": "[data-field-name='Phone'], .phone-field",
+    "email": "[data-field-name='Email']",
+    "status": "[data-field-name='Status']",
+    "last_contact": "[data-field-name='LastContactDate']",
+    "notes": "textarea[id*='Note'], .note-textarea"
+  },
+  "search_url_pattern": "/lightning/setup/FindRecords?term={phone}",
+  "notes": "Legacy Salesforce - shared with Flyland"
+}

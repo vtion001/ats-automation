@@ -42,6 +42,19 @@
         "*://*.calltrackingmetrics.com/*"
       ],
       "js": [
+        "src/lib/core.js",
+        "src/services/ctm-service.js",
+        "src/main.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://*.calltrackingmetrics.com/calls/phone*",
+        "*://*.calltrackingmetrics.com/desk*"
+      ],
+      "js": [
+        "content-scripts/ctm-softphone-monitor.js",
         "content-scripts/ctm-live-transcription.js"
       ],
       "run_at": "document_end"

@@ -1,0 +1,44 @@
+{
+  "client_name": "takami",
+  "display_name": "Takahami",
+  "description": "Medical billing - claims negotiation - RingCentral (NO CTM)",
+  "systems": {
+    "ringcentral": {
+      "name": "RingCentral",
+      "url_pattern": "*.ringcentral.com",
+      "enabled": true,
+      "note": "NOT CTM - different call detection needed"
+    },
+    "kipu": {
+      "name": "KIPU EHR",
+      "url_pattern": "*.kipuworks.com",
+      "enabled": true
+    },
+    "collaboratemd": {
+      "name": "CollaborateMD",
+      "url_pattern": "*.collaboratemd.com",
+      "enabled": true
+    }
+  },
+  "automations": {
+    "auto_fax": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1
+    },
+    "appeal_router": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1
+    },
+    "negotiation_filler": {
+      "enabled": true,
+      "priority": "MEDIUM",
+      "phase": 2
+    }
+  },
+  "critical_notes": [
+    "Uses RingCentral for calls - NOT CTM",
+    "Uses KIPU EHR - add as secondary data source"
+  ]
+}

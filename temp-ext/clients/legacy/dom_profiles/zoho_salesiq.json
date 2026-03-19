@@ -1,0 +1,12 @@
+{
+  "system": "zoho_salesiq",
+  "client": "legacy",
+  "url_pattern": "*.zoho.com/salesiq",
+  "selectors": {
+    "chat_input": ".zsiq-input, #chatInput",
+    "message_thread": ".zsiq-msgcntnr, .msgThread",
+    "visitor_info": ".visitor-info, .visitorDetails",
+    "quick_reply": ".quickReply, .cannedResponse"
+  },
+  "notes": "ZOHO SalesIQ - DIFFERENT from Flyland's ZOHO Mail"
+}

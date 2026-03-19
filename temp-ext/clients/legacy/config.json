@@ -1,0 +1,41 @@
+{
+  "client_name": "legacy",
+  "display_name": "Legacy",
+  "description": "BPO services - multi-tab workflow automation",
+  "systems": {
+    "ctm": {
+      "name": "Call Tracking Metrics",
+      "url_pattern": "*.calltrackingmetrics.co",
+      "enabled": true
+    },
+    "salesforce": {
+      "name": "Salesforce",
+      "url_pattern": "*.flyland.my.salesforce.com",
+      "enabled": true,
+      "note": "Shared with Flyland"
+    },
+    "zoho_salesiq": {
+      "name": "ZOHO SalesIQ",
+      "url_pattern": "*.zoho.com/salesiq",
+      "enabled": true,
+      "note": "Different from Flyland's ZOHO Mail"
+    }
+  },
+  "automations": {
+    "wrapup_sync": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1
+    },
+    "history_auto_pull": {
+      "enabled": true,
+      "priority": "HIGH",
+      "phase": 1
+    },
+    "form_filler_ai": {
+      "enabled": true,
+      "priority": "MEDIUM",
+      "phase": 2
+    }
+  }
+}

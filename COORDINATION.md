@@ -8,6 +8,32 @@
 
 ## Recent Changes (append-only)
 ```
+2026-03-19 09:30 - main (Vincent)
+  Files: chrome-extension/content-scripts/ctm-live-transcription.js, chrome-extension/manifest.api.json
+  Changes:
+    - REMOVED all DOM monitoring from ctm-live-transcription.js
+    - Replaced with API-based polling (/api/ctm/calls)
+    - Removed ctm-softphone-monitor.js from manifest (DOM-based)
+    - Removed src/ scripts from manifest (DOM-based ctm-service.js)
+    - Now fully API-based - no CTM softphone UI dependency
+    - Extension now uses only ctm-live-transcription.js (API mode)
+  Reason: CTM API does not support real-time audio streaming
+    - Live transcription not available via API (only post-call)
+    - DOM monitoring unnecessary with direct API calls
+
+2026-03-19 04:44 - session-1 (OpenCode) - main
+  Files: service-worker.js, ctm-monitor.js
+  Changes:
+    - Architecture change: CTM content script now hosts MediaRecorder directly
+    - REQUEST_TAB_CAPTURE: content script -> SW -> chrome.tabCapture.capture() ->
+      MediaStream passed back to content script -> MediaRecorder created there
+    - STOP_CAPTURE_TAB: SW cleans up stream, content script stops MediaRecorder
+    - Removed broken blob URL / Audio element approach
+    - Removed broken injected script with MediaRecorder
+    - startAutoRecording() now checks SW state and reuses existing capture
+    - stopAutoRecording() properly waits for chunks before processing
+    - STOP_DOM_MONITORING now cleans up MediaRecorder directly
+
 2026-03-18 18:50 - session-1 (OpenCode) - main
   Files: chrome-extension/content-scripts/ctm-monitor.js, chrome-extension/src/popup/services/status-service.js,
          chrome-extension/popup/popup.js, chrome-extension/background/service-worker.js
