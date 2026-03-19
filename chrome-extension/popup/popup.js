@@ -25,7 +25,9 @@ let activeCallMonitor = {
     polling: false,
     currentCallId: null,
     callPhone: null,
-    callStartTime: null
+    callStartTime: null,
+    lastSeenCallId: null,
+    analyzedCallIds: new Set()
 };
 
 // Listen for messages from background service worker
@@ -222,6 +224,18 @@ async function fetchActiveCallsForAgent(agentId) {
     } catch (e) {
         console.error('[API] Fetch active calls error:', e);
         return [];
+    }
+}
+
+async function fetchAllCallsForAgent(agentId) {
+    try {
+        const resp = await fetch(`${SERVER_URL}/api/ctm/calls/by-agent/${encodeURIComponent(agentId)}?limit=50`);
+        if (!resp.ok) return { calls: [], count: 0 };
+        const data = await resp.json();
+        return data;
+    } catch (e) {
+        console.error('[API] Fetch all calls error:', e);
+        return { calls: [], count: 0 };
     }
 }
 
@@ -449,36 +463,59 @@ function stopActiveCallMonitoring() {
     activeCallMonitor.currentCallId = null;
     activeCallMonitor.callPhone = null;
     activeCallMonitor.callStartTime = null;
+    activeCallMonitor.lastSeenCallId = null;
 }
 
 async function pollForActiveCalls() {
     if (!activeCallMonitor.active || !activeCallMonitor.polling) return;
     
     try {
-        const calls = await fetchActiveCallsForAgent(authState.agentId);
+        const data = await fetchAllCallsForAgent(authState.agentId);
         updatePollStatus();
         
-        if (calls && calls.length > 0) {
-            const call = calls[0];
+        const calls = data.calls || [];
+        console.log('[Monitor] Found', calls.length, 'calls for agent');
+        
+        if (calls.length > 0) {
+            const activeStatuses = ['in progress', 'ringing', 'queued', 'new'];
+            const endedStatuses = ['completed', 'answered', 'no answer', 'busy', 'hangup', 'missed'];
             
-            if (call.call_id !== activeCallMonitor.currentCallId) {
-                console.log('[Monitor] New active call detected:', call.call_id, call.phone);
-                activeCallMonitor.currentCallId = call.call_id;
-                activeCallMonitor.callPhone = call.phone;
-                activeCallMonitor.callStartTime = Date.now();
-                
-                showActiveCallUI(call);
-            }
-        } else {
-            if (activeCallMonitor.currentCallId && activeCallMonitor.callPhone) {
-                console.log('[Monitor] Call ended:', activeCallMonitor.currentCallId);
+            const activeCalls = calls.filter(c => activeStatuses.includes(c.status?.toLowerCase()));
+            const endedCalls = calls.filter(c => endedStatuses.includes(c.status?.toLowerCase()));
+            
+            if (activeCalls.length > 0) {
+                const call = activeCalls[0];
+                if (call.call_id !== activeCallMonitor.currentCallId) {
+                    console.log('[Monitor] Active call detected:', call.call_id, call.phone, call.status);
+                    activeCallMonitor.currentCallId = call.call_id;
+                    activeCallMonitor.callPhone = call.phone;
+                    activeCallMonitor.callStartTime = Date.now();
+                    showActiveCallUI(call);
+                }
+            } else if (activeCallMonitor.currentCallId) {
+                console.log('[Monitor] Call ended (no active calls):', activeCallMonitor.currentCallId);
                 await handleCallEnded(activeCallMonitor.currentCallId, activeCallMonitor.callPhone);
+                activeCallMonitor.currentCallId = null;
+                activeCallMonitor.callPhone = null;
             }
             
-            if (!activeCallMonitor.currentCallId) {
-                showMonitoringActive(Date.now());
+            for (const call of endedCalls) {
+                if (!activeCallMonitor.analyzedCallIds.has(call.call_id)) {
+                    if (call.call_id === activeCallMonitor.lastSeenCallId && call.status?.toLowerCase() !== 'in progress') {
+                        console.log('[Monitor] Analyzing ended call:', call.call_id, call.phone, call.status);
+                        activeCallMonitor.analyzedCallIds.add(call.call_id);
+                        await handleCallEnded(call.call_id, call.phone);
+                    }
+                }
             }
+            
+            activeCallMonitor.lastSeenCallId = calls[0].call_id;
         }
+        
+        if (!activeCallMonitor.currentCallId && calls.length === 0) {
+            showMonitoringActive(Date.now());
+        }
+        
     } catch (e) {
         console.error('[Monitor] Poll error:', e);
         const statusEl = document.getElementById('pollStatus');

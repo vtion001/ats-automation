@@ -17,6 +17,8 @@ let bgCallMonitor = {
     polling: false,
     currentCallId: null,
     callPhone: null,
+    lastSeenCallId: null,
+    analyzedCallIds: null,
     auth: {
         loggedIn: false,
         agentId: null,
@@ -1043,33 +1045,48 @@ async function pollForActiveCalls() {
     if (!bgCallMonitor.auth.agentId) return;
     
     try {
-        const resp = await fetch(`${SERVER_URL}/api/ctm/active-calls/by-agent/${encodeURIComponent(bgCallMonitor.auth.agentId)}`);
-        const calls = resp.ok ? await resp.json() : [];
+        const resp = await fetch(`${SERVER_URL}/api/ctm/calls/by-agent/${encodeURIComponent(bgCallMonitor.auth.agentId)}?limit=50`);
+        const data = resp.ok ? await resp.json() : { calls: [] };
+        const calls = data.calls || [];
         
-        if (calls && calls.length > 0) {
-            const call = calls[0];
+        console.log('[BG] Found', calls.length, 'calls for agent');
+        
+        if (calls.length > 0) {
+            const activeStatuses = ['in progress', 'ringing', 'queued', 'new'];
+            const endedStatuses = ['completed', 'answered', 'no answer', 'busy', 'hangup', 'missed'];
             
-            if (call.call_id !== bgCallMonitor.currentCallId) {
-                console.log('[BG] New active call detected:', call.call_id, call.phone);
-                bgCallMonitor.currentCallId = call.call_id;
-                bgCallMonitor.callPhone = call.phone;
-                
-                // Notify popup if open
-                notifyPopup({ type: 'CALL_STARTED', phone: call.phone, callId: call.call_id });
-            }
-        } else {
-            if (bgCallMonitor.currentCallId && bgCallMonitor.callPhone) {
-                console.log('[BG] Call ended:', bgCallMonitor.currentCallId);
+            const activeCalls = calls.filter(c => activeStatuses.includes(c.status?.toLowerCase()));
+            const endedCalls = calls.filter(c => endedStatuses.includes(c.status?.toLowerCase()));
+            
+            if (activeCalls.length > 0) {
+                const call = activeCalls[0];
+                if (call.call_id !== bgCallMonitor.currentCallId) {
+                    console.log('[BG] Active call detected:', call.call_id, call.phone, call.status);
+                    bgCallMonitor.currentCallId = call.call_id;
+                    bgCallMonitor.callPhone = call.phone;
+                    notifyPopup({ type: 'CALL_STARTED', phone: call.phone, callId: call.call_id });
+                }
+            } else if (bgCallMonitor.currentCallId) {
+                console.log('[BG] Call ended (no active calls):', bgCallMonitor.currentCallId);
                 const callId = bgCallMonitor.currentCallId;
                 const phone = bgCallMonitor.callPhone;
-                
-                // Clear state first
                 bgCallMonitor.currentCallId = null;
                 bgCallMonitor.callPhone = null;
-                
-                // Handle call ended in background
                 await handleBgCallEnded(callId, phone);
             }
+            
+            for (const call of endedCalls) {
+                if (!bgCallMonitor.analyzedCallIds?.has(call.call_id)) {
+                    if (call.call_id === bgCallMonitor.lastSeenCallId && call.status?.toLowerCase() !== 'in progress') {
+                        console.log('[BG] Analyzing ended call:', call.call_id, call.phone, call.status);
+                        if (!bgCallMonitor.analyzedCallIds) bgCallMonitor.analyzedCallIds = new Set();
+                        bgCallMonitor.analyzedCallIds.add(call.call_id);
+                        await handleBgCallEnded(call.call_id, call.phone);
+                    }
+                }
+            }
+            
+            bgCallMonitor.lastSeenCallId = calls[0].call_id;
         }
     } catch (e) {
         console.error('[BG] Poll error:', e);

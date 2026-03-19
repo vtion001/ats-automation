@@ -242,6 +242,33 @@ async def get_active_calls_by_agent(agent_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/calls/by-agent/{agent_id}")
+async def get_calls_by_agent(
+    agent_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    lookback_hours: int = Query(default=24, ge=1, le=168),
+):
+    """Get recent calls for a specific agent, including ended calls"""
+    try:
+        client = create_ctm_client()
+        from datetime import datetime, timedelta
+
+        start_date = datetime.utcnow() - timedelta(hours=lookback_hours)
+
+        calls = client.get_calls(limit=limit, start_date=start_date, direction=None)
+
+        filtered_calls = []
+        for call in calls:
+            call_agent = call.get("agent", {})
+            if call_agent.get("id") == agent_id:
+                filtered_calls.append(_map_ctm_call(call))
+
+        return {"agent_id": agent_id, "calls": filtered_calls, "count": len(filtered_calls)}
+    except Exception as e:
+        logger.error(f"Failed to fetch calls for agent {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/user/by-email/{email}")
 async def get_user_by_email(email: str):
     """Look up CTM user by email and return their agent_id"""
