@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AGS Automation Tool</title>
+    <title>AGS Automation</title>
     <style>
         :root {
             --primary: #1e3a5f;
@@ -11,13 +11,10 @@
             --accent: #3182ce;
             --bg-white: #ffffff;
             --bg-light: #f7f8fa;
-            --bg-hover: #edf2f7;
             --text-primary: #1a202c;
             --text-secondary: #4a5568;
             --text-muted: #a0aec0;
             --border: #e2e8f0;
-            --shadow: 0 1px 3px rgba(0,0,0,0.08);
-            --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
             --success: #38a169;
             --warning: #dd6b20;
             --error: #e53e3e;
@@ -25,302 +22,85 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
-            width: 100%;
-            max-width: 400px;
-            min-height: 100vh;
+            width: 360px;
+            min-height: 300px;
             margin: 0 auto;
             background: var(--bg-white);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             color: var(--text-primary);
             font-size: 14px;
-            line-height: 1.5;
-        }
-        
-        /* Toast Notifications */
-        .toast-container {
-            position: fixed;
-            top: 12px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            pointer-events: none;
-        }
-        .toast {
-            padding: 12px 16px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 500;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            animation: toastSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            min-width: 220px;
-            max-width: 340px;
-            background: var(--primary);
-            color: white;
-            border-left: 4px solid var(--accent);
-        }
-        .toast.error { border-left-color: var(--error); }
-        .toast.success { border-left-color: var(--success); }
-        .toast.warning { border-left-color: var(--warning); }
-        .toast-icon { width: 18px; height: 18px; flex-shrink: 0; }
-        @keyframes toastSlideIn {
-            from { transform: translateY(-20px) scale(0.9); opacity: 0; }
-            to { transform: translateY(0) scale(1); opacity: 1; }
-        }
-        
-        .popup-container {
-            width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
-            background: var(--bg-white);
         }
         
         .header {
             background: var(--primary);
-            padding: 20px;
+            padding: 16px;
             text-align: center;
-            position: relative;
         }
-        .header-controls {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-        }
-        .header-btn {
-            width: 28px;
-            height: 28px;
-            border-radius: 4px;
-            border: none;
-            background: rgba(255,255,255,0.15);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: rgba(255,255,255,0.8);
-            transition: all 0.2s;
-        }
-        .header-btn:hover { background: rgba(255,255,255,0.25); color: white; }
-        .header-btn.pinned { background: var(--accent); color: white; }
-        .logo {
-            width: 56px;
-            height: 56px;
-            margin: 0 auto 12px;
-            border-radius: 8px;
-            overflow: hidden;
-            background: white;
-            padding: 8px;
-        }
-        .logo img { width: 100%; height: 100%; object-fit: contain; }
-        .header h1 { font-size: 16px; font-weight: 600; color: white; margin-bottom: 2px; }
-        .header .tagline { font-size: 12px; color: rgba(255,255,255,0.7); }
+        .header h1 { font-size: 16px; font-weight: 600; color: white; }
+        .header .tagline { font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 2px; }
         
         .status-bar {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
-            padding: 10px;
+            padding: 8px;
             background: var(--bg-light);
             border-bottom: 1px solid var(--border);
         }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--accent);
-            animation: pulse 2s infinite;
-        }
-        .status-dot.inactive { background: var(--text-muted); animation: none; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+        .status-dot.ok { background: var(--success); }
+        .status-dot.error { background: var(--error); }
         .status-text { font-size: 12px; color: var(--text-secondary); }
-        .status-text.active { color: var(--primary); font-weight: 500; }
         
-        .section { padding: 16px; border-bottom: 1px solid var(--border); }
-        .section.collapsible .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-            margin-bottom: 12px;
-        }
-        .section.collapsible .section-toggle {
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-muted);
-            transition: transform 0.3s ease;
-        }
-        .section.collapsible.collapsed .section-toggle { transform: rotate(-90deg); }
-        .section.collapsible .section-content {
-            max-height: 500px;
-            overflow: hidden;
-            transition: max-height 0.3s ease, opacity 0.3s ease;
-        }
-        .section.collapsible.collapsed .section-content { max-height: 0; opacity: 0; }
-        
-        .section-title {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-muted);
-            margin-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        .section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        .section-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; }
         
         .client-select {
-            padding: 10px 12px;
-            background: var(--bg-white);
+            width: 100%;
+            padding: 8px 10px;
             border: 1px solid var(--border);
             border-radius: 4px;
-            color: var(--text-primary);
-            font-size: 14px;
-            cursor: pointer;
-            width: 100%;
-        }
-        .client-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.15); }
-        
-        .toggle-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 12px;
-            background: var(--bg-light);
-            border-radius: 4px;
-            margin-bottom: 8px;
-        }
-        .toggle-row:last-child { margin-bottom: 0; }
-        .toggle-label { display: flex; flex-direction: column; }
-        .toggle-label span:first-child { font-weight: 500; color: var(--text-primary); font-size: 13px; }
-        .toggle-label span:last-child { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-        
-        .toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
-        .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: #cbd5e0;
-            border-radius: 24px;
-            transition: 0.3s;
-        }
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 3px;
-            bottom: 3px;
-            background: white;
-            border-radius: 50%;
-            transition: 0.3s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-        }
-        .toggle input:checked + .toggle-slider { background: var(--accent); }
-        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
-        
-        .btn-row { display: flex; gap: 8px; }
-        .btn {
-            flex: 1;
-            padding: 10px 14px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
             font-size: 13px;
-            font-weight: 500;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
+            background: white;
         }
-        .btn:hover { background: var(--primary-light); transform: translateY(-1px); box-shadow: var(--shadow-md); }
-        .btn.secondary { background: var(--bg-white); border: 1px solid var(--border); color: var(--text-primary); }
-        .btn.secondary:hover { background: var(--bg-light); border-color: var(--accent); }
+        .client-select:focus { outline: none; border-color: var(--accent); }
         
         .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .stat-card { background: var(--bg-light); padding: 12px; border-radius: 4px; text-align: center; }
-        .stat-value { font-size: 20px; font-weight: 700; color: var(--primary); }
-        .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        .stat-card { background: var(--bg-light); padding: 10px; border-radius: 4px; text-align: center; }
+        .stat-value { font-size: 18px; font-weight: 700; color: var(--primary); }
+        .stat-label { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
         
-        .service-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 12px;
-            background: var(--bg-white);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            margin-bottom: 8px;
-        }
-        .service-name { font-weight: 500; color: var(--text-primary); font-size: 13px; }
-        .service-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
-        .status-indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); transition: all 0.3s; }
-        .status-indicator.online { background: var(--accent); }
-        .status-indicator.offline { background: var(--error); }
-        .status-indicator.checking { background: var(--warning); animation: pulse 1s infinite; }
-        
-        .call-activity {
+        .call-card {
             background: var(--bg-light);
-            border-radius: 4px;
+            border-radius: 8px;
             padding: 16px;
-            margin-top: 12px;
         }
-        .call-activity-header {
+        .call-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 12px;
         }
-        .call-activity-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
         .call-badge {
-            padding: 4px 8px;
-            border-radius: 3px;
+            padding: 4px 10px;
+            border-radius: 4px;
             font-size: 11px;
             font-weight: 600;
         }
         .call-badge.active { background: rgba(56, 161, 105, 0.1); color: var(--success); }
         .call-badge.ended { background: rgba(49, 130, 206, 0.1); color: var(--accent); }
-        .call-badge.waiting { background: rgba(160, 174, 192, 0.2); color: var(--text-muted); }
+        .call-badge.waiting { background: var(--bg-light); color: var(--text-muted); }
+        .call-badge.analyzing { background: rgba(221, 107, 32, 0.1); color: var(--warning); }
         
-        .call-info { display: flex; flex-direction: column; gap: 8px; }
-        .call-info-row { display: flex; justify-content: space-between; font-size: 13px; }
-        .call-info-label { color: var(--text-muted); }
-        .call-info-value { font-weight: 500; color: var(--text-primary); }
+        .call-phone { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+        .call-meta { font-size: 12px; color: var(--text-muted); }
         
-        .analysis-preview {
-            background: var(--bg-white);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 12px;
-            margin-top: 12px;
-        }
-        .analysis-preview-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        .analysis-score {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+        .analysis-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+        .analysis-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
         .score-circle {
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -332,87 +112,65 @@
         .score-circle.hot { background: var(--error); }
         .score-circle.warm { background: var(--warning); }
         .score-circle.cold { background: var(--accent); }
-        .score-label { font-size: 12px; color: var(--text-muted); }
         
-        .analysis-summary { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
-        .analysis-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-        .tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: rgba(49, 130, 206, 0.1); color: var(--accent); }
+        .score-info { flex: 1; margin-left: 12px; }
+        .score-label { font-size: 14px; font-weight: 600; }
+        .score-sublabel { font-size: 11px; color: var(--text-muted); }
         
-        .waiting-state {
-            text-align: center;
-            padding: 20px;
-            color: var(--text-muted);
+        .summary { font-size: 13px; color: var(--text-secondary); line-height: 1.4; margin-top: 8px; }
+        .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+        .tag { font-size: 10px; padding: 3px 8px; border-radius: 3px; background: rgba(49, 130, 206, 0.1); color: var(--accent); }
+        
+        .waiting-state { text-align: center; padding: 20px; color: var(--text-muted); }
+        .waiting-icon { font-size: 28px; margin-bottom: 8px; opacity: 0.5; }
+        .waiting-text { font-size: 13px; }
+        
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
         }
-        .waiting-icon { font-size: 32px; margin-bottom: 8px; }
+        .btn {
+            flex: 1;
+            padding: 8px 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .btn:hover { background: var(--primary-light); }
+        .btn.secondary { background: var(--bg-light); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn.secondary:hover { background: var(--bg-white); }
         
-        .notes-container { max-height: 150px; overflow-y: auto; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-light); }
-        .notes-empty { padding: 24px 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
-        .note-item { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 12px; display: flex; justify-content: space-between; align-items: flex-start; }
-        .note-item:last-child { border-bottom: none; }
-        .note-text { flex: 1; color: var(--text-primary); word-break: break-word; }
-        .note-time { font-size: 10px; color: var(--text-muted); margin-left: 8px; white-space: nowrap; }
-        .note-input-row { display: flex; gap: 8px; }
-        .note-input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; resize: none; font-family: inherit; }
-        .note-input:focus { outline: none; border-color: var(--accent); }
-        .btn-note-add { width: 36px; height: 36px; border: none; background: var(--primary); color: white; border-radius: 4px; cursor: pointer; font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
-        
-        .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
-        .info-row:last-child { border-bottom: none; }
-        .info-label { color: var(--text-muted); font-size: 13px; }
-        .info-value { color: var(--text-primary); font-weight: 500; font-size: 13px; }
-        
-        .footer { padding: 12px 16px; text-align: center; font-size: 11px; background: var(--primary); margin: 0 -16px -16px -16px; }
-        .footer a { color: rgba(255,255,255,0.85); text-decoration: none; }
-        .footer a:hover { text-decoration: underline; color: white; }
-        
-        .icon { width: 16px; height: 16px; }
+        .footer {
+            padding: 10px 16px;
+            text-align: center;
+            font-size: 10px;
+            color: var(--text-muted);
+            background: var(--bg-light);
+        }
     </style>
 </head>
 <body>
-    <div class="toast-container" id="toastContainer"></div>
-    
-    <div class="popup-container">
-        <div class="header">
-            <div class="header-controls">
-                <button class="header-btn" id="pinBtn" title="Pin as floating window">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
-                </button>
-            </div>
-            <div class="logo">
-                <img src="https://res.cloudinary.com/dbviya1rj/image/upload/v1773384037/gpnkwelbdcwfjmw5axtx.webp" alt="AGS Logo">
-            </div>
-            <h1>AGS Automation Tool</h1>
-            <div class="tagline">BPO Workflow Automation</div>
-        </div>
+    <div class="header">
+        <h1>AGS Automation</h1>
+        <div class="tagline">Call Analysis</div>
     </div>
 
     <div class="status-bar">
         <div class="status-dot" id="statusDot"></div>
-        <span class="status-text active" id="statusText">Ready</span>
+        <span class="status-text" id="statusText">Initializing...</span>
     </div>
 
     <div class="section">
-        <div class="section-title">Service Status</div>
-        <div class="service-row">
-            <span class="service-name">Storage</span>
-            <span class="service-status" id="storageStatus"><span class="status-indicator"></span><span class="service-label"></span></span>
-        </div>
-        <div class="service-row">
-            <span class="service-name">AI Server</span>
-            <span class="service-status" id="aiServerStatus"><span class="status-indicator"></span><span class="service-label"></span></span>
-        </div>
-        <div class="service-row">
-            <span class="service-name">CTM API</span>
-            <span class="service-status" id="ctmStatus"><span class="status-indicator"></span><span class="service-label"></span></span>
-        </div>
-        <div class="service-row">
-            <span class="service-name">Recording</span>
-            <span class="service-status" id="recordingStatus"><span class="status-indicator offline"></span><span class="service-label"></span></span>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">Active Client</div>
+        <div class="section-title">Client</div>
         <select class="client-select" id="clientSelect">
             <option value="flyland">Flyland Recovery</option>
             <option value="legacy">Legacy Services</option>
@@ -424,41 +182,7 @@
     </div>
 
     <div class="section">
-        <div class="section-title">Automation Controls</div>
-        <div class="toggle-row">
-            <div class="toggle-label">
-                <span>Call Monitoring</span>
-                <span>Monitor calls via CTM API</span>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="callMonitorToggle" checked>
-                <span class="toggle-slider"></span>
-            </label>
-        </div>
-        <div class="toggle-row">
-            <div class="toggle-label">
-                <span>Auto Analysis</span>
-                <span>Transcribe & analyze calls</span>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="aiToggle" checked>
-                <span class="toggle-slider"></span>
-            </label>
-        </div>
-        <div class="toggle-row">
-            <div class="toggle-label">
-                <span>Show Overlay</span>
-                <span>Display analysis popup</span>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="overlayToggle" checked>
-                <span class="toggle-slider"></span>
-            </label>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">Today's Activity</div>
+        <div class="section-title">Today's Stats</div>
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-value" id="callsCount">0</div>
@@ -470,91 +194,29 @@
             </div>
             <div class="stat-card">
                 <div class="stat-value" id="hotCount">0</div>
-                <div class="stat-label">Hot Leads</div>
+                <div class="stat-label">Hot</div>
             </div>
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">Current Call</div>
-        <div id="callState">
+        <div class="section-title">Latest Call</div>
+        <div id="callContent">
             <div class="waiting-state">
                 <div class="waiting-icon">📞</div>
-                <div>Waiting for calls...</div>
-                <div style="font-size: 11px; margin-top: 4px;">Monitoring CTM API</div>
+                <div class="waiting-text">Monitoring for calls...</div>
             </div>
         </div>
-        
-        <div id="callAnalysisPreview" style="display: none;">
-            <div class="analysis-preview">
-                <div class="analysis-preview-header">
-                    <div class="analysis-score">
-                        <div class="score-circle" id="scoreCircle">--</div>
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-muted);">Qualification</div>
-                            <div style="font-size: 14px; font-weight: 600;" id="scoreLabel">--</div>
-                        </div>
-                    </div>
-                    <span class="call-badge ended" id="callBadge">Analyzed</span>
-                </div>
-                <div class="analysis-summary" id="analysisSummary">--</div>
-                <div class="analysis-tags" id="analysisTags"></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">
-            <span>Live Notes</span>
-            <span class="note-count" id="noteCount">0</span>
-        </div>
-        <div class="notes-container" id="notesContainer">
-            <div class="notes-empty" id="notesEmpty">
-                <div>No notes yet</div>
-            </div>
-        </div>
-        <div class="note-input-row">
-            <textarea class="note-input" id="noteInput" placeholder="Add a note..." rows="2"></textarea>
-            <button class="btn-note-add" id="addNoteBtn" title="Add Note">+</button>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">Quick Actions</div>
-        <div class="btn-row">
-            <button class="btn secondary" id="configBtn">
-                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                Config
-            </button>
-            <button class="btn" id="refreshBtn">
-                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                Refresh
-            </button>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="info-row">
-            <span class="info-label">Version</span>
-            <span class="info-value">3.0.0</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">Server</span>
-            <span class="info-value" id="serverStatus">ags-ai-server</span>
+        <div class="actions">
+            <button class="btn secondary" id="configBtn">⚙️ Config</button>
+            <button class="btn" id="refreshBtn">↻ Refresh</button>
         </div>
     </div>
 
     <div class="footer">
-        <a href="docs.html">Documentation</a> · <a href="support.html">Support</a>
-    </div>
+        v3.0 · API Mode · AGS Automation
     </div>
 
-    <script src="../src/lib/config-constants.js"></script>
-    <script src="../src/lib/core.js"></script>
-    <script src="../src/popup/services/storage-service.js"></script>
-    <script src="../src/popup/services/status-service.js"></script>
-    <script src="../src/popup/components/toast-manager.js"></script>
-    <script src="../src/popup/managers/notes-manager.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>
