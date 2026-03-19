@@ -219,7 +219,7 @@ async function findCallByPhone(phone) {
     
     const calls = await fetchCalls(50, 24);
     
-    // Filter by phone AND account_id if available
+    // Filter by phone, account_id, and status
     return calls.find(call => {
         // Phone match
         const callPhone = (call.phone || '').replace(/\D/g, '');
@@ -228,6 +228,16 @@ async function findCallByPhone(phone) {
         
         if (!phoneMatch) return false;
         
+        // Status filter: only inbound (new) calls
+        const direction = (call.direction || '').toLowerCase();
+        const status = (call.status || '').toLowerCase();
+        const isInbound = direction === 'inbound' || status === 'inbound' || status === 'in-progress' || status === 'in progress';
+        
+        if (!isInbound) {
+            console.log('[CTM-DOM] Skipping non-inbound call:', direction, status);
+            return false;
+        }
+        
         // Account_id match (if available)
         if (agentAccountId && call.caller && call.caller.account_id) {
             const callAccountId = call.caller.account_id;
@@ -235,7 +245,7 @@ async function findCallByPhone(phone) {
             return callAccountId === agentAccountId;
         }
         
-        return true; // No account_id to check, just phone match
+        return true; // No account_id to check, just phone and inbound match
     }) || null;
 }
 
