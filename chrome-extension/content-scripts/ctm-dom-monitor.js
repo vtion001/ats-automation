@@ -228,24 +228,30 @@ async function findCallByPhone(phone) {
         
         if (!phoneMatch) return false;
         
-        // Status filter: only inbound (new) calls
+        // Direction filter: must be inbound
         const direction = (call.direction || '').toLowerCase();
-        const status = (call.status || '').toLowerCase();
-        const isInbound = direction === 'inbound' || status === 'inbound' || status === 'in-progress' || status === 'in progress';
-        
-        if (!isInbound) {
-            console.log('[CTM-DOM] Skipping non-inbound call:', direction, status);
+        if (direction !== 'inbound') {
+            console.log('[CTM-DOM] Skipping non-inbound call:', direction);
             return false;
         }
         
-        // Account_id match (if available)
-        if (agentAccountId && call.caller && call.caller.account_id) {
-            const callAccountId = call.caller.account_id;
-            console.log('[CTM-DOM] Checking account_id:', callAccountId, '===', agentAccountId);
-            return callAccountId === agentAccountId;
+        // Status filter: must be 'new' to capture calls just arriving at this workstation
+        const status = (call.status || '').toLowerCase();
+        if (status !== 'new') {
+            console.log('[CTM-DOM] Skipping call not in new status:', status);
+            return false;
         }
         
-        return true; // No account_id to check, just phone and inbound match
+        // Account_id match: verify call is directed to this workstation
+        if (agentAccountId && call.caller && call.caller.account_id) {
+            const callAccountId = call.caller.account_id;
+            if (callAccountId !== agentAccountId) {
+                console.log('[CTM-DOM] Skipping call for different account_id:', callAccountId, '!==', agentAccountId);
+                return false;
+            }
+        }
+        
+        return true;
     }) || null;
 }
 
