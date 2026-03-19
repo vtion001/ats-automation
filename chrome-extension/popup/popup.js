@@ -385,32 +385,29 @@ async function handleAnalysisComplete(data) {
 }
 
 async function checkForCalls() {
-    try {
-        const calls = await fetchCalls(3);
-        
-        // Skip if we already have analysis
-        if (lastAnalysis && (lastAnalysis.type === 'analysis_complete' || lastAnalysis.status === 'complete')) {
+    // Only show calls that were detected by the DOM monitor (softphone)
+    // If no call detected by DOM, show waiting state
+    const storageResult = await getStorage(STORAGE_KEY);
+    const latestFromDom = storageResult[STORAGE_KEY];
+    
+    // If DOM monitor detected a call, show it
+    if (latestFromDom && latestFromDom.phone) {
+        // Check if it's still fresh (within last 5 minutes)
+        const age = Date.now() - (latestFromDom.timestamp || 0);
+        if (age < 5 * 60 * 1000) {
+            if (latestFromDom.type === 'analysis_complete' || latestFromDom.status === 'complete') {
+                showAnalysis(latestFromDom);
+            } else if (latestFromDom.type === 'call_detected') {
+                showCallDetected(latestFromDom.phone);
+            } else {
+                showActiveCall({ phone: latestFromDom.phone, direction: 'inbound' });
+            }
             return;
         }
-        
-        if (calls.length === 0) {
-            showWaiting();
-            return;
-        }
-        
-        const call = calls[0];
-        const isActive = call.status === 'in progress' || call.status === 'in-progress';
-        
-        if (isActive) {
-            showActiveCall(call);
-        } else {
-            showEndedCall(call);
-            await analyzeCallData(call);
-        }
-        
-    } catch (e) {
-        console.error('[Popup] Monitor error:', e);
     }
+    
+    // No recent call detected by DOM - show waiting
+    showWaiting();
 }
 
 function showWaiting() {
