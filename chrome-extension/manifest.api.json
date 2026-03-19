@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ATS Automation (API Mode)",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "BPO workflow automation - CTM API integration with Azure Key Vault credentials",
   "minimum_chrome_version": "102",
   "permissions": [
@@ -9,7 +9,8 @@
     "storage",
     "scripting",
     "notifications",
-    "downloads"
+    "downloads",
+    "tabCapture"
   ],
   "host_permissions": [
     "*://*.calltrackingmetrics.com/*",
@@ -53,7 +54,8 @@
         "*://*.calltrackingmetrics.com/desk*"
       ],
       "js": [
-        "content-scripts/ctm-softphone-monitor.js"
+        "content-scripts/ctm-softphone-monitor.js",
+        "content-scripts/ctm-live-transcription.js"
       ],
       "run_at": "document_end"
     }
