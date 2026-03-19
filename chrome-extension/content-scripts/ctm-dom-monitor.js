@@ -59,11 +59,11 @@ function formatPhone(phone) {
     return phone;
 }
 
-// ============ DOM EXTRACTION ============
+// ============ DOM EXTRACTION (SOFTPHONE ONLY) ============
 
 /**
- * Extract phone from CTM phone control interface
- * The main container is <ctm-phone-control>
+ * Extract phone from CTM phone control interface (SOFTPHONE ONLY)
+ * This is the agent's actual phone interface - not the dashboard
  */
 function extractFromCTMPhoneControl() {
     // Find the main CTM phone control element
@@ -73,7 +73,7 @@ function extractFromCTMPhoneControl() {
     // Method 1: Check shadow DOM of ctm-phone-input
     const phoneInput = phoneControl.querySelector('ctm-phone-input');
     if (phoneInput && phoneInput.shadowRoot) {
-        const shadowInput = phoneInput.shadowRoot.querySelector('input.phone-number, input');
+        const shadowInput = phoneInput.shadowRoot.querySelector('input.phone-number, input[type="tel"]');
         if (shadowInput) {
             const value = shadowInput.value || shadowInput.getAttribute('value') || '';
             const phone = extractPhoneFromText(value);
@@ -82,146 +82,11 @@ function extractFromCTMPhoneControl() {
                 return phone;
             }
         }
-        // Check shadow text content
-        const shadowContent = phoneInput.shadowRoot.textContent || '';
-        const phoneShadow = extractPhoneFromText(shadowContent);
-        if (phoneShadow) {
-            console.log('[CTM-DOM] Found phone in shadow DOM:', phoneShadow);
-            return phoneShadow;
-        }
     }
 
-    // Method 2: Look for select2 chosen element (shows caller ID / from number)
-    const select2Chosen = phoneControl.querySelector('.select2-chosen, .from_number .select2-choice .select2-chosen');
-    if (select2Chosen) {
-        const text = select2Chosen.textContent || '';
-        const phone = extractPhoneFromText(text);
-        if (phone) {
-            console.log('[CTM-DOM] Found phone in select2-chosen:', phone);
-            return phone;
-        }
-    }
-
-    // Method 3: Look in inbound call banner (incoming calls)
-    const incomingInfo = phoneControl.querySelector('#incoming-call-info, .incoming-call-info, .info-body, .info-title');
-    if (incomingInfo) {
-        const text = incomingInfo.textContent || '';
-        const phone = extractPhoneFromText(text);
-        if (phone) return phone;
-    }
-
-    // Method 4: Look in outbound number container
-    const outboundContainer = phoneControl.querySelector('#outbound-number-container, .agent-status-outbound-picker, .outbound-number');
-    if (outboundContainer) {
-        const text = outboundContainer.textContent || '';
-        const phone = extractPhoneFromText(text);
-        if (phone) return phone;
-    }
-
-    // Method 5: Look for dialpad or number display
-    const dialpad = phoneControl.querySelector('.dialpad, .number-display, .phone-number-input');
-    if (dialpad) {
-        const text = dialpad.textContent || dialpad.getAttribute('value') || '';
-        const phone = extractPhoneFromText(text);
-        if (phone) return phone;
-    }
-
-    // Method 6: Look in data attributes on the phone control
-    const dataPhone = phoneControl.getAttribute('data-phone') || phoneControl.getAttribute('phone');
-    if (dataPhone) {
-        const phone = extractPhoneFromText(dataPhone);
-        if (phone) return phone;
-    }
-
-    // Method 7: Search for any phone-like numbers in the control
-    const allElements = phoneControl.querySelectorAll('*');
-    for (const el of allElements) {
-        // Check text content
-        const text = el.textContent || '';
-        const phone = extractPhoneFromText(text);
-        if (phone && text.trim().length < 50) {
-            return phone;
-        }
-        
-        // Check value attribute for inputs
-        const value = el.getAttribute('value');
-        if (value) {
-            const phone = extractPhoneFromText(value);
-            if (phone) return phone;
-        }
-    }
-
-    return null;
-}
-
-/**
- * Extract from party options (existing method)
- */
-function extractFromPartyOptions() {
-    const partyOptions = document.querySelector('.frame.party-options');
-    if (!partyOptions) return null;
-
-    const participants = partyOptions.querySelectorAll('.participant');
-    
-    for (const participant of participants) {
-        const isModerator = participant.getAttribute('data-moderator') === '1';
-        if (isModerator) continue;
-
-        const resultText = participant.querySelector('.result-text');
-        if (resultText) {
-            const phone = extractPhoneFromText(resultText.textContent);
-            if (phone) return phone;
-        }
-
-        const dataId = participant.getAttribute('data-id');
-        if (dataId && looksLikePhone(dataId)) {
-            return cleanPhone(dataId);
-        }
-    }
-    return null;
-}
-
-/**
- * Extract from incoming call banners
- */
-function extractFromIncomingBanners() {
-    // Look for incoming call banner
-    const banner = document.querySelector('.banner[data-type="answer"], .banner.incoming-call');
-    if (!banner) return null;
-
-    // Check info-body and info-title which typically contain the caller info
-    const infoBody = banner.querySelector('.info-body');
-    const infoTitle = banner.querySelector('.info-title');
-    
-    for (const el of [infoBody, infoTitle]) {
-        if (el) {
-            const text = el.textContent || el.getAttribute('data-phone') || '';
-            const phone = extractPhoneFromText(text);
-            if (phone) {
-                console.log('[CTM-DOM] Found phone in incoming banner:', phone);
-                return phone;
-            }
-        }
-    }
-
-    // Check data attributes
-    const dataPhone = banner.getAttribute('data-phone') || banner.getAttribute('phone');
-    if (dataPhone) {
-        const phone = extractPhoneFromText(dataPhone);
-        if (phone) return phone;
-    }
-
-    return null;
-}
-
-/**
- * Extract from active call display
- */
-function extractFromActiveCall() {
-    // Look for calling_number element (appears during active calls)
-    const callingNumber = document.querySelector('.calling_number, .phone_number, .phone_in_progress');
+    // Method 2: Look for calling number during active call
+    const callingNumber = phoneControl.querySelector('.calling_number .phone_number, .phone_in_progress .phone_number');
     if (callingNumber) {
-        // Check direct text content
         const text = callingNumber.textContent || '';
         const phone = extractPhoneFromText(text);
         if (phone) {
@@ -230,15 +95,27 @@ function extractFromActiveCall() {
         }
     }
 
-    // Look for .details, .full_name, .phone_number spans
-    const details = document.querySelector('.calling_number .details, .calling_number .phone_number, .calling_number .full_name');
-    if (details) {
-        const text = details.textContent || '';
+    // Method 3: Look in dialpad display
+    const dialpadDisplay = phoneControl.querySelector('.dialpad-display, .phone-display, .number-display');
+    if (dialpadDisplay) {
+        const text = dialpadDisplay.textContent || '';
         const phone = extractPhoneFromText(text);
-        if (phone) {
-            console.log('[CTM-DOM] Found phone in details:', phone);
-            return phone;
-        }
+        if (phone) return phone;
+    }
+
+    // Method 4: Look in info elements during incoming call
+    const infoBody = phoneControl.querySelector('.info-body, .info-title');
+    if (infoBody) {
+        const text = infoBody.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) return phone;
+    }
+
+    // Method 5: Check data attributes
+    const dataPhone = phoneControl.getAttribute('data-phone');
+    if (dataPhone) {
+        const phone = extractPhoneFromText(dataPhone);
+        if (phone) return phone;
     }
 
     return null;
@@ -263,28 +140,109 @@ function extractFromBanners() {
 }
 
 /**
- * Main extraction function - tries all methods
+ * Main extraction function - ONLY from softphone interface
+ * We ONLY look inside ctm-phone-control to avoid dashboard numbers
  */
 function extractAnyPhoneNumber() {
-    // Priority 1: CTM phone control (shadow DOM)
+    // Find the softphone element
+    const phoneControl = document.querySelector('ctm-phone-control');
+    if (!phoneControl) {
+        console.log('[CTM-DOM] No ctm-phone-control found');
+        return null;
+    }
+
+    // ONLY extract from within the softphone interface
+    // Priority 1: Shadow DOM phone input
     let phone = extractFromCTMPhoneControl();
     if (phone) return phone;
 
-    // Priority 2: Active call display
-    phone = extractFromActiveCall();
+    // Priority 2: Active call display within softphone
+    phone = extractFromActiveCallInSoftphone(phoneControl);
     if (phone) return phone;
 
-    // Priority 3: Party options
-    phone = extractFromPartyOptions();
+    // Priority 3: Incoming call banners within softphone
+    phone = extractFromIncomingBannersInSoftphone(phoneControl);
     if (phone) return phone;
 
-    // Priority 4: Incoming call banners
-    phone = extractFromIncomingBanners();
+    // Priority 4: Party options within softphone
+    phone = extractFromPartyOptionsInSoftphone(phoneControl);
     if (phone) return phone;
 
-    // Priority 5: General banners
-    phone = extractFromBanners();
-    if (phone) return phone;
+    console.log('[CTM-DOM] No phone found in softphone');
+    return null;
+}
+
+/**
+ * Extract from party options within a specific container
+ */
+function extractFromPartyOptionsInSoftphone(container) {
+    const partyOptions = container.querySelector('.frame.party-options');
+    if (!partyOptions) return null;
+
+    const participants = partyOptions.querySelectorAll('.participant');
+    
+    for (const participant of participants) {
+        const isModerator = participant.getAttribute('data-moderator') === '1';
+        if (isModerator) continue;
+
+        const resultText = participant.querySelector('.result-text');
+        if (resultText) {
+            const phone = extractPhoneFromText(resultText.textContent);
+            if (phone) return phone;
+        }
+
+        const dataId = participant.getAttribute('data-id');
+        if (dataId && looksLikePhone(dataId)) {
+            return cleanPhone(dataId);
+        }
+    }
+    return null;
+}
+
+/**
+ * Extract from incoming banners within a specific container
+ */
+function extractFromIncomingBannersInSoftphone(container) {
+    const banner = container.querySelector('.banner[data-type="answer"]');
+    if (!banner) return null;
+
+    const infoBody = banner.querySelector('.info-body');
+    const infoTitle = banner.querySelector('.info-title');
+    
+    for (const el of [infoBody, infoTitle]) {
+        if (el) {
+            const text = el.textContent || el.getAttribute('data-phone') || '';
+            const phone = extractPhoneFromText(text);
+            if (phone) return phone;
+        }
+    }
+
+    const dataPhone = banner.getAttribute('data-phone');
+    if (dataPhone) {
+        const phone = extractPhoneFromText(dataPhone);
+        if (phone) return phone;
+    }
+
+    return null;
+}
+
+/**
+ * Extract from active call display within softphone
+ */
+function extractFromActiveCallInSoftphone(container) {
+    const callingNumber = container.querySelector('.calling_number, .phone_number, .phone_in_progress');
+    if (callingNumber) {
+        const text = callingNumber.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) return phone;
+    }
+
+    const details = container.querySelector('.calling_number .details, .calling_number .phone_number, .calling_number .full_name');
+    if (details) {
+        const text = details.textContent || '';
+        const phone = extractPhoneFromText(text);
+        if (phone) return phone;
+    }
 
     return null;
 }
